@@ -1,0 +1,14 @@
+# Machine-specific bash configuration
+# Copy this file to ~/.bash.d/local.sh and customize
+
+# Example: Custom PATH additions
+# export PATH="$HOME/custom-tools/bin:$PATH"
+
+# Example: Machine-specific aliases
+# alias project="cd /path/to/my/project"
+
+# Example: Environment variables
+# export MY_API_KEY="..."
+
+# Example: Work-specific settings
+# export WORK_REPO_PATH="/path/to/work/repos"
