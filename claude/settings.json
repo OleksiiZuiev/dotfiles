@@ -1,0 +1,105 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//**)",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch",
+      "Bash(echo:*)",
+      "Bash(dotnet sln:*)",
+      "Bash(dotnet new:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(dotnet run:*)",
+      "Bash(dotnet test:*)",
+      "Bash(dotnet add:*)",
+      "Bash(dotnet publish:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git diff:*)",
+      "Bash(git reset:*)",
+      "Bash(git fetch:*)",
+      "Bash(git show:*)",
+      "Bash(git restore:*)",
+      "Bash(git rebase:*)",
+      "Bash(git rm:*)",
+      "Bash(cat:*)",
+      "Bash(curl:*)",
+      "Bash(python -m json.tool:*)",
+      "Bash(test:*)",
+      "Bash(docker:*)",
+      "Bash(docker build:*)",
+      "Bash(docker run:*)",
+      "Bash(docker stop:*)",
+      "Bash(docker rm:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(netstat:*)",
+      "Bash(find:*)",
+      "Bash(findstr:*)",
+      "Bash(ls:*)",
+      "Bash(dir:*)",
+      "Bash(chmod:*)",
+      "Bash(pg_isready:*)",
+      "Bash(gh auth:*)",
+      "Bash(gh api graphql:*)",
+      "Bash(gh secret list:*)",
+      "Bash(gh variable:*)",
+      "Bash(gh repo view:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr edit:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(az acr repository show-tags:*)",
+      "Bash(az containerapp revision list:*)",
+      "Bash(az containerapp revision show:*)",
+      "Bash(az containerapp logs show:*)",
+      "Bash(az account show:*)",
+      "Bash(az keyvault secret list:*)",
+      "Bash(terraform fmt:*)",
+      "Bash(claude code settings)",
+      "Skill(git-commit)",
+      "Skill(refine)",
+      "mcp__notion__notion-fetch",
+      "mcp__notion__notion-update-page",
+      "mcp__linear-server__get_issue",
+      "mcp__linear-server__list_comments",
+      "mcp__linear-server__update_issue",
+      "mcp__linear-server__create_comment"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -Command \"[console]::beep(1000, 400)\""
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -Command \"[console]::beep(600, 200); Start-Sleep -Milliseconds 100; [console]::beep(800, 200)\""
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\OleksiiZuiev\\.claude\\statusline.ps1"
+  },
+  "alwaysThinkingEnabled": true,
+  "model": "opus"
+}
