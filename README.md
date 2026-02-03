@@ -120,3 +120,42 @@ Without these, the install script creates copies instead of symlinks (default Gi
 To enable native symlinks in Git Bash:
 1. Enable Developer Mode: Settings > Privacy & Security > For developers > Developer Mode
 2. Or set `MSYS=winsymlinks:nativestrict` environment variable
+
+### Corporate Windows (no Developer Mode)
+
+If Developer Mode is disabled by IT policy, running Git Bash as Administrator changes `$HOME` to the admin user's directory. Use the `--home` flag to specify the correct target:
+
+```bash
+# Open Git Bash as Administrator, then:
+cd /c/work/github/OleksiiZuiev/dotfiles
+./install.sh --home /c/Users/YourUsername
+```
+
+This creates symlinks in your user's home directory while running with admin privileges.
+
+#### PowerShell Admin Wrapper (Recommended)
+
+For convenience, create a local `install-admin.ps1` script that handles elevation and paths automatically:
+
+```powershell
+# Self-elevate to Administrator
+if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Start-Process powershell "-ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+    exit
+}
+
+# Configuration - edit these paths for your machine
+# Common bash paths:
+#   C:\Program Files\Git\bin\bash.exe (system-wide install)
+#   C:\Users\<name>\AppData\Local\Programs\Git\bin\bash.exe (user install)
+$bashPath = "C:\Program Files\Git\bin\bash.exe"
+$dotfilesPath = "/c/work/github/YourUsername/dotfiles"
+$targetHome = "/c/Users/YourUsername"
+
+# Run install script
+& $bashPath -c "cd $dotfilesPath && ./install.sh --home $targetHome"
+
+Read-Host "Press Enter to close"
+```
+
+Save this in the dotfiles directory (it's gitignored since paths are machine-specific). Double-click to run - it will prompt for UAC elevation and run the install script with the correct paths.

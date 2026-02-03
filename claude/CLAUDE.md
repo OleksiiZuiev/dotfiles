@@ -20,3 +20,50 @@
 - Do NOT use `git -C <path>` when already in the target directory - it's redundant and complicates permission patterns
   - Bad: `git -C "C:\work\github\datasnipper-enterprise\integrations-service" log --oneline -10` (when already in that directory)
   - Good: `git log --oneline -10`
+
+# Ticket Context Documents
+
+Session history for Linear tickets, stored outside the repo for worktree access.
+
+## Configuration
+
+Set the environment variable to customize the storage location:
+
+```bash
+export CLAUDE_TICKET_CONTEXTS_DIR="$HOME/work/ticket-contexts"
+```
+
+Default: `~/work/ticket-contexts/`
+
+## Structure
+
+Each ticket gets its own file: `{TICKET-ID}.md` containing:
+- Ticket info and Linear link
+- Session history (accomplishments, decisions, files changed)
+
+## Document Template
+
+```markdown
+# {TICKET-ID}: {Ticket Title}
+
+## Ticket Info
+- **Linear Link**: https://linear.app/team/issue/{TICKET-ID}
+- **Created**: {YYYY-MM-DD}
+
+## Sessions
+
+### {YYYY-MM-DD HH:MM} - {Brief Session Title}
+**Branch**: `{branch-name}`
+**Repository**: `{repo-name}`
+
+#### Accomplished
+- {bullet list}
+
+#### Key Decisions
+- {decision}: {rationale}
+
+#### Files Changed
+- `{path}` - {description}
+
+---
+```

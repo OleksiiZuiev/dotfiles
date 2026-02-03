@@ -50,6 +50,41 @@ Implement the plan for ticket: **{{$1}}**
    - Confirm all tasks are completed
    - Summarize what was implemented
    - Note any known issues or follow-up work needed
+
+7. **Update Ticket Context Document**
+   - Context path: `${CLAUDE_TICKET_CONTEXTS_DIR:-$HOME/work/ticket-contexts}`
+   - Context file: `{context-path}/{{$1}}.md`
+   - Create directory if needed: `mkdir -p {context-path}`
+   - If file doesn't exist, create with template:
+     ```markdown
+     # {{$1}}: {Ticket Title from plan or Linear}
+
+     ## Ticket Info
+     - **Linear Link**: https://linear.app/team/issue/{{$1}}
+     - **Created**: {current date YYYY-MM-DD}
+
+     ## Sessions
+     ```
+   - Append new session entry:
+     ```markdown
+     ### {YYYY-MM-DD HH:MM} - Implementation
+     **Branch**: `{current git branch}`
+     **Repository**: `{basename of git root}`
+
+     #### Accomplished
+     - {summary of completed tasks from todo list}
+
+     #### Key Decisions
+     - {any decisions made during implementation}
+
+     #### Files Changed
+     - {list from tracked edits or git diff --name-only}
+
+     ---
+     ```
+   - Show context document location to user
+
+8. **Remind Next Steps**
    - Remind user about next steps: `/create-pr {{$1}}`
 
 ### Important Guidelines
