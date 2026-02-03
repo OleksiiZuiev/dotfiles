@@ -114,7 +114,18 @@ Create an implementation plan for Linear ticket: **{{$1}}**
 Additional context from user: "{{$ARGUMENTS}}"
 {{/if}}
 
+### Ticket Context Configuration
+
+Context path: `${CLAUDE_TICKET_CONTEXTS_DIR:-$HOME/work/ticket-contexts}`
+Context file: `{context-path}/{{$1}}.md`
+
 ### Steps to Follow
+
+0. **Load Existing Ticket Context (if exists)**
+   - Check if `{context-path}/{{$1}}.md` exists
+   - If yes, read and summarize previous sessions
+   - Use this context to inform planning (avoid re-exploring solved problems, build on previous decisions)
+   - Note: This helps maintain continuity across worktrees and sessions
 
 1. **Fetch Linear Ticket Details**
    - Use the Task tool with the MCP Linear integration to fetch ticket details for `{{$1}}`
@@ -144,10 +155,51 @@ Additional context from user: "{{$ARGUMENTS}}"
    - Ensure the `.claude/plans/` directory exists (create if needed)
    - Format the plan as markdown with clear sections
 
-6. **Present to User**
-   - Show the plan file location
-   - Summarize key points
-   - Confirm user is ready to proceed with `/implement {{$1}}`
+6. **Confirm Implementation Approach**
+   - Use AskUserQuestion with options:
+     - "Implement now" - Continue with implementation in this session
+     - "Save plan only" - Save plan and exit (user can run `/implement {{$1}}` later)
+
+7. **Implement the Plan** (if user chose "Implement now")
+   - Use TodoWrite to create task list from plan
+   - Execute each task (same logic as /implement)
+   - Track files changed during implementation
+   - Run tests and verify
+
+8. **Update Ticket Context Document**
+   - Create context directory if needed: `mkdir -p {context-path}`
+   - If new ticket: create document from template:
+     ```markdown
+     # {{$1}}: {Ticket Title}
+
+     ## Ticket Info
+     - **Linear Link**: https://linear.app/team/issue/{{$1}}
+     - **Created**: {YYYY-MM-DD}
+
+     ## Sessions
+     ```
+   - Append new session entry:
+     ```markdown
+     ### {YYYY-MM-DD HH:MM} - {Brief Session Title}
+     **Branch**: `{branch-name}`
+     **Repository**: `{repo-name}`
+
+     #### Accomplished
+     - {bullet list of completed items}
+
+     #### Key Decisions
+     - {decision}: {rationale}
+
+     #### Files Changed
+     - `{path}` - {description}
+
+     ---
+     ```
+
+9. **Final Summary**
+   - Show what was implemented
+   - Show context document location: `{context-path}/{{$1}}.md`
+   - Remind user: `/create-pr {{$1}}`
 
 ### Important Notes
 
@@ -155,6 +207,7 @@ Additional context from user: "{{$ARGUMENTS}}"
 - Include specific file paths and function names where applicable
 - Note any assumptions made during planning
 - If the ticket references external docs (Notion, Confluence, etc.), fetch and incorporate that context
+- Context documents persist across worktrees, enabling continuity when switching branches
 
 {{/if}}
 

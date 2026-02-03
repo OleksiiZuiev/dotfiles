@@ -1,15 +1,77 @@
 #!/bin/bash
 # Dotfiles installation script
 # Creates symlinks from dotfiles repo to home directory
+#
+# On Windows, requires one of:
+# - Developer Mode enabled, OR
+# - Running as Administrator
+#
+# Usage:
+#   ./install.sh                    # Uses $HOME
+#   ./install.sh --home /path/to/home  # Uses specified directory
 
 set -e
 
+# Parse arguments
+TARGET_HOME="$HOME"
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --home)
+            TARGET_HOME="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKUP_DIR="$HOME/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
+BACKUP_DIR="$TARGET_HOME/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
+
+# Enable native symlinks on Windows/MSYS
+export MSYS=winsymlinks:nativestrict
 
 echo "Dotfiles installation"
 echo "====================="
 echo "Source: $DOTFILES_DIR"
+echo "Target: $TARGET_HOME"
+echo ""
+
+# Test if we can create symlinks
+test_symlink_support() {
+    local test_dir=$(mktemp -d)
+    local test_file="$test_dir/test_file"
+    local test_link="$test_dir/test_link"
+
+    echo "test" > "$test_file"
+
+    if ln -s "$test_file" "$test_link" 2>/dev/null; then
+        if [ -L "$test_link" ]; then
+            rm -rf "$test_dir"
+            return 0
+        fi
+    fi
+
+    rm -rf "$test_dir"
+    return 1
+}
+
+echo "Checking symlink support..."
+if ! test_symlink_support; then
+    echo ""
+    echo "ERROR: Cannot create native symlinks."
+    echo ""
+    echo "On Windows, you need one of the following:"
+    echo "  1. Enable Developer Mode:"
+    echo "     Settings > Privacy & Security > For developers > Developer Mode"
+    echo ""
+    echo "  2. Run Git Bash as Administrator"
+    echo ""
+    echo "After enabling, restart Git Bash and run this script again."
+    exit 1
+fi
+echo "Symlink support: OK"
 echo ""
 
 # Track if we created any backups
@@ -62,30 +124,30 @@ create_link() {
 
 # Install Claude files
 echo "Installing Claude configuration..."
-mkdir -p "$HOME/.claude/commands"
+mkdir -p "$TARGET_HOME/.claude/commands"
 
 # Claude commands
 for cmd in "$DOTFILES_DIR"/claude/commands/*.md; do
     [ -e "$cmd" ] || continue
-    create_link "$cmd" "$HOME/.claude/commands/$(basename "$cmd")"
+    create_link "$cmd" "$TARGET_HOME/.claude/commands/$(basename "$cmd")"
 done
 
 # Claude config files
 [ -e "$DOTFILES_DIR/claude/settings.json" ] && \
-    create_link "$DOTFILES_DIR/claude/settings.json" "$HOME/.claude/settings.json"
+    create_link "$DOTFILES_DIR/claude/settings.json" "$TARGET_HOME/.claude/settings.json"
 [ -e "$DOTFILES_DIR/claude/CLAUDE.md" ] && \
-    create_link "$DOTFILES_DIR/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
+    create_link "$DOTFILES_DIR/claude/CLAUDE.md" "$TARGET_HOME/.claude/CLAUDE.md"
 [ -e "$DOTFILES_DIR/claude/statusline.ps1" ] && \
-    create_link "$DOTFILES_DIR/claude/statusline.ps1" "$HOME/.claude/statusline.ps1"
+    create_link "$DOTFILES_DIR/claude/statusline.ps1" "$TARGET_HOME/.claude/statusline.ps1"
 
 # Install bash.d files
 echo ""
 echo "Installing bash.d configuration..."
-mkdir -p "$HOME/.bash.d"
+mkdir -p "$TARGET_HOME/.bash.d"
 
 for bashfile in "$DOTFILES_DIR"/bash.d/*.sh; do
     [ -e "$bashfile" ] || continue
-    create_link "$bashfile" "$HOME/.bash.d/$(basename "$bashfile")"
+    create_link "$bashfile" "$TARGET_HOME/.bash.d/$(basename "$bashfile")"
 done
 
 echo ""
