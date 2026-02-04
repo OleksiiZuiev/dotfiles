@@ -121,27 +121,35 @@ Context file: `{context-path}/{{$1}}.md`
 
 ### Steps to Follow
 
-0. **Load Existing Ticket Context (if exists)**
+0. **Check for Existing Plan**
+   - Check if `.claude/plans/{{$1}}.md` exists
+   - If yes, use AskUserQuestion:
+     - "Found existing plan for {{$1}}. What would you like to do?"
+     - Option 1: "Resume implementation" - Skip to step 7 (implementation)
+     - Option 2: "Create fresh plan" - Continue with normal flow (overwrites existing)
+   - If no plan exists, continue with step 1
+
+1. **Load Existing Ticket Context (if exists)**
    - Check if `{context-path}/{{$1}}.md` exists
    - If yes, read and summarize previous sessions
    - Use this context to inform planning (avoid re-exploring solved problems, build on previous decisions)
    - Note: This helps maintain continuity across worktrees and sessions
 
-1. **Fetch Linear Ticket Details**
+2. **Fetch Linear Ticket Details**
    - Use the Task tool with the MCP Linear integration to fetch ticket details for `{{$1}}`
    - Extract the ticket title, description, and any linked resources
    - Look for Notion page links in the description or comments and fetch those automatically
 
-2. **Explore the Codebase**
+3. **Explore the Codebase**
    - Use Grep, Glob, and Read tools to understand relevant code areas
    - Use the Task tool with subagent_type=Explore for broader context gathering
    - Focus on areas mentioned in the ticket or related to the feature/fix
 
-3. **Ask Clarifying Questions**
+4. **Ask Clarifying Questions**
    - If requirements are unclear or multiple approaches are viable, use AskUserQuestion
    - Don't assume implementation details not specified in the ticket
 
-4. **Enter Plan Mode**
+5. **Enter Plan Mode**
    - Use EnterPlanMode to create a detailed implementation plan
    - Include:
      - Overview of the change
@@ -150,23 +158,23 @@ Context file: `{context-path}/{{$1}}.md`
      - Testing approach
      - Any risks or considerations
 
-5. **Save the Plan**
+6. **Save the Plan**
    - After exiting plan mode, save the plan to `.claude/plans/{{$1}}.md`
    - Ensure the `.claude/plans/` directory exists (create if needed)
    - Format the plan as markdown with clear sections
 
-6. **Confirm Implementation Approach**
+7. **Confirm Implementation Approach**
    - Use AskUserQuestion with options:
      - "Implement now" - Continue with implementation in this session
-     - "Save plan only" - Save plan and exit (user can run `/implement {{$1}}` later)
+     - "Save plan only" - Save plan and exit (user can run `/start-task {{$1}}` later to resume)
 
-7. **Implement the Plan** (if user chose "Implement now")
+8. **Implement the Plan** (if user chose "Implement now" or "Resume implementation")
    - Use TodoWrite to create task list from plan
-   - Execute each task (same logic as /implement)
+   - Execute each task sequentially
    - Track files changed during implementation
    - Run tests and verify
 
-8. **Update Ticket Context Document**
+9. **Update Ticket Context Document**
    - Create context directory if needed: `mkdir -p {context-path}`
    - If new ticket: create document from template:
      ```markdown
@@ -196,10 +204,10 @@ Context file: `{context-path}/{{$1}}.md`
      ---
      ```
 
-9. **Final Summary**
-   - Show what was implemented
+10. **Final Summary**
+   - Show what was implemented (or "Plan saved" if user chose save only)
    - Show context document location: `{context-path}/{{$1}}.md`
-   - Remind user: `/create-pr {{$1}}`
+   - Remind user: `/create-pr {{$1}}` (if implemented) or `/start-task {{$1}}` to resume (if saved only)
 
 ### Important Notes
 
