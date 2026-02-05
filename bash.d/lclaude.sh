@@ -8,10 +8,10 @@ lclaude() {
     local MAX_HISTORY=10
     local real_claude="$HOME/.local/bin/claude.exe"
 
-    # Helper: Add current directory to history (if git repo)
+    # Helper: Add current directory to history (if git repo or worktree)
     _lclaude_add_to_history() {
         local dir="$1"
-        [[ ! -d "$dir/.git" ]] && return
+        git -C "$dir" rev-parse --git-dir > /dev/null 2>&1 || return
 
         # Create history file if missing
         touch "$HISTORY_FILE"
