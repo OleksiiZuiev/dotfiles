@@ -21,6 +21,17 @@
   - Bad: `git -C "C:\work\github\datasnipper-enterprise\integrations-service" log --oneline -10` (when already in that directory)
   - Good: `git log --oneline -10`
 
+# Local GitHub Repos
+
+Repos are stored at `C:\work\github\{org}\{repo-name}`.
+
+When resolving a repo reference:
+1. **Exact `org/repo`**: resolve directly to `C:\work\github\{org}\{repo}`
+2. **Partial or ambiguous name**: read `~/.claude/repo-map.md` for the full repo list with descriptions, match by name or summary
+3. **Multiple matches**: show candidates and ask user to confirm
+
+Regenerate the map: `bash ~/dotfiles/claude/scripts/update-repo-map.sh`
+
 # Ticket Context Documents
 
 Session history for Linear tickets, stored outside the repo for worktree access.

@@ -1,19 +1,14 @@
-# Smart Claude launcher with repository history
-# Usage: lclaude [args...]
-# - Always shows fzf menu of recent projects
-# - In a git repo: current directory is first option (pre-selected)
-# - Not in a git repo: shows history with "[Stay in current directory]" option
+# Quick directory switcher for recent git repos
+# Usage: cd-repo
+# - Shows fzf menu of recent projects from ~/.claude_repos
+# - Selects a repo and CDs there
 
-lclaude() {
+cd-repo() {
     local HISTORY_FILE="$HOME/.claude_repos"
     local MAX_HISTORY=10
-    local real_claude="$HOME/.local/bin/claude.exe"
-
-    # Refresh repo map in background
-    bash "$HOME/dotfiles/claude/scripts/update-repo-map.sh" &>/dev/null &
 
     # Helper: Add current directory to history (if git repo or worktree)
-    _lclaude_add_to_history() {
+    _cd-repo_add_to_history() {
         local dir="$1"
         git -C "$dir" rev-parse --git-dir > /dev/null 2>&1 || return
 
@@ -51,19 +46,15 @@ lclaude() {
         valid_repos=("$current_dir" "${filtered_repos[@]}")
     fi
 
-    # If no repos to show, just launch
+    # If no repos to show, nothing to do
     if [[ ${#valid_repos[@]} -eq 0 ]]; then
-        echo "No history available. Launching Claude in current directory..."
-        clear
-        "$real_claude" "$@"
-        return
+        echo "No repository history. Use lclaude to build history."
+        return 1
     fi
 
-    # If only current dir and we're in git repo, launch directly (no need to prompt)
+    # If only current dir and we're in git repo, already there
     if [[ "$in_git_repo" == true ]] && [[ ${#valid_repos[@]} -eq 1 ]]; then
-        _lclaude_add_to_history "$current_dir"
-        clear
-        "$real_claude" "$@"
+        _cd-repo_add_to_history "$current_dir"
         return
     fi
 
@@ -106,17 +97,12 @@ lclaude() {
         echo "Cancelled."
         return 1
     elif [[ "$selection" == "[Stay in current directory]" ]]; then
-        clear
-        "$real_claude" "$@"
+        return
     elif [[ "$selection" == "$current_dir" ]]; then
-        _lclaude_add_to_history "$current_dir"
-        clear
-        "$real_claude" "$@"
+        _cd-repo_add_to_history "$current_dir"
     else
         echo "Changing to: $selection"
         cd "$selection" || return 1
-        _lclaude_add_to_history "$selection"
-        clear
-        "$real_claude" "$@"
+        _cd-repo_add_to_history "$selection"
     fi
 }

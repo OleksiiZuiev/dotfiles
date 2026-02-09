@@ -33,6 +33,8 @@
       "Bash(findstr:*)",
       "Bash(sed:*)",
       "Bash(ls:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
       "Bash(dir:*)",
       "Bash(chmod:*)",
       "Bash(pg_isready:*)",
