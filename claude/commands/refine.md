@@ -1,10 +1,10 @@
 ---
-description: Refine a Linear ticket by collaboratively resolving ambiguities and capturing answers as acceptance criteria
+description: Refine a Linear ticket by challenging assumptions, resolving ambiguities, and capturing answers as acceptance criteria
 allowed-tools: AskUserQuestion
 argument-hint: <ticket-id>
 ---
 
-You are helping refine a Linear ticket by identifying unclear aspects, questioning the user, and updating the ticket with clear acceptance criteria.
+You are helping refine a Linear ticket — not just as a scribe, but as a thinking buddy. You challenge assumptions, verify rationale, flag risks, and propose alternatives before diving into details.
 
 ## Your Task
 
@@ -25,15 +25,40 @@ Extract:
 - Attachments
 - Related issues
 - Current state/status
+- Parent issue (if exists) — title, description, acceptance criteria
+
+If the ticket has a parent issue, fetch it using `mcp__linear-server__get_issue` with the parent ID.
 
 Display a brief summary of the ticket to the user:
 ```
 Ticket: {{$1}} - [Title]
 Status: [Current Status]
+Parent: {parent-id} - [Parent Title] (or "None")
 Current Description: [Brief excerpt...]
 ```
 
-#### 2. Analyze for Clarity
+#### 2. Challenge Value & Rationale
+
+Before refining details, verify the ticket makes strategic sense:
+
+**Check for clear rationale:**
+- Does the ticket explain **why** this work matters? (user impact, business value, technical necessity)
+- If there's a parent task, does this sub-task clearly serve the parent's goal?
+
+**Watch for common anti-patterns:**
+- **Solution disguised as requirement**: The ticket prescribes _how_ (e.g., "use Redis for caching") instead of stating the _problem_ (e.g., "reduce response time below 200ms"). Reframe around the underlying problem.
+- **Symptom treatment**: The ticket addresses a symptom rather than a root cause.
+- **Scope mismatch**: Over-scoped or under-scoped relative to the parent goal or the stated problem.
+- **Duplicate effort**: Overlapping with related or sibling issues.
+
+**If rationale is unclear**, use `AskUserQuestion` to challenge before proceeding. No point clarifying the "how" if the "why" is wrong. Example questions:
+- "This ticket says to add X, but the parent ticket's goal is Y. How does X contribute to Y?"
+- "This describes a solution (use Redis) rather than a problem. What's the underlying issue we're solving?"
+- "What happens if we don't do this? What's the cost of inaction?"
+
+If the rationale is clear and the approach makes sense, acknowledge it briefly and move on.
+
+#### 3. Analyze for Clarity
 
 Review the ticket for common ambiguities:
 - **Vague requirements**: "improve performance" without metrics, "make it better"
@@ -47,6 +72,14 @@ Review the ticket for common ambiguities:
 - **Data requirements**: What data is needed, format, validation rules
 - **Integration points**: How does this interact with other systems
 
+**Proactive observations** — after identifying ambiguities, also share your assessment:
+- **Flag concerns**: If the proposed approach has known tradeoffs, mention them
+- **Suggest alternatives**: If there's a simpler or more common way to achieve the same goal, propose it
+- **Identify risks**: Dependencies, complexity, potential for scope creep
+
+Present observations directly, not just as questions. Example:
+> "The ticket proposes building a custom caching layer. Before we refine the details — have you considered using the existing `CacheService` that handles similar patterns? It might reduce scope significantly."
+
 If the ticket is already clear and well-defined, acknowledge this:
 ```
 This ticket appears well-defined with clear acceptance criteria.
@@ -58,7 +91,7 @@ Then use `AskUserQuestion` to ask: "Would you like to add or refine anything?" w
 
 If the user chooses "No", exit without making changes.
 
-#### 3. Interactive Questioning
+#### 4. Interactive Questioning
 
 Use the `AskUserQuestion` tool to clarify ambiguities:
 - Group related questions together (max 4 questions per interaction)
@@ -113,7 +146,7 @@ options:
     description: "Undo partial changes and restore previous state"
 ```
 
-#### 4. Update the Ticket
+#### 5. Update the Ticket
 
 Format the refined requirements as acceptance criteria:
 
@@ -135,7 +168,7 @@ Format the refined requirements as acceptance criteria:
 
 Use `mcp__linear-server__update_issue` to update the description field with the new/updated A/C section. Update directly without separate approval.
 
-#### 5. Add Audit Comment
+#### 6. Add Audit Comment
 
 Use `mcp__linear-server__create_comment` to document the refinement:
 
@@ -155,13 +188,13 @@ Use `mcp__linear-server__create_comment` to document the refinement:
 - [New A/C 2]
 ```
 
-#### 6. Summary
+#### 7. Summary
 
 Display a concise summary to the user:
 ```
-✓ Ticket refined: {{$1}}
-✓ Questions asked: [N]
-✓ Acceptance criteria updated
+Ticket refined: {{$1}}
+Questions asked: [N]
+Acceptance criteria updated
 
 View ticket: [link to Linear ticket]
 ```
@@ -186,10 +219,12 @@ View ticket: [link to Linear ticket]
 
 ### Important Notes
 
+- **Challenge before clarifying** — Verify the task's value and rationale before refining details. If the "why" isn't clear, resolve that first.
+- **Be opinionated** — If you see a simpler approach, a potential risk, or a mismatch with the parent goal, say so. Present your reasoning and let the user decide.
+- **Solution vs problem** — Watch for tickets that prescribe a solution. Reframe around the underlying problem so the best solution can emerge.
 - Focus on clarifying **what** needs to be done, not **how** to implement it
 - Acceptance criteria should be testable/verifiable
-- Keep the refinement collaborative - the human has context you may not have
-- Don't add unnecessary requirements - only clarify what's ambiguous
+- Keep the refinement collaborative — the human has context you may not have, but you may see patterns they don't
 
 {{else}}
 **Error:** No ticket ID provided.

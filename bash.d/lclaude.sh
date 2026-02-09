@@ -51,6 +51,7 @@ lclaude() {
     # If no repos to show, just launch
     if [[ ${#valid_repos[@]} -eq 0 ]]; then
         echo "No history available. Launching Claude in current directory..."
+        clear
         "$real_claude" "$@"
         return
     fi
@@ -58,6 +59,7 @@ lclaude() {
     # If only current dir and we're in git repo, launch directly (no need to prompt)
     if [[ "$in_git_repo" == true ]] && [[ ${#valid_repos[@]} -eq 1 ]]; then
         _lclaude_add_to_history "$current_dir"
+        clear
         "$real_claude" "$@"
         return
     fi
@@ -101,14 +103,17 @@ lclaude() {
         echo "Cancelled."
         return 1
     elif [[ "$selection" == "[Stay in current directory]" ]]; then
+        clear
         "$real_claude" "$@"
     elif [[ "$selection" == "$current_dir" ]]; then
         _lclaude_add_to_history "$current_dir"
+        clear
         "$real_claude" "$@"
     else
         echo "Changing to: $selection"
         cd "$selection" || return 1
         _lclaude_add_to_history "$selection"
+        clear
         "$real_claude" "$@"
     fi
 }
