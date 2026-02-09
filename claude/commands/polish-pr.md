@@ -65,17 +65,26 @@ Address review comments for PR: **#{{$1}}**
       - Show the reviewer's comment
       - Show surrounding code for context (if helpful)
 
-   b. **Analyze and Propose Fix**
-      - Analyze the reviewer's concern
-      - Propose a specific fix with explanation
+   b. **Assess Comment & Propose Fix**
+
+      **Part 1 — Thinking Buddy Assessment:**
+      - **Evaluate the comment's merit**: Does the suggestion actually improve the code? Is it a valid concern or a style preference? Does it address a real problem?
+      - **Flag disagreements**: If the suggested approach has downsides or the existing code was correct, say so with reasoning
+      - **Suggest alternatives**: If there's a better way to address the reviewer's underlying concern than what they suggested, propose it
+      - **Categorize**: Indicate whether this is a "strong agree", "agree with modifications", "minor/style preference", or "disagree — here's why"
+
+      **Part 2 — Proposed Fix:**
+      - Based on the assessment, propose a specific fix (may differ from what the reviewer suggested if you have a better idea)
       - Explain what changes will be made and why
+      - If you disagree with the comment, still propose what you would do if asked (but clearly communicate the disagreement)
 
    c. **Get User Approval**
       - Use `AskUserQuestion` to present options:
         - **"Approve fix"** - Proceed with this specific fix
         - **"Approve all similar"** - If pattern detected, batch similar fixes
         - **"Modify approach"** - User wants to change the proposed fix
-        - **"Skip this comment"** - Don't address this comment now
+        - **"Skip this comment"** - Don't address this comment now (deal with later)
+        - **"Dismiss comment"** - Agree with agent's assessment that this comment doesn't warrant a change
       - Wait for user decision before proceeding to next comment
       - Record approved fixes for implementation phase
 
@@ -87,7 +96,15 @@ Address review comments for PR: **#{{$1}}**
         - **"Custom explanation"** - Provide custom rationale
       - Record the skipped comment and rationale for the reply phase
 
-   e. **Create Todo List**
+   e. **Handle Dismissed Comments**
+      - If user selected "Dismiss comment", ask for the rationale using `AskUserQuestion`:
+        - **"Use agent's reasoning"** - Use the thinking buddy assessment as the rationale
+        - **"Not applicable"** - The comment doesn't apply to current code
+        - **"Disagree with suggestion"** - Have a different technical opinion
+        - **"Custom explanation"** - Provide custom rationale
+      - Record the dismissed comment and rationale for the reply phase
+
+   f. **Create Todo List**
       - After ALL comments are planned and approved, use TodoWrite
       - Format: "Address comment by @reviewer: <brief summary>"
       - Only include approved fixes in the todo list
@@ -151,7 +168,24 @@ Address review comments for PR: **#{{$1}}**
         }'
         ```
 
-   e. **Mark Todo Complete**
+   e. **Reply to Dismissed Comments**
+      - For each dismissed comment, post a threaded reply explaining why no change is warranted:
+        ```bash
+        gh api graphql -f query='
+        mutation {
+          addPullRequestReviewThreadReply(input: {
+            pullRequestReviewThreadId: "<thread_id>"
+            body: "Won'\''t be changing this.\n\n**Reason:** <rationale>\n\n🤖 Generated with [Claude Code](https://claude.ai/claude-code)"
+          }) {
+            comment {
+              id
+              body
+            }
+          }
+        }'
+        ```
+
+   f. **Mark Todo Complete**
       - Update TodoWrite to mark this comment as completed
 
 5. **Push All Changes**
@@ -165,10 +199,13 @@ Address review comments for PR: **#{{$1}}**
    - List all comments that were addressed
    - Show commit SHAs for each fix
    - List any comments that were skipped (with replies posted explaining the rationale)
+   - List any comments that were dismissed (with replies posted explaining why)
    - Remind user to manually resolve conversations after reviewing the changes
 
 ### Important Notes
 
+- **Be Opinionated (Thinking Buddy)**: If a review comment is a style preference disguised as a bug, or if the existing code was actually correct, say so. Present your reasoning and let the user decide.
+- **Reviewer Comments Are Suggestions, Not Mandates**: Evaluate each comment on its merit. Some may be wrong, some may have better alternatives. Your job is to give the PR author a second opinion.
 - **Two-Phase Approach**: ALWAYS complete the Plan Phase (get approval for ALL comments) before starting Implementation Phase
 - **One-by-One Planning**: Process each comment individually during planning, getting user approval before moving to the next
 - **Batch Approval**: When similar issues are detected (e.g., same type of fix across multiple files), offer "Approve all similar" option
@@ -176,7 +213,7 @@ Address review comments for PR: **#{{$1}}**
 - **Thread IDs vs Comment IDs**: When replying to review comments, you must use the **thread ID** (format: `PRRT_*`), NOT the comment ID (format: `PRRC_*`). The REST API `/pulls/comments/{id}/replies` endpoint returns 404 - use GraphQL `addPullRequestReviewThreadReply` mutation instead.
 - Make each fix a separate commit with a clear message
 - **Always include attribution**: Every GitHub reply must include the Claude Code attribution line
-- **Skipped Comments**: When a user chooses to skip a comment, always ask for rationale and post a reply explaining why it won't be addressed
+- **Skipped vs Dismissed**: "Skip" means "deal with later" (won't address in this PR). "Dismiss" means "I've considered it and chosen not to change anything" (won't be changing this). Use the appropriate reply template for each.
 - **Manual Resolution**: Conversations are NOT auto-resolved - humans will resolve them manually after reviewing the changes
 - If a review comment is unclear, ask the user for clarification during the planning phase
 - Use `gh api` for detailed operations not covered by `gh pr` commands
@@ -262,17 +299,26 @@ gh pr view --json number --jq '.number'
       - Show the reviewer's comment
       - Show surrounding code for context (if helpful)
 
-   b. **Analyze and Propose Fix**
-      - Analyze the reviewer's concern
-      - Propose a specific fix with explanation
+   b. **Assess Comment & Propose Fix**
+
+      **Part 1 — Thinking Buddy Assessment:**
+      - **Evaluate the comment's merit**: Does the suggestion actually improve the code? Is it a valid concern or a style preference? Does it address a real problem?
+      - **Flag disagreements**: If the suggested approach has downsides or the existing code was correct, say so with reasoning
+      - **Suggest alternatives**: If there's a better way to address the reviewer's underlying concern than what they suggested, propose it
+      - **Categorize**: Indicate whether this is a "strong agree", "agree with modifications", "minor/style preference", or "disagree — here's why"
+
+      **Part 2 — Proposed Fix:**
+      - Based on the assessment, propose a specific fix (may differ from what the reviewer suggested if you have a better idea)
       - Explain what changes will be made and why
+      - If you disagree with the comment, still propose what you would do if asked (but clearly communicate the disagreement)
 
    c. **Get User Approval**
       - Use `AskUserQuestion` to present options:
         - **"Approve fix"** - Proceed with this specific fix
         - **"Approve all similar"** - If pattern detected, batch similar fixes
         - **"Modify approach"** - User wants to change the proposed fix
-        - **"Skip this comment"** - Don't address this comment now
+        - **"Skip this comment"** - Don't address this comment now (deal with later)
+        - **"Dismiss comment"** - Agree with agent's assessment that this comment doesn't warrant a change
       - Wait for user decision before proceeding to next comment
       - Record approved fixes for implementation phase
 
@@ -284,7 +330,15 @@ gh pr view --json number --jq '.number'
         - **"Custom explanation"** - Provide custom rationale
       - Record the skipped comment and rationale for the reply phase
 
-   e. **Create Todo List**
+   e. **Handle Dismissed Comments**
+      - If user selected "Dismiss comment", ask for the rationale using `AskUserQuestion`:
+        - **"Use agent's reasoning"** - Use the thinking buddy assessment as the rationale
+        - **"Not applicable"** - The comment doesn't apply to current code
+        - **"Disagree with suggestion"** - Have a different technical opinion
+        - **"Custom explanation"** - Provide custom rationale
+      - Record the dismissed comment and rationale for the reply phase
+
+   f. **Create Todo List**
       - After ALL comments are planned and approved, use TodoWrite
       - Format: "Address comment by @reviewer: <brief summary>"
       - Only include approved fixes in the todo list
@@ -348,7 +402,24 @@ gh pr view --json number --jq '.number'
         }'
         ```
 
-   e. **Mark Todo Complete**
+   e. **Reply to Dismissed Comments**
+      - For each dismissed comment, post a threaded reply explaining why no change is warranted:
+        ```bash
+        gh api graphql -f query='
+        mutation {
+          addPullRequestReviewThreadReply(input: {
+            pullRequestReviewThreadId: "<thread_id>"
+            body: "Won'\''t be changing this.\n\n**Reason:** <rationale>\n\n🤖 Generated with [Claude Code](https://claude.ai/claude-code)"
+          }) {
+            comment {
+              id
+              body
+            }
+          }
+        }'
+        ```
+
+   f. **Mark Todo Complete**
       - Update TodoWrite to mark this comment as completed
 
 5. **Push All Changes**
@@ -362,10 +433,13 @@ gh pr view --json number --jq '.number'
    - List all comments that were addressed
    - Show commit SHAs for each fix
    - List any comments that were skipped (with replies posted explaining the rationale)
+   - List any comments that were dismissed (with replies posted explaining why)
    - Remind user to manually resolve conversations after reviewing the changes
 
 ### Important Notes
 
+- **Be Opinionated (Thinking Buddy)**: If a review comment is a style preference disguised as a bug, or if the existing code was actually correct, say so. Present your reasoning and let the user decide.
+- **Reviewer Comments Are Suggestions, Not Mandates**: Evaluate each comment on its merit. Some may be wrong, some may have better alternatives. Your job is to give the PR author a second opinion.
 - **Two-Phase Approach**: ALWAYS complete the Plan Phase (get approval for ALL comments) before starting Implementation Phase
 - **One-by-One Planning**: Process each comment individually during planning, getting user approval before moving to the next
 - **Batch Approval**: When similar issues are detected (e.g., same type of fix across multiple files), offer "Approve all similar" option
@@ -373,7 +447,7 @@ gh pr view --json number --jq '.number'
 - **Thread IDs vs Comment IDs**: When replying to review comments, you must use the **thread ID** (format: `PRRT_*`), NOT the comment ID (format: `PRRC_*`). The REST API `/pulls/comments/{id}/replies` endpoint returns 404 - use GraphQL `addPullRequestReviewThreadReply` mutation instead.
 - Make each fix a separate commit with a clear message
 - **Always include attribution**: Every GitHub reply must include the Claude Code attribution line
-- **Skipped Comments**: When a user chooses to skip a comment, always ask for rationale and post a reply explaining why it won't be addressed
+- **Skipped vs Dismissed**: "Skip" means "deal with later" (won't address in this PR). "Dismiss" means "I've considered it and chosen not to change anything" (won't be changing this). Use the appropriate reply template for each.
 - **Manual Resolution**: Conversations are NOT auto-resolved - humans will resolve them manually after reviewing the changes
 - If a review comment is unclear, ask the user for clarification during the planning phase
 - Use `gh api` for detailed operations not covered by `gh pr` commands

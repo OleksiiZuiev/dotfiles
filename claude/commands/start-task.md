@@ -173,41 +173,60 @@ Context file: `{context-path}/{{$1}}.md`
    - Execute each task sequentially
    - Track files changed during implementation
    - Run tests and verify
+   - After implementation, prepare a brief summary: what was accomplished, key decisions, files changed
 
-9. **Update Ticket Context Document**
-   - Create context directory if needed: `mkdir -p {context-path}`
-   - If new ticket: create document from template:
-     ```markdown
-     # {{$1}}: {Ticket Title}
-
-     ## Ticket Info
-     - **Linear Link**: https://linear.app/team/issue/{{$1}}
-     - **Created**: {YYYY-MM-DD}
-
-     ## Sessions
+9. **Update Ticket Context Document (via subagent)**
+   - Use the Task tool to spawn a general-purpose subagent with this prompt:
      ```
-   - Append new session entry:
-     ```markdown
-     ### {YYYY-MM-DD HH:MM} - {Brief Session Title}
-     **Branch**: `{branch-name}`
-     **Repository**: `{repo-name}`
+     Update the ticket context document for a completed implementation session.
 
-     #### Accomplished
-     - {bullet list of completed items}
+     Configuration:
+     - Context directory: ${CLAUDE_TICKET_CONTEXTS_DIR:-$HOME/work/ticket-contexts}
+     - Context file: {context-dir}/{TICKET-ID}.md
 
-     #### Key Decisions
-     - {decision}: {rationale}
+     Session details:
+     - Ticket ID: {ticket-id}
+     - Ticket Title: {title from Linear}
+     - Branch: {current branch}
+     - Repository: {repo name}
+     - Date/Time: {current date and time}
 
-     #### Files Changed
-     - `{path}` - {description}
+     What was accomplished:
+     {bullet list of what was implemented}
 
-     ---
+     Key decisions:
+     {decisions with rationale}
+
+     Files changed:
+     {list of files with descriptions}
+
+     Instructions:
+     1. Run: echo ${CLAUDE_TICKET_CONTEXTS_DIR:-$HOME/work/ticket-contexts} to resolve the path
+     2. Run: mkdir -p {resolved-path}
+     3. Check if {resolved-path}/{ticket-id}.md exists
+     4. If NOT exists, create it with this header:
+        # {ticket-id}: {title}
+        ## Ticket Info
+        - **Linear Link**: {linear-url}
+        - **Created**: {today}
+        ## Sessions
+     5. Append a new session entry at the end of the file:
+        ### {date} - {brief title}
+        **Branch**: `{branch}`
+        **Repository**: `{repo}`
+        #### Accomplished
+        - {items}
+        #### Key Decisions
+        - {items}
+        #### Files Changed
+        - {items}
+        ---
      ```
 
 10. **Final Summary**
-   - Show what was implemented (or "Plan saved" if user chose save only)
-   - Show context document location: `{context-path}/{{$1}}.md`
-   - Remind user: `/create-pr {{$1}}` (if implemented) or `/start-task {{$1}}` to resume (if saved only)
+    - Show what was implemented (or "Plan saved" if user chose save only)
+    - Confirm ticket context was updated
+    - Remind user: `/create-pr {{$1}}` (if implemented) or `/start-task {{$1}}` to resume (if saved only)
 
 ### Important Notes
 
