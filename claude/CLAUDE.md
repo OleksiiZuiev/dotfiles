@@ -32,6 +32,12 @@ When resolving a repo reference:
 
 Regenerate the map: `bash ~/dotfiles/claude/scripts/update-repo-map.sh`
 
+# Symlink Management
+
+Files in this repo are symlinked to `~/.claude/` and `~/.bash.d/` by the install script. After creating new files that need to be symlinked, the install script must be re-run.
+
+On Windows without Developer Mode, use `install-admin.ps1` in the repo root — it self-elevates to admin (UAC prompt) and runs `install.sh --home`.
+
 # Ticket Context Documents
 
 Session history for Linear tickets, stored outside the repo for worktree access.
@@ -41,10 +47,10 @@ Session history for Linear tickets, stored outside the repo for worktree access.
 Set the environment variable to customize the storage location:
 
 ```bash
-export CLAUDE_TICKET_CONTEXTS_DIR="$HOME/work/ticket-contexts"
+export CLAUDE_TICKET_CONTEXTS_DIR="/c/work/ticket-contexts"
 ```
 
-Default: `~/work/ticket-contexts/`
+Default: `/c/work/ticket-contexts/`
 
 ## Structure
 
