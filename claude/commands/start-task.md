@@ -37,8 +37,8 @@ This mode will:
    - Run `git pull` to get latest changes from remote
 
 2. **Fetch Linear Ticket Details**
-   - Use the Task tool with MCP Linear integration to fetch ticket details for `{{$1}}`
-   - Extract: ticket ID, title, type/labels, and description
+   - Use `mcp__linear-server__get_issue` with ticket ID `{{$1}}` and `includeRelations: true`
+   - Extract: ticket ID, title, type/labels, description, and parent issue (if exists)
    - This information will be used to generate the branch name
 
 3. **Generate Branch Name**
@@ -116,7 +116,7 @@ Additional context from user: "{{$ARGUMENTS}}"
 
 ### Ticket Context Configuration
 
-Context path: `${CLAUDE_TICKET_CONTEXTS_DIR:-$HOME/work/ticket-contexts}`
+Context path: `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}`
 Context file: `{context-path}/{{$1}}.md`
 
 ### Steps to Follow
@@ -136,8 +136,8 @@ Context file: `{context-path}/{{$1}}.md`
    - Note: This helps maintain continuity across worktrees and sessions
 
 2. **Fetch Linear Ticket Details**
-   - Use the Task tool with the MCP Linear integration to fetch ticket details for `{{$1}}`
-   - Extract the ticket title, description, and any linked resources
+   - Use `mcp__linear-server__get_issue` with ticket ID `{{$1}}` and `includeRelations: true`
+   - Extract the ticket title, description, comments, and any linked resources
    - Look for Notion page links in the description or comments and fetch those automatically
 
 3. **Explore the Codebase**
@@ -157,6 +157,7 @@ Context file: `{context-path}/{{$1}}.md`
      - Implementation steps with rationale
      - Testing approach
      - Any risks or considerations
+     - **Final step: Update ticket context document** — the plan MUST end with a step to append a session entry to `{context-path}/{{$1}}.md` following the template from step 1. This step will capture what was accomplished, key decisions, and files changed during implementation.
 
 6. **Save the Plan**
    - After exiting plan mode, save the plan to `.claude/plans/{{$1}}.md`
@@ -175,55 +176,7 @@ Context file: `{context-path}/{{$1}}.md`
    - Run tests and verify
    - After implementation, prepare a brief summary: what was accomplished, key decisions, files changed
 
-9. **Update Ticket Context Document (via subagent)**
-   - Use the Task tool to spawn a general-purpose subagent with this prompt:
-     ```
-     Update the ticket context document for a completed implementation session.
-
-     Configuration:
-     - Context directory: ${CLAUDE_TICKET_CONTEXTS_DIR:-$HOME/work/ticket-contexts}
-     - Context file: {context-dir}/{TICKET-ID}.md
-
-     Session details:
-     - Ticket ID: {ticket-id}
-     - Ticket Title: {title from Linear}
-     - Branch: {current branch}
-     - Repository: {repo name}
-     - Date/Time: {current date and time}
-
-     What was accomplished:
-     {bullet list of what was implemented}
-
-     Key decisions:
-     {decisions with rationale}
-
-     Files changed:
-     {list of files with descriptions}
-
-     Instructions:
-     1. Run: echo ${CLAUDE_TICKET_CONTEXTS_DIR:-$HOME/work/ticket-contexts} to resolve the path
-     2. Run: mkdir -p {resolved-path}
-     3. Check if {resolved-path}/{ticket-id}.md exists
-     4. If NOT exists, create it with this header:
-        # {ticket-id}: {title}
-        ## Ticket Info
-        - **Linear Link**: {linear-url}
-        - **Created**: {today}
-        ## Sessions
-     5. Append a new session entry at the end of the file:
-        ### {date} - {brief title}
-        **Branch**: `{branch}`
-        **Repository**: `{repo}`
-        #### Accomplished
-        - {items}
-        #### Key Decisions
-        - {items}
-        #### Files Changed
-        - {items}
-        ---
-     ```
-
-10. **Final Summary**
+9. **Final Summary**
     - Show what was implemented (or "Plan saved" if user chose save only)
     - Confirm ticket context was updated
     - Remind user: `/create-pr {{$1}}` (if implemented) or `/start-task {{$1}}` to resume (if saved only)
