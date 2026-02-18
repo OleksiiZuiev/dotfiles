@@ -29,10 +29,12 @@
       "Bash(docker exec:*)",
       "Bash(docker-compose up:*)",
       "Bash(netstat:*)",
+      "Bash(grep:*)",
       "Bash(find:*)",
       "Bash(findstr:*)",
       "Bash(sed:*)",
       "Bash(ls:*)",
+      "Bash(mkdir:*)",
       "Bash(tail:*)",
       "Bash(wc:*)",
       "Bash(dir:*)",
@@ -54,6 +56,7 @@
       "Bash(az containerapp revision show:*)",
       "Bash(az containerapp logs show:*)",
       "Bash(az account show:*)",
+      "Bash(az account list:*)",
       "Bash(az keyvault secret list:*)",
       "Bash(terraform fmt:*)",
       "Bash(claude code settings)",
@@ -61,12 +64,12 @@
       "Skill(refine)",
       "mcp__notion__notion-fetch",
       "mcp__notion__notion-update-page",
-      "mcp__linear-server__get_issue",
-      "mcp__linear-server__list_comments",
-      "mcp__linear-server__update_issue",
-      "mcp__linear-server__create_comment"
+      "mcp__linear-server__*",
+      "Write(//c/work/ticket-contexts/**)",
+      "Edit(//c/work/ticket-contexts/**)"
     ]
   },
+  "model": "opus",
   "hooks": {
     "Stop": [
       {
@@ -96,5 +99,5 @@
     "command": "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\OleksiiZuiev\\.claude\\statusline.ps1"
   },
   "alwaysThinkingEnabled": true,
-  "model": "opus"
+  "effortLevel": "medium"
 }
