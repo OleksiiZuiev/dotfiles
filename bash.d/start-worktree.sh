@@ -12,6 +12,7 @@
 #   - Strips branch prefix (feat/int-31-foo -> int-31-foo)
 #   - Creates worktree at ../repo-worktrees/<stripped-branch-name>
 #   - CDs into the new worktree
+#   - Launches lclaude in the new worktree
 
 start-worktree() {
     local branch="$1"
@@ -75,4 +76,7 @@ start-worktree() {
     # CD into worktree
     echo "Changing to: $worktree_dir"
     cd "$worktree_dir"
+
+    # Launch lclaude in the new worktree
+    lclaude
 }
