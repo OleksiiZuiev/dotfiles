@@ -1,5 +1,5 @@
 # Create git worktree with proper validations
-# Usage: startworktree <branch-name>
+# Usage: start-worktree <branch-name>
 #
 # Prerequisites (all must pass):
 #   - Must be in a git repo
@@ -13,12 +13,12 @@
 #   - Creates worktree at ../repo-worktrees/<stripped-branch-name>
 #   - CDs into the new worktree
 
-startworktree() {
+start-worktree() {
     local branch="$1"
 
     # Require branch name argument
     if [[ -z "$branch" ]]; then
-        echo "Usage: startworktree <branch-name>"
+        echo "Usage: start-worktree <branch-name>"
         return 1
     fi
 
