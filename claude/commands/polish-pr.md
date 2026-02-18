@@ -48,11 +48,27 @@ Address review comments for PR: **#{{$1}}**
 2. **Display Comments Summary**
    - Show the total number of unresolved comments
    - Group comments by file/location for better context
+   - Note how many threads have existing replies (candidates for auto-skip triage)
    - Prepare to process each comment one-by-one
 
-3. **Plan Phase - For Each Unresolved Comment (One-by-One):**
+3. **Triage Already-Addressed Threads**
 
-   **IMPORTANT**: Process comments ONE AT A TIME. For each comment:
+   Before entering the Plan Phase, triage unresolved threads that already have replies (more than just the original review comment). This step is silent — no user interaction needed.
+
+   For each unresolved thread with replies:
+   1. Read the full thread conversation (original comment + all replies)
+   2. Check the current state of the code at the commented location
+   3. Assess whether the reviewer's concern has already been addressed — either by a code change, an explanatory reply, or both
+   4. **If addressed**: Exclude from processing. Record the thread and the reason it was considered addressed (e.g., "code changed in commit abc123", "explanatory reply given")
+   5. **If NOT addressed**: Keep it in the processing queue (e.g., reply was a question back to the reviewer, code wasn't actually changed, reply acknowledged but didn't fix)
+
+   After triage, display:
+   - How many threads were auto-skipped as already addressed
+   - For each skipped thread: the file, reviewer comment summary, and why it was considered addressed
+
+4. **Plan Phase - For Each Remaining Unresolved Comment (One-by-One):**
+
+   **IMPORTANT**: Process comments ONE AT A TIME. Only process threads that were NOT auto-skipped in the triage step. For each comment:
 
    a. **Display Comment Context**
       - Show file path and line number
@@ -104,7 +120,7 @@ Address review comments for PR: **#{{$1}}**
       - Format: "Address comment by @reviewer: <brief summary>"
       - Only include approved fixes in the todo list
 
-4. **Implementation Phase - For Each Approved Fix:**
+5. **Implementation Phase - For Each Approved Fix:**
 
    a. **Implement the Fix**
       - Read the relevant code files
@@ -183,14 +199,14 @@ Address review comments for PR: **#{{$1}}**
    f. **Mark Todo Complete**
       - Update TodoWrite to mark this comment as completed
 
-5. **Push All Changes**
+6. **Push All Changes**
    - After all comments are addressed:
      ```bash
      git push
      ```
    - This updates the PR with all fix commits
 
-6. **Update PR Description (if scope changed)**
+7. **Update PR Description (if scope changed)**
    - After pushing, check whether polishing changed the PR's scope enough to warrant a description update
    - **Detect scope changes:**
      - Fetch the current PR description:
@@ -224,9 +240,9 @@ Address review comments for PR: **#{{$1}}**
        )"
        ```
 
-7. **Final Summary**
-   - List all comments that were addressed
-   - Show commit SHAs for each fix
+8. **Final Summary**
+   - List all comments that were addressed with commit SHAs
+   - List any threads that were auto-skipped as already addressed (from triage step), with the reason for each
    - List any comments that were skipped (with replies posted explaining the rationale)
    - List any comments that were dismissed (with replies posted explaining why)
    - Note whether the PR description was updated
@@ -236,6 +252,7 @@ Address review comments for PR: **#{{$1}}**
 
 - **Be Opinionated (Thinking Buddy)**: If a review comment is a style preference disguised as a bug, or if the existing code was actually correct, say so. Present your reasoning and let the user decide.
 - **Reviewer Comments Are Suggestions, Not Mandates**: Evaluate each comment on its merit. Some may be wrong, some may have better alternatives. Your job is to give the PR author a second opinion.
+- **Already-Addressed Detection**: Before entering the Plan Phase, threads with existing replies are triaged. If the reviewer's concern appears already addressed (code was changed, explanatory reply was given), the thread is skipped entirely — no assessment, no user prompt, no reply posted. These are listed in the summary.
 - **Two-Phase Approach**: ALWAYS complete the Plan Phase (get approval for ALL comments) before starting Implementation Phase
 - **One-by-One Planning**: Process each comment individually during planning, getting user approval before moving to the next
 - **Batch Approval**: When similar issues are detected (e.g., same type of fix across multiple files), offer "Approve all similar" option
@@ -318,11 +335,27 @@ gh pr view --json number --jq '.number'
 2. **Display Comments Summary**
    - Show the total number of unresolved comments
    - Group comments by file/location for better context
+   - Note how many threads have existing replies (candidates for auto-skip triage)
    - Prepare to process each comment one-by-one
 
-3. **Plan Phase - For Each Unresolved Comment (One-by-One):**
+3. **Triage Already-Addressed Threads**
 
-   **IMPORTANT**: Process comments ONE AT A TIME. For each comment:
+   Before entering the Plan Phase, triage unresolved threads that already have replies (more than just the original review comment). This step is silent — no user interaction needed.
+
+   For each unresolved thread with replies:
+   1. Read the full thread conversation (original comment + all replies)
+   2. Check the current state of the code at the commented location
+   3. Assess whether the reviewer's concern has already been addressed — either by a code change, an explanatory reply, or both
+   4. **If addressed**: Exclude from processing. Record the thread and the reason it was considered addressed (e.g., "code changed in commit abc123", "explanatory reply given")
+   5. **If NOT addressed**: Keep it in the processing queue (e.g., reply was a question back to the reviewer, code wasn't actually changed, reply acknowledged but didn't fix)
+
+   After triage, display:
+   - How many threads were auto-skipped as already addressed
+   - For each skipped thread: the file, reviewer comment summary, and why it was considered addressed
+
+4. **Plan Phase - For Each Remaining Unresolved Comment (One-by-One):**
+
+   **IMPORTANT**: Process comments ONE AT A TIME. Only process threads that were NOT auto-skipped in the triage step. For each comment:
 
    a. **Display Comment Context**
       - Show file path and line number
@@ -374,7 +407,7 @@ gh pr view --json number --jq '.number'
       - Format: "Address comment by @reviewer: <brief summary>"
       - Only include approved fixes in the todo list
 
-4. **Implementation Phase - For Each Approved Fix:**
+5. **Implementation Phase - For Each Approved Fix:**
 
    a. **Implement the Fix**
       - Read the relevant code files
@@ -453,14 +486,14 @@ gh pr view --json number --jq '.number'
    f. **Mark Todo Complete**
       - Update TodoWrite to mark this comment as completed
 
-5. **Push All Changes**
+6. **Push All Changes**
    - After all comments are addressed:
      ```bash
      git push
      ```
    - This updates the PR with all fix commits
 
-6. **Update PR Description (if scope changed)**
+7. **Update PR Description (if scope changed)**
    - After pushing, check whether polishing changed the PR's scope enough to warrant a description update
    - **Detect scope changes:**
      - Fetch the current PR description:
@@ -494,9 +527,9 @@ gh pr view --json number --jq '.number'
        )"
        ```
 
-7. **Final Summary**
-   - List all comments that were addressed
-   - Show commit SHAs for each fix
+8. **Final Summary**
+   - List all comments that were addressed with commit SHAs
+   - List any threads that were auto-skipped as already addressed (from triage step), with the reason for each
    - List any comments that were skipped (with replies posted explaining the rationale)
    - List any comments that were dismissed (with replies posted explaining why)
    - Note whether the PR description was updated
@@ -506,6 +539,7 @@ gh pr view --json number --jq '.number'
 
 - **Be Opinionated (Thinking Buddy)**: If a review comment is a style preference disguised as a bug, or if the existing code was actually correct, say so. Present your reasoning and let the user decide.
 - **Reviewer Comments Are Suggestions, Not Mandates**: Evaluate each comment on its merit. Some may be wrong, some may have better alternatives. Your job is to give the PR author a second opinion.
+- **Already-Addressed Detection**: Before entering the Plan Phase, threads with existing replies are triaged. If the reviewer's concern appears already addressed (code was changed, explanatory reply was given), the thread is skipped entirely — no assessment, no user prompt, no reply posted. These are listed in the summary.
 - **Two-Phase Approach**: ALWAYS complete the Plan Phase (get approval for ALL comments) before starting Implementation Phase
 - **One-by-One Planning**: Process each comment individually during planning, getting user approval before moving to the next
 - **Batch Approval**: When similar issues are detected (e.g., same type of fix across multiple files), offer "Approve all similar" option
