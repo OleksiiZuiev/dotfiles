@@ -6,11 +6,6 @@ argument-hint: <ticket-id> [--worktree] [extra context]
 
 You are helping the user start work on a new task by gathering context and creating an implementation plan.
 
-## Current Context
-
-Working directory: !`pwd`
-Current branch: !`git branch --show-current 2>/dev/null || echo "not in git repo"`
-
 ## Your Task
 
 {{#if $1}}
@@ -121,14 +116,6 @@ Context file: `{context-path}/{{$1}}.md`
 
 ### Steps to Follow
 
-0. **Check for Existing Plan**
-   - Check if `.claude/plans/{{$1}}.md` exists
-   - If yes, use AskUserQuestion:
-     - "Found existing plan for {{$1}}. What would you like to do?"
-     - Option 1: "Resume implementation" - Skip to step 7 (implementation)
-     - Option 2: "Create fresh plan" - Continue with normal flow (overwrites existing)
-   - If no plan exists, continue with step 1
-
 1. **Load Existing Ticket Context (if exists)**
    - Check if `{context-path}/{{$1}}.md` exists
    - If yes, read and summarize previous sessions
@@ -167,9 +154,9 @@ Context file: `{context-path}/{{$1}}.md`
 7. **Confirm Implementation Approach**
    - Use AskUserQuestion with options:
      - "Implement now" - Continue with implementation in this session
-     - "Save plan only" - Save plan and exit (user can run `/start-task {{$1}}` later to resume)
+     - "Save plan only" - Save plan and exit (user can run `/follow-up {{$1}}` later to continue)
 
-8. **Implement the Plan** (if user chose "Implement now" or "Resume implementation")
+8. **Implement the Plan** (if user chose "Implement now")
    - Use TodoWrite to create task list from plan
    - Execute each task sequentially
    - Track files changed during implementation
@@ -179,7 +166,7 @@ Context file: `{context-path}/{{$1}}.md`
 9. **Final Summary**
     - Show what was implemented (or "Plan saved" if user chose save only)
     - Confirm ticket context was updated
-    - Remind user: `/create-pr {{$1}}` (if implemented) or `/start-task {{$1}}` to resume (if saved only)
+    - Remind user: `/create-pr {{$1}}` (if implemented) or `/follow-up {{$1}} <next change>` to continue (if saved only)
 
 ### Important Notes
 

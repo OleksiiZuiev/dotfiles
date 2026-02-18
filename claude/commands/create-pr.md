@@ -6,11 +6,6 @@ argument-hint: <ticket-id> [--draft]
 
 You are creating a pull request for an implemented ticket.
 
-## Current Context
-
-Working directory: !`pwd`
-Current branch: !`git branch --show-current 2>/dev/null || echo "not in git repo"`
-
 ## Your Task
 
 {{#if $1}}
