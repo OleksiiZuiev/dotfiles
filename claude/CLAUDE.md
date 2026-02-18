@@ -23,12 +23,17 @@
 
 # Local GitHub Repos
 
+> **IMPORTANT**: When the user mentions ANY repo, package, SDK, library, or dependency by name — even casually — ALWAYS check the local filesystem FIRST before searching the web or claiming you can't access it. This includes references like `unified-to/unified-csharp-sdk`, "the unified SDK", "check the platform repo", etc.
+
 Repos are stored at `C:\work\github\{org}\{repo-name}`.
 
-When resolving a repo reference:
-1. **Exact `org/repo`**: resolve directly to `C:\work\github\{org}\{repo}`
-2. **Partial or ambiguous name**: read `~/.claude/repo-map.md` for the full repo list with descriptions, match by name or summary
+**Resolution steps** (follow in order for every repo/library mention):
+1. **Exact `org/repo`**: resolve directly to `C:\work\github\{org}\{repo}` and READ from that path
+2. **Partial or ambiguous name**: read `~/.claude/repo-map.md` for the full repo list with descriptions, match by name or summary, then READ from the matched path
 3. **Multiple matches**: show candidates and ask user to confirm
+4. **Not found locally**: only then fall back to web search or tell the user the repo isn't available locally
+
+Example: user says "look at `unified-to/unified-csharp-sdk`" → read files from `C:\work\github\unified-to\unified-csharp-sdk\`.
 
 Regenerate the map: `bash ~/dotfiles/claude/scripts/update-repo-map.sh`
 
