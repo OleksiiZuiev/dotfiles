@@ -6,11 +6,6 @@ argument-hint: [<pr-number>]
 
 You are addressing review comments on a pull request by implementing fixes, committing them, replying to comments, and resolving conversations.
 
-## Current Context
-
-Working directory: !`pwd`
-Current branch: !`git branch --show-current 2>/dev/null || echo "not in git repo"`
-
 ## Your Task
 
 {{#if $1}}
@@ -195,11 +190,46 @@ Address review comments for PR: **#{{$1}}**
      ```
    - This updates the PR with all fix commits
 
-6. **Final Summary**
+6. **Update PR Description (if scope changed)**
+   - After pushing, check whether polishing changed the PR's scope enough to warrant a description update
+   - **Detect scope changes:**
+     - Fetch the current PR description:
+       ```bash
+       gh pr view {{$1}} --json body --jq '.body'
+       ```
+     - Fetch the full diff stat of the PR:
+       ```bash
+       gh pr view {{$1}} --json baseRefName --jq '.baseRefName'
+       # then:
+       git diff origin/<base-branch>...HEAD --stat
+       ```
+     - Compare the description against the actual PR state:
+       - Are there new files in the diff not mentioned in the description?
+       - Were files/features removed that the description still references?
+       - Did the approach change from what the summary describes?
+     - **Skip this step entirely** if the polishing was only style/formatting fixes (no new logic, no new files, no changed approach)
+   - **Offer to update** — use `AskUserQuestion`:
+     - **"Update description"** — Revise the PR description to match current state
+     - **"Skip"** — Keep the existing description as-is
+   - **If approved, revise in-place:**
+     - Keep the existing structure (Summary section, Verification section, Closes link)
+     - Update the Summary section to reflect what the PR actually does now
+     - Update the Verification section if new test steps are needed
+     - Preserve the `Closes <ticket>` link and any other metadata
+     - Update using:
+       ```bash
+       gh pr edit {{$1}} --body "$(cat <<'EOF'
+       <updated PR body>
+       EOF
+       )"
+       ```
+
+7. **Final Summary**
    - List all comments that were addressed
    - Show commit SHAs for each fix
    - List any comments that were skipped (with replies posted explaining the rationale)
    - List any comments that were dismissed (with replies posted explaining why)
+   - Note whether the PR description was updated
    - Remind user to manually resolve conversations after reviewing the changes
 
 ### Important Notes
@@ -215,6 +245,7 @@ Address review comments for PR: **#{{$1}}**
 - **Always include attribution**: Every GitHub reply must include the Claude Code attribution line
 - **Skipped vs Dismissed**: "Skip" means "deal with later" (won't address in this PR). "Dismiss" means "I've considered it and chosen not to change anything" (won't be changing this). Use the appropriate reply template for each.
 - **Manual Resolution**: Conversations are NOT auto-resolved - humans will resolve them manually after reviewing the changes
+- **PR Description Updates**: Only offer to update the description when polishing meaningfully changed the PR's scope (new files, removed features, changed approach). Style/formatting fixes don't warrant a description update.
 - If a review comment is unclear, ask the user for clarification during the planning phase
 - Use `gh api` for detailed operations not covered by `gh pr` commands
 - Test critical changes before committing
@@ -429,11 +460,46 @@ gh pr view --json number --jq '.number'
      ```
    - This updates the PR with all fix commits
 
-6. **Final Summary**
+6. **Update PR Description (if scope changed)**
+   - After pushing, check whether polishing changed the PR's scope enough to warrant a description update
+   - **Detect scope changes:**
+     - Fetch the current PR description:
+       ```bash
+       gh pr view <pr-number> --json body --jq '.body'
+       ```
+     - Fetch the full diff stat of the PR:
+       ```bash
+       gh pr view <pr-number> --json baseRefName --jq '.baseRefName'
+       # then:
+       git diff origin/<base-branch>...HEAD --stat
+       ```
+     - Compare the description against the actual PR state:
+       - Are there new files in the diff not mentioned in the description?
+       - Were files/features removed that the description still references?
+       - Did the approach change from what the summary describes?
+     - **Skip this step entirely** if the polishing was only style/formatting fixes (no new logic, no new files, no changed approach)
+   - **Offer to update** — use `AskUserQuestion`:
+     - **"Update description"** — Revise the PR description to match current state
+     - **"Skip"** — Keep the existing description as-is
+   - **If approved, revise in-place:**
+     - Keep the existing structure (Summary section, Verification section, Closes link)
+     - Update the Summary section to reflect what the PR actually does now
+     - Update the Verification section if new test steps are needed
+     - Preserve the `Closes <ticket>` link and any other metadata
+     - Update using:
+       ```bash
+       gh pr edit <pr-number> --body "$(cat <<'EOF'
+       <updated PR body>
+       EOF
+       )"
+       ```
+
+7. **Final Summary**
    - List all comments that were addressed
    - Show commit SHAs for each fix
    - List any comments that were skipped (with replies posted explaining the rationale)
    - List any comments that were dismissed (with replies posted explaining why)
+   - Note whether the PR description was updated
    - Remind user to manually resolve conversations after reviewing the changes
 
 ### Important Notes
@@ -449,6 +515,7 @@ gh pr view --json number --jq '.number'
 - **Always include attribution**: Every GitHub reply must include the Claude Code attribution line
 - **Skipped vs Dismissed**: "Skip" means "deal with later" (won't address in this PR). "Dismiss" means "I've considered it and chosen not to change anything" (won't be changing this). Use the appropriate reply template for each.
 - **Manual Resolution**: Conversations are NOT auto-resolved - humans will resolve them manually after reviewing the changes
+- **PR Description Updates**: Only offer to update the description when polishing meaningfully changed the PR's scope (new files, removed features, changed approach). Style/formatting fixes don't warrant a description update.
 - If a review comment is unclear, ask the user for clarification during the planning phase
 - Use `gh api` for detailed operations not covered by `gh pr` commands
 - Test critical changes before committing
