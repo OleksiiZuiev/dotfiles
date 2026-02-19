@@ -1,7 +1,7 @@
 ---
 description: Gather context from Linear ticket and build implementation plan
 allowed-tools: Bash, Read, Write, Grep, Glob, Task, AskUserQuestion, EnterPlanMode, ExitPlanMode, TodoWrite
-argument-hint: <ticket-id> [--worktree] [extra context]
+argument-hint: <ticket-id> [extra context]
 ---
 
 You are helping the user start work on a new task by gathering context and creating an implementation plan.
@@ -9,99 +9,6 @@ You are helping the user start work on a new task by gathering context and creat
 ## Your Task
 
 {{#if $1}}
-{{! Check if --worktree flag is present in arguments }}
-{{#if (contains $ARGUMENTS "--worktree")}}
-
-## Worktree Mode
-
-You are creating a new worktree for Linear ticket: **{{$1}}**
-
-This mode will:
-1. Validate you're on main/master branch
-2. Create a new worktree with a clean branch
-3. Spawn a new Claude Code session in the worktree to continue the planning flow
-
-### Steps to Follow
-
-1. **Validate Environment**
-   - Check current branch is `main` or `master`
-   - If not on main/master, use AskUserQuestion to ask: "You're on branch `<current-branch>`. Switch to main and continue?" with options:
-     - "Yes, switch to main"
-     - "No, abort"
-   - If user chooses to switch, run `git checkout main` or `git checkout master` (whichever exists)
-   - Run `git pull` to get latest changes from remote
-
-2. **Fetch Linear Ticket Details**
-   - Use `mcp__linear-server__get_issue` with ticket ID `{{$1}}` and `includeRelations: true`
-   - Extract: ticket ID, title, type/labels, description, and parent issue (if exists)
-   - This information will be used to generate the branch name
-
-3. **Generate Branch Name**
-   - Determine branch type from ticket:
-     - If ticket type/labels contain "bug", "fix", or "defect" → use `fix/`
-     - If ticket type/labels contain "feature", "enhancement", or "story" → use `feature/`
-     - If ticket type/labels contain "chore", "task", or "maintenance" → use `chore/`
-     - If ticket type/labels contain "refactor" → use `refactor/`
-     - Default: `feature/`
-   - Convert ticket ID to lowercase (e.g., `ENG-123` → `eng-123`)
-   - Generate brief slug from ticket title:
-     - Take first 4 significant words (skip articles like "the", "a", "an")
-     - Convert to lowercase
-     - Replace spaces with hyphens
-     - Remove special characters
-     - Example: "Add User Authentication Feature" → "add-user-authentication-feature"
-   - Final format: `{type}/{id-lower}-{brief-slug}`
-   - Example: `feature/eng-123-add-user-authentication`
-
-4. **Confirm Branch Name**
-   - Use AskUserQuestion to show the proposed branch name
-   - Ask: "Branch name for this worktree?"
-   - Provide the generated name as the default option
-   - Allow user to modify if needed
-
-5. **Create Worktree**
-   - Get repository name: `basename $(git rev-parse --show-toplevel)`
-   - Create worktrees directory if needed: `mkdir -p "../${repo_name}-worktrees"`
-   - Create worktree with new branch:
-     ```bash
-     git worktree add "../${repo_name}-worktrees/{branch-name}" -b {branch-name}
-     ```
-   - Verify creation succeeded
-
-6. **Open New Terminal with Claude and Start Task**
-   - Get the absolute path of the worktree:
-     ```bash
-     worktree_abs_path=$(cd "../${repo_name}-worktrees/{branch-name}" && pwd)
-     ```
-   - Open a new Windows Terminal tab with Git Bash:
-     ```bash
-     wt.exe -w 0 -d "$worktree_abs_path" -- "C:/Users/OleksiiZuiev/AppData/Local/Programs/Git/bin/bash.exe" -l -i
-     ```
-     - `-w 0` opens a new tab in the current Windows Terminal window
-     - `-d` sets the working directory to the worktree
-     - `--` separator prevents command parsing issues
-     - Uses full path to Git Bash (not WSL bash) with `-l -i` flags for proper environment loading
-   - Display confirmation:
-     ```
-     ✓ Worktree created at: {worktree_abs_path}
-     ✓ Branch: {branch-name}
-     ✓ Git Bash opened in new terminal tab
-
-     Next steps in the new tab:
-     1. Run: claude
-     2. Run: /start-task {{$1}}
-     ```
-
-### Important Notes
-
-- The worktree is created in `../{repo-name}-worktrees/{branch-name}/`
-- A new Windows Terminal tab opens with Claude Code ready
-- Once Claude starts, manually run `/start-task {{$1}}` to begin planning
-- If `wt.exe` fails, fall back to showing the path and command for manual execution
-
-{{else}}
-
-## Simple Mode
 
 Create an implementation plan for Linear ticket: **{{$1}}**
 
@@ -176,14 +83,10 @@ Context file: `{context-path}/{{$1}}.md`
 - If the ticket references external docs (Notion, Confluence, etc.), fetch and incorporate that context
 - Context documents persist across worktrees, enabling continuity when switching branches
 
-{{/if}}
-
 {{else}}
 **Error:** No ticket ID provided.
 
-Usage: `/start-task <ticket-id> [--worktree] [extra context]`
+Usage: `/start-task <ticket-id> [extra context]`
 
-Examples:
-- Simple mode: `/start-task LIN-123 focus on performance`
-- Worktree mode: `/start-task LIN-123 --worktree`
+Example: `/start-task LIN-123 focus on performance`
 {{/if}}
