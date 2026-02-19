@@ -6,7 +6,7 @@
 
 lclaude() {
     local HISTORY_FILE="$HOME/.claude_repos"
-    local MAX_HISTORY=10
+    local MAX_HISTORY=30
     local real_claude="$HOME/.local/bin/claude.exe"
 
     # Refresh repo map in background
@@ -87,14 +87,21 @@ lclaude() {
         selection=$(printf '%s\n' "${menu_items[@]}" | \
             fzf --header="$header" --height=40% --reverse)
     else
-        # Fallback: numbered menu
+        # Fallback: numbered menu (capped at 15 items)
         echo "$header"
         local i=1
+        local max_display=15
         for item in "${menu_items[@]}"; do
-            echo "  $i) $item"
+            if [[ $i -le $max_display ]]; then
+                echo "  $i) $item"
+            fi
             ((i++))
         done
-        echo -n "Choice [1-$((i-1))]: "
+        local total=$((i - 1))
+        if [[ $total -gt $max_display ]]; then
+            echo "  ... $((total - max_display)) more repos available — install fzf for fuzzy search"
+        fi
+        echo -n "Choice [1-$total]: "
         read -r choice
         if [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -lt "$i" ]]; then
             selection="${menu_items[$((choice-1))]}"
