@@ -137,8 +137,8 @@ done
     create_link "$DOTFILES_DIR/claude/settings.json" "$TARGET_HOME/.claude/settings.json"
 [ -e "$DOTFILES_DIR/claude/CLAUDE.md" ] && \
     create_link "$DOTFILES_DIR/claude/CLAUDE.md" "$TARGET_HOME/.claude/CLAUDE.md"
-[ -e "$DOTFILES_DIR/claude/statusline.ps1" ] && \
-    create_link "$DOTFILES_DIR/claude/statusline.ps1" "$TARGET_HOME/.claude/statusline.ps1"
+[ -e "$DOTFILES_DIR/claude/statusline.sh" ] && \
+    create_link "$DOTFILES_DIR/claude/statusline.sh" "$TARGET_HOME/.claude/statusline.sh"
 
 # Install bash.d files
 echo ""

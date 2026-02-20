@@ -37,8 +37,10 @@
       "Bash(mkdir:*)",
       "Bash(tail:*)",
       "Bash(wc:*)",
+      "Bash(jq:*)",
       "Bash(dir:*)",
       "Bash(chmod:*)",
+      "Bash(time:*)",
       "Bash(pg_isready:*)",
       "Bash(gh auth:*)",
       "Bash(gh api graphql:*)",
@@ -96,7 +98,11 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\OleksiiZuiev\\.claude\\statusline.ps1"
+    "command": "bash /c/Users/OleksiiZuiev/.claude/statusline.sh"
+  },
+  "enabledPlugins": {
+    "slack@claude-plugins-official": true,
+    "csharp-lsp@claude-plugins-official": true
   },
   "alwaysThinkingEnabled": true,
   "effortLevel": "medium"
