@@ -1,0 +1,20 @@
+{
+    "window.newWindowDimensions": "maximized",
+    "github.copilot.nextEditSuggestions.enabled": true,
+    "python.defaultInterpreterPath": "c:\\Users\\OleksiiZuiev\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+    "terminal.integrated.defaultProfile.windows": "Git Bash",
+    "workbench.editor.enablePreview": false,
+    "workbench.secondarySideBar.defaultVisibility": "hidden",
+    "terminal.integrated.commandsToSkipShell": [
+        "workbench.action.terminal.rename"
+    ],
+    "terminal.integrated.allowWorkspaceShellIntegration": true,
+    "terminal.integrated.env.windows": {
+        "VSCODE_CLAUDE_CODE_CONTRIBUTION": "1"
+    },
+    "claudeCode.respectGitIgnore": false,
+    "claudeCode.useTerminal": true,
+    "claudeCode.selectedModel": "opus",
+    "claudeCode.preferredLocation": "panel",
+    "editor.minimap.enabled": false
+}

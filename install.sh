@@ -140,6 +140,19 @@ done
 [ -e "$DOTFILES_DIR/claude/statusline.sh" ] && \
     create_link "$DOTFILES_DIR/claude/statusline.sh" "$TARGET_HOME/.claude/statusline.sh"
 
+# Install VS Code settings
+echo ""
+echo "Installing VS Code configuration..."
+VSCODE_APPDATA="$TARGET_HOME/AppData/Roaming"
+if [ -d "$VSCODE_APPDATA/Code" ]; then
+    VSCODE_USER_DIR="$VSCODE_APPDATA/Code/User"
+    mkdir -p "$VSCODE_USER_DIR"
+    [ -e "$DOTFILES_DIR/vscode/settings.json" ] && \
+        create_link "$DOTFILES_DIR/vscode/settings.json" "$VSCODE_USER_DIR/settings.json"
+else
+    echo "  Skipped: VS Code not found at $VSCODE_APPDATA/Code"
+fi
+
 # Install bash.d files
 echo ""
 echo "Installing bash.d configuration..."
