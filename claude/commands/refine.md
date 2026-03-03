@@ -1,6 +1,6 @@
 ---
 description: Refine a Linear ticket by challenging assumptions, resolving ambiguities, and capturing answers as acceptance criteria
-allowed-tools: AskUserQuestion
+allowed-tools: AskUserQuestion, mcp__linear-server__get_issue, mcp__linear-server__save_issue, mcp__linear-server__create_comment
 argument-hint: <ticket-id>
 ---
 
@@ -11,6 +11,11 @@ You are helping refine a Linear ticket — not just as a scribe, but as a thinki
 {{#if $1}}
 
 Refine Linear ticket: **{{$1}}**
+
+### Critical Rules
+- **MANDATORY**: You MUST use `AskUserQuestion` for every ambiguity found in Step 3-4. NEVER assume or infer answers — always ask the user.
+- **MANDATORY**: If you identify 0 ambiguities, you MUST still ask the user to confirm the ticket is ready (Step 3 already covers this — follow it exactly).
+- **NEVER** skip Steps 2-4 or combine them into a single response without user interaction.
 
 ### Steps to Follow
 
@@ -166,7 +171,7 @@ Format the refined requirements as acceptance criteria:
 - Preserve any existing A/C that's still valid
 - Place A/C section after the description, before any "Notes" or similar sections
 
-Use `mcp__linear-server__update_issue` to update the description field with the new/updated A/C section. Update directly without separate approval.
+Use `mcp__linear-server__save_issue` to update the description field with the new/updated A/C section. Update directly without separate approval.
 
 #### 6. Add Audit Comment
 
@@ -198,6 +203,14 @@ Acceptance criteria updated
 
 View ticket: [link to Linear ticket]
 ```
+
+#### 8. Transition to Ready
+
+If refinement completed successfully (ticket was updated with acceptance criteria in Step 5):
+- Use `mcp__linear-server__save_issue` with `id: "<ticket-id>"` and `state: "Ready"` to move the ticket forward
+- Mention the transition in the summary: `Status: Moved to Ready`
+
+If refinement was cancelled or only partially completed (user chose "No, ticket is ready" without changes, or exited early), do NOT transition the status.
 
 ### Error Handling
 

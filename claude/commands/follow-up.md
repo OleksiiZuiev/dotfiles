@@ -21,6 +21,10 @@ Follow-up change: "{{$ARGUMENTS}}"
 Context path: `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}`
 Context file: `{context-path}/{{$1}}.md`
 
+### Critical Rules
+- **MANDATORY**: You MUST call `EnterPlanMode` (Step 4) before any implementation work. NEVER write or modify code without an approved plan.
+- **MANDATORY**: After plan approval, you MUST use `AskUserQuestion` (Step 6) to get explicit user consent before implementing. NEVER auto-proceed to implementation.
+
 ### Steps to Follow
 
 #### 1. Validate Arguments

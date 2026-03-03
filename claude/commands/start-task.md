@@ -21,6 +21,10 @@ Additional context from user: "{{$ARGUMENTS}}"
 Context path: `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}`
 Context file: `{context-path}/{{$1}}.md`
 
+### Critical Rules
+- **MANDATORY**: You MUST call `EnterPlanMode` before any implementation work. NEVER write or modify code without an approved plan.
+- **MANDATORY**: After plan approval, you MUST use `AskUserQuestion` (Step 7) to get explicit user consent before implementing. NEVER auto-proceed to implementation.
+
 ### Steps to Follow
 
 1. **Load Existing Ticket Context (if exists)**
