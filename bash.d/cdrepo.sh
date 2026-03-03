@@ -1,5 +1,5 @@
 # Quick directory switcher for recent git repos
-# Usage: cd-repo
+# Usage: cd-repo [path]
 # - Shows fzf menu of recent projects from ~/.claude_repos
 # - Selects a repo and CDs there
 
@@ -21,6 +21,23 @@ cd-repo() {
         grep -v "^${dir}$" "$HISTORY_FILE" 2>/dev/null | head -n $((MAX_HISTORY - 1)) >> "$temp_file"
         mv "$temp_file" "$HISTORY_FILE"
     }
+
+    # Direct navigation: cd-repo <path>
+    if [[ -n "$1" ]]; then
+        local target="$1"
+        if [[ ! -d "$target" ]]; then
+            echo "Not a valid directory: $target"
+            return 1
+        fi
+        if ! git -C "$target" rev-parse --git-dir > /dev/null 2>&1; then
+            echo "Not a git repository: $target"
+            return 1
+        fi
+        echo "Changing to: $target"
+        cd "$target" || return 1
+        _cd-repo_add_to_history "$target"
+        return
+    fi
 
     # Check if we're in a git repo
     local in_git_repo=false
