@@ -1,6 +1,6 @@
 ---
 description: Gather context from Linear ticket and build implementation plan
-allowed-tools: Bash, Read, Write, Grep, Glob, Task, AskUserQuestion, EnterPlanMode, ExitPlanMode, TodoWrite
+allowed-tools: Bash, Read, Write, Grep, Glob, Task, AskUserQuestion, EnterPlanMode, TodoWrite
 argument-hint: <ticket-id> [extra context]
 ---
 
@@ -23,7 +23,7 @@ Context file: `{context-path}/{{$1}}.md`
 
 ### Critical Rules
 - **MANDATORY**: You MUST call `EnterPlanMode` before any implementation work. NEVER write or modify code without an approved plan.
-- **MANDATORY**: After plan approval, you MUST use `AskUserQuestion` (Step 7) to get explicit user consent before implementing. NEVER auto-proceed to implementation.
+- **MANDATORY**: After writing the plan, call `ExitPlanMode`. The user will get a permission prompt to review and approve. NEVER auto-proceed to implementation.
 
 ### Steps to Follow
 
@@ -62,19 +62,14 @@ Context file: `{context-path}/{{$1}}.md`
    - Ensure the `.claude/plans/` directory exists (create if needed)
    - Format the plan as markdown with clear sections
 
-7. **Confirm Implementation Approach**
-   - Use AskUserQuestion with options:
-     - "Implement now" - Continue with implementation in this session
-     - "Save plan only" - Save plan and exit (user can run `/follow-up {{$1}}` later to continue)
-
-8. **Implement the Plan** (if user chose "Implement now")
+7. **Implement the Plan**
    - Use TodoWrite to create task list from plan
    - Execute each task sequentially
    - Track files changed during implementation
    - Run tests and verify
    - After implementation, prepare a brief summary: what was accomplished, key decisions, files changed
 
-9. **Final Summary**
+8. **Final Summary**
     - Show what was implemented (or "Plan saved" if user chose save only)
     - Confirm ticket context was updated
     - Remind user: `/create-pr {{$1}}` (if implemented) or `/follow-up {{$1}} <next change>` to continue (if saved only)

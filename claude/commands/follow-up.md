@@ -1,6 +1,6 @@
 ---
 description: Continue work on a Linear ticket with a specific follow-up change
-allowed-tools: Bash, Read, Write, Grep, Glob, Task, AskUserQuestion, EnterPlanMode, ExitPlanMode, TodoWrite
+allowed-tools: Bash, Read, Write, Grep, Glob, Task, AskUserQuestion, EnterPlanMode, TodoWrite
 argument-hint: <ticket-id> <prompt>
 ---
 
@@ -23,7 +23,7 @@ Context file: `{context-path}/{{$1}}.md`
 
 ### Critical Rules
 - **MANDATORY**: You MUST call `EnterPlanMode` (Step 4) before any implementation work. NEVER write or modify code without an approved plan.
-- **MANDATORY**: After plan approval, you MUST use `AskUserQuestion` (Step 6) to get explicit user consent before implementing. NEVER auto-proceed to implementation.
+- **MANDATORY**: After writing the plan, call `ExitPlanMode`. The user will get a permission prompt to review and approve. NEVER auto-proceed to implementation.
 
 ### Steps to Follow
 
@@ -97,14 +97,7 @@ After exiting plan mode, save the plan to `.claude/plans/{{$1}}.md`:
 - Format as markdown with clear sections
 - This overwrites any previous plan for this ticket
 
-#### 6. Confirm Implementation Approach
-
-Use AskUserQuestion:
-- "Ready to implement the follow-up change?"
-- Option 1: "Implement now" — continue with implementation
-- Option 2: "Save plan only" — save and exit
-
-#### 7. Implement the Plan (if user chose "Implement now")
+#### 6. Implement the Plan
 
 - Use TodoWrite to create task list from plan
 - Execute each task sequentially
@@ -112,7 +105,7 @@ Use AskUserQuestion:
 - Run tests and verify
 - After implementation, prepare a brief summary: what was accomplished, key decisions, files changed
 
-#### 8. Update Ticket Context
+#### 7. Update Ticket Context
 
 Use the Task tool with a subagent to update the ticket context document. Pass the subagent all session details:
 - Ticket ID: `{{$1}}`
@@ -125,7 +118,7 @@ Use the Task tool with a subagent to update the ticket context document. Pass th
 
 The subagent should append a new session entry following the existing document format.
 
-#### 9. Final Summary
+#### 8. Final Summary
 
 Show what was done:
 ```
