@@ -10,6 +10,9 @@
 
 #Commandments for bash commands
 - NEVER chain commands with `&&` or `;` when they can be separate commands
+- Do NOT `cd` to the current working directory — run commands directly from it
+  - Bad: `cd "C:\work\github\myrepo" && dotnet build` (when already in that directory)
+  - Good: `dotnet build`
 - Use absolute paths or tool-specific flags instead of `cd && command`
   - Bad: `cd /path && git show abc123`
   - Good: `git -C /path show abc123` or `git show abc123 -- /path/file`
