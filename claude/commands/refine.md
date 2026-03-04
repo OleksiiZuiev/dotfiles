@@ -109,6 +109,12 @@ Use the `AskUserQuestion` tool to clarify ambiguities:
 - Continue iterations until all critical ambiguities are resolved
 - Respect if user selects "Other" - they may have context you don't
 
+**Fallback — if `AskUserQuestion` returns empty or unclear answers:**
+`AskUserQuestion` may occasionally fail to render the interactive UI, returning empty responses. If this happens:
+1. Do NOT retry `AskUserQuestion` for the same questions
+2. Instead, present your questions as **numbered plain text** in your response and ask the user to reply by typing
+3. Continue the refinement workflow normally once you receive typed answers
+
 **Example Questions:**
 
 For vague performance requirement:
