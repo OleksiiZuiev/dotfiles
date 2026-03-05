@@ -9,20 +9,18 @@
 - Add explaining comments, only when it is not clear from the code itself. Or when asked explicitly. Prefer expressive code to comments.
 
 #Commandments for bash commands
-- NEVER chain commands with `&&` or `;` when they can be separate commands
-- Do NOT `cd` to the current working directory — run commands directly from it
-  - Bad: `cd "C:\work\github\myrepo" && dotnet build` (when already in that directory)
-  - Good: `dotnet build`
-- Use absolute paths or tool-specific flags instead of `cd && command`
-  - Bad: `cd /path && git show abc123`
-  - Good: `git -C /path show abc123` or `git show abc123 -- /path/file`
-- If commands must be sequential, run them as separate Bash calls
+- NEVER use `cd` in Bash commands — not to the current directory, not to any other directory
+- NEVER chain commands with `&&` or `;` — each command must be its own separate Bash call
+- To run a command in a different directory, set the working directory on the Bash tool call itself (NOT with `cd`):
+  - Bad: `cd "C:\work\github\myrepo" && dotnet build`
+  - Bad: `cd "/path/to/worktree" && git add . && git commit -m "msg"`
+  - Good: run `dotnet build` with the Bash tool's working directory set to the target
+  - Good: run `git add .` as one Bash call, then `git commit -m "msg"` as a separate Bash call, both with working directory set to the target
 - This allows granular permission control per command
 
 #Commandments for git commands
-- Do NOT use `git -C <path>` when already in the target directory - it's redundant and complicates permission patterns
-  - Bad: `git -C "C:\work\github\datasnipper-enterprise\integrations-service" log --oneline -10` (when already in that directory)
-  - Good: `git log --oneline -10`
+- Do NOT use `git -C <path>` — it breaks permission patterns (e.g. `git -C /path add` won't match `git add:*`)
+- Instead, set the working directory on the Bash tool call itself
 
 # Local GitHub Repos
 
