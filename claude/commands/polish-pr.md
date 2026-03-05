@@ -51,11 +51,35 @@ Address review comments for PR: **#{{$1}}**
    - Note how many threads have existing replies (candidates for auto-skip triage)
    - Prepare to process each comment one-by-one
 
-3. **Triage Already-Addressed Threads**
+3. **Scope Assessment**
 
-   Before entering the Plan Phase, triage unresolved threads that already have replies (more than just the original review comment). This step is silent — no user interaction needed.
+   Assess the overall effort of unresolved comments to determine whether to process all at once or split into rounds.
 
-   For each unresolved thread with replies:
+   a. **Classify each comment** by effort level:
+      - **Low** (1 point): typo, naming, style, simple one-liner fix
+      - **Medium** (2 points): logic change in a single function, add validation, adjust error handling
+      - **High** (3 points): refactoring across files, architectural change, new abstraction needed
+
+   b. **Calculate total effort**: sum up effort points across all unresolved comments
+
+   c. **Display effort summary**: show a table of comments with file, reviewer summary, and effort classification
+
+   d. **Evaluate scope**:
+      - **If total effort > 8 OR (any single comment is High AND there are >3 comments total)**:
+        - Suggest splitting into rounds
+        - Recommend which comments to address in this round (prioritize Low/Medium first, or group by file)
+        - Use `AskUserQuestion` with options:
+          - **"Address all"** — proceed with everything
+          - **"Address recommended batch"** — process only the suggested subset
+          - **"Let me pick"** — user selects which comments to handle
+        - Comments not selected for this round are recorded as **deferred** (not processed, not replied to)
+      - **If scope is manageable**: proceed with all comments (no change to existing flow)
+
+4. **Triage Already-Addressed Threads**
+
+   Before entering the Plan Phase, triage unresolved threads that already have replies (more than just the original review comment). Only triage threads that are **in scope** (not deferred). This step is silent — no user interaction needed.
+
+   For each in-scope unresolved thread with replies:
    1. Read the full thread conversation (original comment + all replies)
    2. Check the current state of the code at the commented location
    3. Assess whether the reviewer's concern has already been addressed — either by a code change, an explanatory reply, or both
@@ -66,9 +90,9 @@ Address review comments for PR: **#{{$1}}**
    - How many threads were auto-skipped as already addressed
    - For each skipped thread: the file, reviewer comment summary, and why it was considered addressed
 
-4. **Plan Phase - For Each Remaining Unresolved Comment (One-by-One):**
+5. **Plan Phase - For Each Remaining Unresolved Comment (One-by-One):**
 
-   **IMPORTANT**: Process comments ONE AT A TIME. Only process threads that were NOT auto-skipped in the triage step. For each comment:
+   **IMPORTANT**: Process comments ONE AT A TIME. Only process threads that are **in scope** and were NOT auto-skipped in the triage step. For each comment:
 
    a. **Display Comment Context**
       - Show file path and line number
@@ -120,7 +144,7 @@ Address review comments for PR: **#{{$1}}**
       - Format: "Address comment by @reviewer: <brief summary>"
       - Only include approved fixes in the todo list
 
-5. **Implementation Phase - For Each Approved Fix:**
+6. **Implementation Phase - For Each Approved Fix:**
 
    a. **Implement the Fix**
       - Read the relevant code files
@@ -199,15 +223,23 @@ Address review comments for PR: **#{{$1}}**
    f. **Mark Todo Complete**
       - Update TodoWrite to mark this comment as completed
 
-6. **Push All Changes**
-   - After all comments are addressed:
-     ```bash
-     git push
-     ```
-   - This updates the PR with all fix commits
+7. **Push All Changes**
+   - **If there are NO deferred comments** (all unresolved comments were in scope):
+     - Push as before:
+       ```bash
+       git push
+       ```
+   - **If there ARE deferred comments**:
+     - Show summary: "Addressed X of Y comments. Z comments deferred to next round."
+     - List deferred comments with their effort classification
+     - **Do NOT push by default** — every push triggers a CI review round, so pushing partial work wastes CI cycles
+     - Use `AskUserQuestion`:
+       - **"Don't push yet (Recommended)"** — keep changes local, run `/polish-pr` again to continue with remaining comments
+       - **"Push now"** — push what's done, accept that next round will trigger another CI run
 
-7. **Update PR Description**
+8. **Update PR Description**
    - **Always run this step** — never auto-skip. After pushing, check whether the description still accurately reflects the PR.
+   - **If no push was made** (user chose "Don't push yet"): skip this step entirely — description updates only make sense after pushing.
    - **Detect staleness** by checking each of these (any "yes" means the description needs updating):
      - Fetch the current PR description:
        ```bash
@@ -242,11 +274,12 @@ Address review comments for PR: **#{{$1}}**
        )"
        ```
 
-8. **Final Summary**
+9. **Final Summary**
    - List all comments that were addressed with commit SHAs
    - List any threads that were auto-skipped as already addressed (from triage step), with the reason for each
    - List any comments that were skipped (with replies posted explaining the rationale)
    - List any comments that were dismissed (with replies posted explaining why)
+   - If comments were deferred: "Run `/polish-pr` again to address remaining N comments" with a list of deferred comments and their effort classification
    - Note whether the PR description was updated
    - Remind user to manually resolve conversations after reviewing the changes
 
@@ -254,6 +287,7 @@ Address review comments for PR: **#{{$1}}**
 
 - **Be Opinionated (Thinking Buddy)**: If a review comment is a style preference disguised as a bug, or if the existing code was actually correct, say so. Present your reasoning and let the user decide.
 - **Reviewer Comments Are Suggestions, Not Mandates**: Evaluate each comment on its merit. Some may be wrong, some may have better alternatives. Your job is to give the PR author a second opinion.
+- **Scope Management**: When many comments exist or comments imply significant refactoring, the agent assesses effort and may suggest splitting into multiple rounds. This prevents session overload and keeps each round focused.
 - **Already-Addressed Detection**: Before entering the Plan Phase, threads with existing replies are triaged. If the reviewer's concern appears already addressed (code was changed, explanatory reply was given), the thread is skipped entirely — no assessment, no user prompt, no reply posted. These are listed in the summary.
 - **Two-Phase Approach**: ALWAYS complete the Plan Phase (get approval for ALL comments) before starting Implementation Phase
 - **One-by-One Planning**: Process each comment individually during planning, getting user approval before moving to the next
@@ -340,11 +374,35 @@ gh pr view --json number --jq '.number'
    - Note how many threads have existing replies (candidates for auto-skip triage)
    - Prepare to process each comment one-by-one
 
-3. **Triage Already-Addressed Threads**
+3. **Scope Assessment**
 
-   Before entering the Plan Phase, triage unresolved threads that already have replies (more than just the original review comment). This step is silent — no user interaction needed.
+   Assess the overall effort of unresolved comments to determine whether to process all at once or split into rounds.
 
-   For each unresolved thread with replies:
+   a. **Classify each comment** by effort level:
+      - **Low** (1 point): typo, naming, style, simple one-liner fix
+      - **Medium** (2 points): logic change in a single function, add validation, adjust error handling
+      - **High** (3 points): refactoring across files, architectural change, new abstraction needed
+
+   b. **Calculate total effort**: sum up effort points across all unresolved comments
+
+   c. **Display effort summary**: show a table of comments with file, reviewer summary, and effort classification
+
+   d. **Evaluate scope**:
+      - **If total effort > 8 OR (any single comment is High AND there are >3 comments total)**:
+        - Suggest splitting into rounds
+        - Recommend which comments to address in this round (prioritize Low/Medium first, or group by file)
+        - Use `AskUserQuestion` with options:
+          - **"Address all"** — proceed with everything
+          - **"Address recommended batch"** — process only the suggested subset
+          - **"Let me pick"** — user selects which comments to handle
+        - Comments not selected for this round are recorded as **deferred** (not processed, not replied to)
+      - **If scope is manageable**: proceed with all comments (no change to existing flow)
+
+4. **Triage Already-Addressed Threads**
+
+   Before entering the Plan Phase, triage unresolved threads that already have replies (more than just the original review comment). Only triage threads that are **in scope** (not deferred). This step is silent — no user interaction needed.
+
+   For each in-scope unresolved thread with replies:
    1. Read the full thread conversation (original comment + all replies)
    2. Check the current state of the code at the commented location
    3. Assess whether the reviewer's concern has already been addressed — either by a code change, an explanatory reply, or both
@@ -355,9 +413,9 @@ gh pr view --json number --jq '.number'
    - How many threads were auto-skipped as already addressed
    - For each skipped thread: the file, reviewer comment summary, and why it was considered addressed
 
-4. **Plan Phase - For Each Remaining Unresolved Comment (One-by-One):**
+5. **Plan Phase - For Each Remaining Unresolved Comment (One-by-One):**
 
-   **IMPORTANT**: Process comments ONE AT A TIME. Only process threads that were NOT auto-skipped in the triage step. For each comment:
+   **IMPORTANT**: Process comments ONE AT A TIME. Only process threads that are **in scope** and were NOT auto-skipped in the triage step. For each comment:
 
    a. **Display Comment Context**
       - Show file path and line number
@@ -409,7 +467,7 @@ gh pr view --json number --jq '.number'
       - Format: "Address comment by @reviewer: <brief summary>"
       - Only include approved fixes in the todo list
 
-5. **Implementation Phase - For Each Approved Fix:**
+6. **Implementation Phase - For Each Approved Fix:**
 
    a. **Implement the Fix**
       - Read the relevant code files
@@ -488,15 +546,23 @@ gh pr view --json number --jq '.number'
    f. **Mark Todo Complete**
       - Update TodoWrite to mark this comment as completed
 
-6. **Push All Changes**
-   - After all comments are addressed:
-     ```bash
-     git push
-     ```
-   - This updates the PR with all fix commits
+7. **Push All Changes**
+   - **If there are NO deferred comments** (all unresolved comments were in scope):
+     - Push as before:
+       ```bash
+       git push
+       ```
+   - **If there ARE deferred comments**:
+     - Show summary: "Addressed X of Y comments. Z comments deferred to next round."
+     - List deferred comments with their effort classification
+     - **Do NOT push by default** — every push triggers a CI review round, so pushing partial work wastes CI cycles
+     - Use `AskUserQuestion`:
+       - **"Don't push yet (Recommended)"** — keep changes local, run `/polish-pr` again to continue with remaining comments
+       - **"Push now"** — push what's done, accept that next round will trigger another CI run
 
-7. **Update PR Description**
+8. **Update PR Description**
    - **Always run this step** — never auto-skip. After pushing, check whether the description still accurately reflects the PR.
+   - **If no push was made** (user chose "Don't push yet"): skip this step entirely — description updates only make sense after pushing.
    - **Detect staleness** by checking each of these (any "yes" means the description needs updating):
      - Fetch the current PR description:
        ```bash
@@ -531,11 +597,12 @@ gh pr view --json number --jq '.number'
        )"
        ```
 
-8. **Final Summary**
+9. **Final Summary**
    - List all comments that were addressed with commit SHAs
    - List any threads that were auto-skipped as already addressed (from triage step), with the reason for each
    - List any comments that were skipped (with replies posted explaining the rationale)
    - List any comments that were dismissed (with replies posted explaining why)
+   - If comments were deferred: "Run `/polish-pr` again to address remaining N comments" with a list of deferred comments and their effort classification
    - Note whether the PR description was updated
    - Remind user to manually resolve conversations after reviewing the changes
 
@@ -543,6 +610,7 @@ gh pr view --json number --jq '.number'
 
 - **Be Opinionated (Thinking Buddy)**: If a review comment is a style preference disguised as a bug, or if the existing code was actually correct, say so. Present your reasoning and let the user decide.
 - **Reviewer Comments Are Suggestions, Not Mandates**: Evaluate each comment on its merit. Some may be wrong, some may have better alternatives. Your job is to give the PR author a second opinion.
+- **Scope Management**: When many comments exist or comments imply significant refactoring, the agent assesses effort and may suggest splitting into multiple rounds. This prevents session overload and keeps each round focused.
 - **Already-Addressed Detection**: Before entering the Plan Phase, threads with existing replies are triaged. If the reviewer's concern appears already addressed (code was changed, explanatory reply was given), the thread is skipped entirely — no assessment, no user prompt, no reply posted. These are listed in the summary.
 - **Two-Phase Approach**: ALWAYS complete the Plan Phase (get approval for ALL comments) before starting Implementation Phase
 - **One-by-One Planning**: Process each comment individually during planning, getting user approval before moving to the next
