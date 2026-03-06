@@ -1,6 +1,11 @@
 # Create git worktree with proper validations
 # Usage: start-worktree <branch-name>
 #
+# Supports new and existing branches:
+#   - New branch: creates branch + worktree, launches lclaude
+#   - Existing local branch: creates worktree for it
+#   - Remote-only branch: fetches and creates worktree for it
+#
 # Prerequisites (all must pass):
 #   - Must be in a git repo
 #   - Current path must NOT contain "worktrees" (must be in main repo)
@@ -12,7 +17,7 @@
 #   - Strips branch prefix (feat/int-31-foo -> int-31-foo)
 #   - Creates worktree at ../repo-worktrees/<stripped-branch-name>
 #   - CDs into the new worktree
-#   - Launches lclaude in the new worktree
+#   - Launches lclaude (new branches only)
 
 start-worktree() {
     local branch="$1"
@@ -66,17 +71,46 @@ start-worktree() {
     local repo_parent=$(dirname "$repo_root")
     local worktree_dir="$repo_parent/${repo_name}-worktrees/$stripped_branch"
 
-    # Create worktree with new branch
+    # Detect branch state
+    local local_exists=false
+    local remote_exists=false
+
+    if git show-ref --verify --quiet "refs/heads/$branch"; then
+        local_exists=true
+    fi
+    if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+        remote_exists=true
+    fi
+
+    # Create worktree based on branch state
     echo "Creating worktree at: $worktree_dir"
-    if ! git worktree add -b "$branch" "$worktree_dir"; then
-        echo "Error: Failed to create worktree"
-        return 1
+    if [[ "$local_exists" == true ]]; then
+        echo "Using existing local branch '$branch'"
+        if ! git worktree add "$worktree_dir" "$branch"; then
+            echo "Error: Failed to create worktree"
+            return 1
+        fi
+    elif [[ "$remote_exists" == true ]]; then
+        echo "Using existing remote branch 'origin/$branch'"
+        git fetch origin "$branch"
+        if ! git worktree add "$worktree_dir" "$branch"; then
+            echo "Error: Failed to create worktree"
+            return 1
+        fi
+    else
+        echo "Creating new branch '$branch'"
+        if ! git worktree add -b "$branch" "$worktree_dir"; then
+            echo "Error: Failed to create worktree"
+            return 1
+        fi
     fi
 
     # CD into worktree
     echo "Changing to: $worktree_dir"
     cd "$worktree_dir"
 
-    # Launch lclaude in the new worktree
-    lclaude
+    # Launch lclaude only for new branches
+    if [[ "$local_exists" == false && "$remote_exists" == false ]]; then
+        lclaude
+    fi
 }
