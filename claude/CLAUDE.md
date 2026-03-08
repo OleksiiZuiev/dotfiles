@@ -33,6 +33,7 @@ Repos are stored at `C:\work\github\{org}\{repo-name}`.
 2. **Partial or ambiguous name**: read `~/.claude/repo-map.md` for the full repo list with descriptions, match by name or summary, then READ from the matched path
 3. **Multiple matches**: show candidates and ask user to confirm
 4. **Not found locally**: only then fall back to web search or tell the user the repo isn't available locally
+5. **Before reading code**: if the resolved repo is not the current working directory, run `git pull` in that repo to ensure you're reading the latest code
 
 Example: user says "look at `unified-to/unified-csharp-sdk`" → read files from `C:\work\github\unified-to\unified-csharp-sdk\`.
 
