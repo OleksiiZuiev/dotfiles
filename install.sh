@@ -132,6 +132,17 @@ for cmd in "$DOTFILES_DIR"/claude/commands/*.md; do
     create_link "$cmd" "$TARGET_HOME/.claude/commands/$(basename "$cmd")"
 done
 
+# Claude command subdirectories (e.g., ds/)
+for subdir in "$DOTFILES_DIR"/claude/commands/*/; do
+    [ -d "$subdir" ] || continue
+    dirname=$(basename "$subdir")
+    mkdir -p "$TARGET_HOME/.claude/commands/$dirname"
+    for cmd in "$subdir"*.md; do
+        [ -e "$cmd" ] || continue
+        create_link "$cmd" "$TARGET_HOME/.claude/commands/$dirname/$(basename "$cmd")"
+    done
+done
+
 # Claude config files
 [ -e "$DOTFILES_DIR/claude/settings.json" ] && \
     create_link "$DOTFILES_DIR/claude/settings.json" "$TARGET_HOME/.claude/settings.json"

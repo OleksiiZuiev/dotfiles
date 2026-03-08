@@ -67,7 +67,7 @@ You are creating a pull request for an implemented ticket.
 7. **Output Results**
    - Display the PR URL
    - Show the PR number clearly
-   - Remind user: `Use /polish-pr to address review comments`
+   - Remind user: `Use /ds:polish-pr to address review comments`
 
 ### Important Notes
 

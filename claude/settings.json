@@ -60,7 +60,7 @@
       "Bash(terraform fmt:*)",
       "Bash(claude code settings)",
       "Skill(git-commit)",
-      "Skill(refine)",
+      "Skill(ds/refine)",
       "mcp__notion__notion-fetch",
       "mcp__notion__notion-update-page",
       "mcp__linear-server__*",

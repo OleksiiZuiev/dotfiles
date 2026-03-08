@@ -1,9 +1,9 @@
 ---
-description: Query Linear for eligible tickets and launch parallel /refine sessions in Windows Terminal tabs
+description: Query Linear for eligible tickets and launch parallel /ds:refine sessions in Windows Terminal tabs
 allowed-tools: mcp__linear-server__list_issues, mcp__linear-server__list_issue_statuses, mcp__linear-server__list_teams, mcp__linear-server__get_user, AskUserQuestion, Bash
 ---
 
-You are dispatching parallel `/refine` sessions for Linear tickets that are ready for refinement.
+You are dispatching parallel `/ds:refine` sessions for Linear tickets that are ready for refinement.
 
 ## Your Task
 
@@ -44,7 +44,7 @@ Found N ticket(s) ready for sweep:
 
 Use `AskUserQuestion` to ask which tickets to sweep:
 - **header**: "Sweep"
-- **question**: "Which tickets should I launch /refine sessions for?"
+- **question**: "Which tickets should I launch /ds:refine sessions for?"
 - **multiSelect**: true
 - **options**:
   - "All N tickets" — Launch sessions for all found tickets
@@ -69,5 +69,5 @@ Launched N /refine session(s):
 - TICKET-ID — Title
 - TICKET-ID — Title
 
-Switch tabs with Ctrl+Tab. Each session will run /refine and transition the ticket to "Ready" when done.
+Switch tabs with Ctrl+Tab. Each session will run /ds:refine and transition the ticket to "Ready" when done.
 ```
