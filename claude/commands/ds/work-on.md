@@ -1,6 +1,6 @@
 ---
 description: Work on a Linear ticket — auto-detects fresh start vs continuation
-allowed-tools: Bash, Read, Write, Grep, Glob, Task, AskUserQuestion, EnterPlanMode, TodoWrite
+allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, AskUserQuestion, EnterPlanMode, TodoWrite
 argument-hint: [extra context]
 ---
 
@@ -151,7 +151,62 @@ After exiting plan mode, save the plan to `.claude/plans/{TICKET_ID}.md`:
 - Run tests and verify
 - After implementation, prepare a brief summary: what was accomplished, key decisions, files changed
 
-### Step 5: Update Ticket Context
+### Step 5: Pre-Review Sub-Agent
+
+Launch a Task sub-agent to review uncommitted changes for style, naming, and convention issues.
+
+**Sub-agent prompt:**
+> Review the uncommitted changes in the current repo for style, naming, and convention issues.
+>
+> 1. Get the diff: run `git diff` (unstaged) and `git diff --cached` (staged). Review both.
+> 2. Read the repo's `CLAUDE.md` at the repo root for conventions.
+> 3. Analyze the diff for: style issues, naming violations, obvious refactorings, convention violations. Do NOT flag architecture, logic, test coverage, performance, or security issues.
+> 4. For each finding, classify as `auto-fix` (obvious, safe — apply it directly using Edit) or `suggestion` (requires judgment — report it back).
+> 5. Apply all auto-fixes directly. For each auto-fix applied, note the file, line, and what you changed.
+> 6. Return a structured report:
+>    - **Auto-fixes applied**: list of changes made (file, line, description). Empty if none.
+>    - **Suggestions**: list of suggestions for the user to consider (file, line, description, proposed change). Empty if none.
+>    - If nothing found, return: "Pre-review passed — no issues found."
+
+**Sub-agent allowed tools:** `Bash(git diff*), Read, Edit, Grep, Glob`
+
+### Step 6: Handle Pre-Review Suggestions
+
+If the pre-review sub-agent returned suggestions:
+1. Display the suggestions report to the user
+2. Use AskUserQuestion: "Apply all suggestions / Skip"
+3. If **"Apply all"**: apply each suggestion using the Edit tool
+4. If **"Skip"**: proceed without changes
+
+If the pre-review returned no suggestions (only auto-fixes or clean pass), proceed silently.
+
+### Step 7: Commit Sub-Agent
+
+Launch a Task sub-agent to commit all changes (implementation + any pre-review fixes).
+
+**Sub-agent prompt:**
+> Commit the current changes in the repo.
+>
+> 1. Run `git status` to see all changes
+> 2. Run `git diff` and `git diff --cached` to understand what changed
+> 3. Run `git log --oneline -5` to see recent commit message style
+> 4. Stage all relevant files with `git add <specific files>` (avoid .env, credentials, etc.)
+> 5. Generate a conventional commit message that summarizes the implementation work
+> 6. Commit using a HEREDOC format:
+>    ```bash
+>    git commit -m "$(cat <<'EOF'
+>    <commit message>
+>
+>    Co-Authored-By: Claude <noreply@anthropic.com>
+>    EOF
+>    )"
+>    ```
+> 7. Run `git status` to verify the commit succeeded
+> 8. Do NOT push.
+
+**Sub-agent allowed tools:** `Bash(git *)`
+
+### Step 8: Update Ticket Context
 
 Use the Task tool with a subagent to update the ticket context document. Pass the subagent all session details:
 - Ticket ID: `{TICKET_ID}`
@@ -164,7 +219,7 @@ Use the Task tool with a subagent to update the ticket context document. Pass th
 
 The subagent should append a new session entry following the existing document format.
 
-### Step 6: Final Summary
+### Step 9: Final Summary
 
 Show what was implemented:
 ```
@@ -172,13 +227,14 @@ Work completed: {TICKET_ID}
 Phase: Fresh start / Continuation
 Change: [brief description of what was done]
 Files modified: [count]
+Pre-review: [N auto-fixes applied, M suggestions] or [clean]
+Committed: [yes — commit hash] or [no — reason]
 Ticket context updated: yes/no
 ```
 
 Suggest next steps:
 - `/ds:create-pr` if ready for review
 - `/ds:work-on <next change>` if more work needed
-- `/ds:pre-review` to catch style issues before human review
 
 ### Important Notes
 
