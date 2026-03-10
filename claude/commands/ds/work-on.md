@@ -34,6 +34,20 @@ Context file: `{context-path}/{TICKET_ID}.md`
 - **MANDATORY**: You MUST call `EnterPlanMode` before any implementation work. NEVER write or modify code without an approved plan.
 - **MANDATORY**: After writing the plan, call `ExitPlanMode`. The user will get a permission prompt to review and approve. NEVER auto-proceed to implementation.
 
+### Step 0.5: Pre-Seed Post-Implementation Todo Items
+
+**Before doing anything else**, use TodoWrite to create the following fixed items. These ensure post-implementation steps are NEVER skipped — they will be visible in the todo list throughout the entire session.
+
+Create these todo items (all with status `pending`):
+1. `🔧 Implementation` — placeholder, will be replaced with plan tasks in Step 4
+2. `🔍 Pre-review: launch sub-agent` — see Step 5
+3. `📋 Handle pre-review suggestions` — see Step 6
+4. `💾 Commit: launch sub-agent` — see Step 7
+5. `📝 Update ticket context: launch sub-agent` — see Step 8
+6. `✅ Final summary` — see Step 9
+
+These items act as a persistent checklist. Implementation tasks from the plan will be inserted as sub-items or replace item 1.
+
 ### Step 1: Detect Phase
 
 Check two signals to determine whether this is a fresh start or a continuation:
@@ -89,7 +103,8 @@ Include:
 - Implementation steps with rationale
 - Testing approach
 - Any risks or considerations
-- **Final step: Update ticket context document** — the plan MUST end with a step to append a session entry to `{context-path}/{TICKET_ID}.md` following the template from the Ticket Context Configuration. This step will capture what was accomplished, key decisions, and files changed during implementation.
+
+Do NOT include post-implementation steps (pre-review, commit, ticket context) in the plan — those are already pre-seeded in the todo list from Step 0.5 and will run automatically after implementation.
 
 Then proceed to **Step 3** (shared flow).
 
@@ -132,7 +147,8 @@ The plan should:
 - Include the specific follow-up change
 - Include files to be created/modified
 - Include testing approach
-- **Final step: Update ticket context document** — the plan MUST end with a step to append a new session entry to `{context-path}/{TICKET_ID}.md` following the existing document's format
+
+Do NOT include post-implementation steps (pre-review, commit, ticket context) in the plan — those are already pre-seeded in the todo list from Step 0.5 and will run automatically after implementation.
 
 Then proceed to **Step 3** (shared flow).
 
@@ -145,11 +161,16 @@ After exiting plan mode, save the plan to `.claude/plans/{TICKET_ID}.md`:
 
 ### Step 4: Implement the Plan
 
-- Use TodoWrite to create task list from plan
-- Execute each task sequentially
+- Use TodoWrite to update the todo list: replace the `🔧 Implementation` placeholder with the specific implementation tasks from the plan. Keep the pre-seeded post-steps (items 2-6 from Step 0.5) at the end — they must remain visible.
+- Execute each implementation task sequentially
 - Track files changed during implementation
 - Run tests and verify
-- After implementation, prepare a brief summary: what was accomplished, key decisions, files changed
+- After the last implementation task is complete, mark `🔧 Implementation` as `completed` and prepare a brief summary: what was accomplished, key decisions, files changed
+- **Then continue to the next pending todo item** — the pre-seeded post-steps. Do NOT stop after implementation.
+
+## Post-Implementation Steps (pre-seeded in todo list)
+
+The following steps correspond to the todo items pre-seeded in Step 0.5. Work through them in order — each one should be marked `in_progress` when you start it and `completed` when done.
 
 ### Step 5: Pre-Review Sub-Agent
 
