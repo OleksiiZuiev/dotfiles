@@ -1,7 +1,7 @@
 ---
 description: Refine a Linear ticket by challenging assumptions, resolving ambiguities, and capturing answers as acceptance criteria
 allowed-tools: AskUserQuestion, mcp__linear-server__get_issue, mcp__linear-server__save_issue, mcp__linear-server__create_comment
-argument-hint: <ticket-id>
+argument-hint: <ticket-id> [focus-prompt]
 ---
 
 You are helping refine a Linear ticket — not just as a scribe, but as a thinking buddy. You challenge assumptions, verify rationale, flag risks, and propose alternatives before diving into details.
@@ -13,9 +13,10 @@ You are helping refine a Linear ticket — not just as a scribe, but as a thinki
 Refine Linear ticket: **{{$1}}**
 
 ### Critical Rules
-- **MANDATORY**: You MUST use `AskUserQuestion` for every ambiguity found in Step 3-4. NEVER assume or infer answers — always ask the user.
-- **MANDATORY**: If you identify 0 ambiguities, you MUST still ask the user to confirm the ticket is ready (Step 3 already covers this — follow it exactly).
-- **NEVER** skip Steps 2-4 or combine them into a single response without user interaction.
+- **MANDATORY**: You MUST use `AskUserQuestion` for every ambiguity found. NEVER assume or infer answers — always ask the user.
+- **MANDATORY**: If you identify 0 ambiguities, you MUST still ask the user to confirm the ticket is ready.
+- **NEVER** skip the analysis steps or combine them into a single response without user interaction.
+- **If `$2` is provided**: Run in guided mode — skip Steps 2-4 and use the Focused Refinement step instead.
 
 ### Steps to Follow
 
@@ -41,6 +42,33 @@ Status: [Current Status]
 Parent: {parent-id} - [Parent Title] (or "None")
 Current Description: [Brief excerpt...]
 ```
+
+{{#if $2}}
+
+#### 2. Focused Refinement
+
+The user wants to focus this refinement on: **{{$2}}**
+
+Scope your entire analysis to this topic. Do NOT run a general-purpose review of the ticket — stay focused on the guided topic.
+
+Within that scope, apply full rigor:
+- **Challenge assumptions** related to the topic — are we solving the right problem here?
+- **Identify ambiguities** — what's unclear or underspecified about this aspect?
+- **Propose alternatives** — is there a simpler or better approach for this specific area?
+- **Flag risks** — what could go wrong if this aspect isn't handled well?
+
+Use `AskUserQuestion` to clarify any ambiguities you find within the guided topic. Follow the same rules as vanilla mode:
+- Group related questions (max 4 per interaction)
+- Use **header**, **question**, **options** format
+- Set **multiSelect: true** when multiple choices can apply
+- Continue iterating until the focused topic is fully resolved
+
+**Fallback — if `AskUserQuestion` returns empty or unclear answers:**
+Present your questions as **numbered plain text** and ask the user to reply by typing.
+
+Once the focused topic is resolved, proceed to Step 5 (Update the Ticket).
+
+{{else}}
 
 #### 2. Challenge Value & Rationale
 
@@ -157,6 +185,8 @@ options:
     description: "Undo partial changes and restore previous state"
 ```
 
+{{/if}}
+
 #### 5. Update the Ticket
 
 Format the refined requirements as acceptance criteria:
@@ -185,6 +215,9 @@ Use `mcp__linear-server__create_comment` to document the refinement:
 
 ```markdown
 ## Ticket Refined via /refine
+{{#if $2}}
+**Focus:** {{$2}}
+{{/if}}
 
 **Questions Asked:**
 - [Question 1]
@@ -248,9 +281,10 @@ If refinement was cancelled or only partially completed (user chose "No, ticket 
 {{else}}
 **Error:** No ticket ID provided.
 
-Usage: `/refine <ticket-id>`
+Usage: `/refine <ticket-id> [focus-prompt]`
 
-Example:
-- `/refine ENG-123`
+Examples:
+- `/refine ENG-123` — full-spectrum refinement
+- `/refine ENG-123 focus on error handling edge cases` — guided refinement
 - `/refine 550e8400-e29b-41d4-a716-446655440000`
 {{/if}}
