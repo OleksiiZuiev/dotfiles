@@ -151,6 +151,15 @@ done
 [ -e "$DOTFILES_DIR/claude/statusline.sh" ] && \
     create_link "$DOTFILES_DIR/claude/statusline.sh" "$TARGET_HOME/.claude/statusline.sh"
 
+# Claude hooks
+if [ -d "$DOTFILES_DIR/claude/hooks" ]; then
+    mkdir -p "$TARGET_HOME/.claude/hooks"
+    for hook in "$DOTFILES_DIR"/claude/hooks/*.sh; do
+        [ -e "$hook" ] || continue
+        create_link "$hook" "$TARGET_HOME/.claude/hooks/$(basename "$hook")"
+    done
+fi
+
 # Install VS Code settings
 echo ""
 echo "Installing VS Code configuration..."

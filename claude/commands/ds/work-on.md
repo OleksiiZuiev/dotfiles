@@ -1,6 +1,6 @@
 ---
 description: Work on a Linear ticket — auto-detects fresh start vs continuation
-allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, AskUserQuestion, EnterPlanMode, TodoWrite
+allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, AskUserQuestion, EnterPlanMode
 argument-hint: [extra context]
 ---
 
@@ -33,20 +33,6 @@ Context file: `{context-path}/{TICKET_ID}.md`
 ### Critical Rules
 - **MANDATORY**: You MUST call `EnterPlanMode` before any implementation work. NEVER write or modify code without an approved plan.
 - **MANDATORY**: After writing the plan, call `ExitPlanMode`. The user will get a permission prompt to review and approve. NEVER auto-proceed to implementation.
-
-### Step 0.5: Pre-Seed Post-Implementation Todo Items
-
-**Before doing anything else**, use TodoWrite to create the following fixed items. These ensure post-implementation steps are NEVER skipped — they will be visible in the todo list throughout the entire session.
-
-Create these todo items (all with status `pending`):
-1. `🔧 Implementation` — placeholder, will be replaced with plan tasks in Step 4
-2. `🔍 Pre-review: launch sub-agent` — see Step 5
-3. `📋 Handle pre-review suggestions` — see Step 6
-4. `💾 Commit: launch sub-agent` — see Step 7
-5. `📝 Update ticket context: launch sub-agent` — see Step 8
-6. `✅ Final summary` — see Step 9
-
-These items act as a persistent checklist. Implementation tasks from the plan will be inserted as sub-items or replace item 1.
 
 ### Step 1: Detect Phase
 
@@ -104,8 +90,6 @@ Include:
 - Testing approach
 - Any risks or considerations
 
-Do NOT include post-implementation steps (pre-review, commit, ticket context) in the plan — those are already pre-seeded in the todo list from Step 0.5 and will run automatically after implementation.
-
 Then proceed to **Step 3** (shared flow).
 
 ### Step 2B: Continuation
@@ -148,29 +132,51 @@ The plan should:
 - Include files to be created/modified
 - Include testing approach
 
-Do NOT include post-implementation steps (pre-review, commit, ticket context) in the plan — those are already pre-seeded in the todo list from Step 0.5 and will run automatically after implementation.
-
 Then proceed to **Step 3** (shared flow).
 
-### Step 3: Save the Plan
+### Step 3: Save the Plan with Checklist
 
 After exiting plan mode, save the plan to `.claude/plans/{TICKET_ID}.md`:
 - Ensure `.claude/plans/` directory exists (create if needed)
 - Format as markdown with clear sections
 - This overwrites any previous plan for this ticket
 
+**CRITICAL**: Append a `## Checklist` section at the end of the plan file. This is the persistent checklist that survives `/clear` because it lives on disk.
+
+The checklist must contain:
+1. One checkbox per implementation task from the plan (derived from the plan steps)
+2. The following fixed post-implementation checkboxes (always included, in this order):
+
+```markdown
+## Checklist
+
+### Implementation
+- [ ] {implementation task 1}
+- [ ] {implementation task 2}
+- [ ] ...
+
+### Post-Implementation
+- [ ] Pre-review: launch sub-agent (Step 5)
+- [ ] Handle pre-review suggestions (Step 6)
+- [ ] Commit: launch sub-agent (Step 7)
+- [ ] Update ticket context: launch sub-agent (Step 8)
+- [ ] Push & PR (Step 9)
+- [ ] Final summary (Step 10)
+```
+
 ### Step 4: Implement the Plan
 
-- Use TodoWrite to update the todo list: replace the `🔧 Implementation` placeholder with the specific implementation tasks from the plan. Keep the pre-seeded post-steps (items 2-6 from Step 0.5) at the end — they must remain visible.
-- Execute each implementation task sequentially
+- Execute each implementation task from the checklist sequentially
+- After completing each task, use Edit to mark its checkbox in `.claude/plans/{TICKET_ID}.md`: change `- [ ]` to `- [x]`
 - Track files changed during implementation
 - Run tests and verify
-- After the last implementation task is complete, mark `🔧 Implementation` as `completed` and prepare a brief summary: what was accomplished, key decisions, files changed
-- **Then continue to the next pending todo item** — the pre-seeded post-steps. Do NOT stop after implementation.
+- After the last implementation task, prepare a brief summary: what was accomplished, key decisions, files changed
+- **Then continue to the Post-Implementation checklist items.** Do NOT stop after implementation.
+- **After `/clear`**: Read `.claude/plans/{TICKET_ID}.md` to recover the checklist and resume from the first unchecked item.
 
-## Post-Implementation Steps (pre-seeded in todo list)
+## Post-Implementation Steps
 
-The following steps correspond to the todo items pre-seeded in Step 0.5. Work through them in order — each one should be marked `in_progress` when you start it and `completed` when done.
+The following steps correspond to the Post-Implementation checkboxes in `.claude/plans/{TICKET_ID}.md`. Work through them in order — use Edit to mark each checkbox `- [x]` when done. After `/clear`, read the plan file to find where you left off.
 
 ### Step 5: Pre-Review Sub-Agent
 
@@ -178,6 +184,8 @@ Launch a Task sub-agent to review uncommitted changes for style, naming, and con
 
 **Sub-agent prompt:**
 > Review the uncommitted changes in the current repo for style, naming, and convention issues.
+>
+> IMPORTANT: Ignore any gitStatus snapshot from the conversation context — it is stale. You MUST run fresh git commands to see the actual current state.
 >
 > 1. Get the diff: run `git diff` (unstaged) and `git diff --cached` (staged). Review both.
 > 2. Read the repo's `CLAUDE.md` at the repo root for conventions.
@@ -207,6 +215,8 @@ Launch a Task sub-agent to commit all changes (implementation + any pre-review f
 
 **Sub-agent prompt:**
 > Commit the current changes in the repo.
+>
+> IMPORTANT: Ignore any gitStatus snapshot from the conversation context — it is stale. You MUST run fresh git commands to see the actual current state.
 >
 > 1. Run `git status` to see all changes
 > 2. Run `git diff` and `git diff --cached` to understand what changed
@@ -240,7 +250,34 @@ Use the Task tool with a subagent to update the ticket context document. Pass th
 
 The subagent should append a new session entry following the existing document format.
 
-### Step 9: Final Summary
+### Step 9: Push & Create/Update PR
+
+Push the branch and handle PR creation:
+
+1. Push the branch: `git push -u origin <branch-name>`
+2. Check if a PR already exists: `gh pr view --json url,number` (exit code 0 = exists)
+3. **If no PR exists**: launch a Task sub-agent to create a draft PR.
+
+**Sub-agent prompt:**
+> Create a draft PR for the current branch.
+>
+> 1. Get the ticket ID from the branch name: strip everything before the first `/`, take the first two hyphen-separated segments, uppercase them (e.g., `feature/eng-123-foo` → `ENG-123`)
+> 2. Fetch the Linear ticket using `mcp__linear-server__get_issue` with the ticket ID and `includeRelations: true`
+> 3. Read the ticket context file at `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET_ID}.md` if it exists
+> 4. Run `git log --oneline origin/main..HEAD` and `git diff origin/main...HEAD --stat` to understand all changes
+> 5. Create a draft PR using `gh pr create --draft` with:
+>    - Title: short summary derived from the ticket title and changes
+>    - Body: structured description with sections for Summary, Linear ticket link, and Test plan
+>    - Use HEREDOC for the body to preserve formatting
+> 6. Return the PR URL and number
+
+**Sub-agent allowed tools:** `Bash(git *), Bash(gh *), mcp__linear-server__get_issue, Read, Glob`
+
+4. **If PR already exists**: just note the PR URL and number from the `gh pr view` output.
+
+Store the result (PR URL and number) for the final summary.
+
+### Step 10: Final Summary
 
 Show what was implemented:
 ```
@@ -251,10 +288,10 @@ Files modified: [count]
 Pre-review: [N auto-fixes applied, M suggestions] or [clean]
 Committed: [yes — commit hash] or [no — reason]
 Ticket context updated: yes/no
+PR: created #N <url> (draft) / pushed to existing #N <url>
 ```
 
 Suggest next steps:
-- `/ds:create-pr` if ready for review
 - `/ds:work-on <next change>` if more work needed
 
 ### Important Notes
