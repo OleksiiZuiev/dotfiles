@@ -30,7 +30,7 @@ Repos are stored at `C:\work\github\{org}\{repo-name}`.
 
 **Resolution steps** (follow in order for every repo/library mention):
 1. **Exact `org/repo`**: resolve directly to `C:\work\github\{org}\{repo}` and READ from that path
-2. **Partial or ambiguous name**: read `~/.claude/repo-map.md` for the full repo list with descriptions, match by name or summary, then READ from the matched path
+2. **Partial or ambiguous name**: read `${CLAUDE_REPO_MAP:-/c/work/claude-data/repo-map.md}` for the full repo list with descriptions, match by name or summary, then READ from the matched path
 3. **Multiple matches**: show candidates and ask user to confirm
 4. **Not found locally**: only then fall back to web search or tell the user the repo isn't available locally
 5. **Before reading code**: if the resolved repo is not the current working directory, run `git pull` in that repo to ensure you're reading the latest code
@@ -91,3 +91,19 @@ Each ticket gets its own file: `{TICKET-ID}.md` containing:
 
 ---
 ```
+
+# Repo Map
+
+A generated index of all local GitHub repos with README-derived summaries. Used for resolving partial or ambiguous repo references.
+
+## Configuration
+
+Set the environment variable to customize the storage location:
+
+```bash
+export CLAUDE_REPO_MAP="/c/work/claude-data/repo-map.md"
+```
+
+Default: `/c/work/claude-data/repo-map.md`
+
+Regenerate: `bash ~/dotfiles/claude/scripts/update-repo-map.sh`

@@ -1,9 +1,9 @@
 #!/bin/bash
-# Generates ~/.claude/repo-map.md by scanning local GitHub repos
+# Generates repo-map.md by scanning local GitHub repos
 # Usage: bash ~/dotfiles/claude/scripts/update-repo-map.sh
 
 GITHUB_ROOT="/c/work/github"
-OUTPUT_FILE="$HOME/.claude/repo-map.md"
+OUTPUT_FILE="${CLAUDE_REPO_MAP:-/c/work/claude-data/repo-map.md}"
 
 mkdir -p "$(dirname "$OUTPUT_FILE")"
 

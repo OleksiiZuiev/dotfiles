@@ -46,6 +46,7 @@
       "Bash(gh api graphql:*)",
       "Bash(gh secret list:*)",
       "Bash(gh variable:*)",
+      "Bash(gh search:*)",
       "Bash(gh repo view:*)",
       "Bash(gh run view:*)",
       "Bash(gh workflow run:*)",
@@ -60,12 +61,14 @@
       "Bash(terraform fmt:*)",
       "Bash(claude code settings)",
       "Skill(git-commit)",
-      "Skill(ds/refine)",
+      "Skill(ds:*)",
       "mcp__notion__notion-fetch",
       "mcp__notion__notion-update-page",
       "mcp__linear-server__*",
       "Write(//c/work/ticket-contexts/**)",
-      "Edit(//c/work/ticket-contexts/**)"
+      "Edit(//c/work/ticket-contexts/**)",
+      "Write(//c/work/claude-data/**)",
+      "Edit(//c/work/claude-data/**)"
     ]
   },
   "model": "opus",
