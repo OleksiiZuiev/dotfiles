@@ -164,15 +164,28 @@ The checklist must contain:
 - [ ] Final summary (Step 10)
 ```
 
-### Step 4: Implement the Plan
+### Step 4: Implement the Plan (Sub-Agent)
 
-- Execute each implementation task from the checklist sequentially
-- After completing each task, use Edit to mark its checkbox in `.claude/plans/{TICKET_ID}.md`: change `- [ ]` to `- [x]`
-- Track files changed during implementation
-- Run tests and verify
-- After the last implementation task, prepare a brief summary: what was accomplished, key decisions, files changed
-- **Then continue to the Post-Implementation checklist items.** Do NOT stop after implementation.
-- **After `/clear`**: Read `.claude/plans/{TICKET_ID}.md` to recover the checklist and resume from the first unchecked item.
+Launch a Task sub-agent to execute the implementation. This keeps the orchestrator context clean for post-implementation steps.
+
+**Sub-agent prompt:**
+> Implement the plan in `.claude/plans/{TICKET_ID}.md`.
+>
+> 1. Read `.claude/plans/{TICKET_ID}.md` to get the full plan and the `### Implementation` checklist
+> 2. Execute each implementation task from the checklist sequentially
+> 3. After completing each task, mark its checkbox in `.claude/plans/{TICKET_ID}.md`: change `- [ ]` to `- [x]`
+> 4. Run tests and verify as you go
+> 5. When all implementation tasks are done, return a summary:
+>    - **What was accomplished**: brief description of the change
+>    - **Key decisions**: any implementation choices made during execution
+>    - **Files changed**: list of files created/modified/deleted
+
+**Sub-agent allowed tools:** `Bash, Read, Write, Edit, Grep, Glob, LSP`
+
+After the sub-agent returns:
+1. Display the implementation summary to the user
+2. **Then continue to the Post-Implementation checklist items.** Do NOT stop after implementation.
+3. **After `/clear`**: Read `.claude/plans/{TICKET_ID}.md` to recover the checklist and resume from the first unchecked item.
 
 ## Post-Implementation Steps
 
