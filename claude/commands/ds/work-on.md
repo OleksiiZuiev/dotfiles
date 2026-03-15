@@ -167,7 +167,7 @@ Note: `.local/` should be in the repo's `.gitignore`.
 
 Before launching the sub-agent, use TodoWrite to replace the `🔧 Implementation` placeholder with specific implementation tasks from the plan. Each task should be a separate todo item.
 
-Launch a Task sub-agent to execute the implementation. This keeps the orchestrator context clean for post-implementation steps.
+**MANDATORY**: You MUST use the Agent tool to launch a sub-agent for implementation — even for trivial plans. The purpose is **context isolation**, not complexity delegation. Implementation generates file reads, edits, build logs, and test output that consume the orchestrator's context budget. Keeping this in a sub-agent preserves context for post-implementation steps (review, commit, PR). NEVER implement inline.
 
 **Sub-agent prompt:**
 > Implement the plan in `.local/plans/{TICKET_ID}.md`.
