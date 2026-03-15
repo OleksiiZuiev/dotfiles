@@ -1,6 +1,6 @@
 ---
 description: Work on a Linear ticket — auto-detects fresh start vs continuation
-allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, AskUserQuestion, EnterPlanMode
+allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, AskUserQuestion, EnterPlanMode, TodoWrite
 argument-hint: [extra context]
 ---
 
@@ -24,6 +24,21 @@ Store the extracted ticket ID as `TICKET_ID` for use throughout.
 {{#if $ARGUMENTS}}
 Additional context from user: "{{$ARGUMENTS}}"
 {{/if}}
+
+### Step 0.5: Pre-Seed Post-Implementation Todo Items
+
+**Before doing anything else**, use TodoWrite to create the following fixed items. These ensure post-implementation steps are NEVER skipped — they will be visible in the todo list throughout the entire session.
+
+Create these todo items (all with status `pending`):
+1. `🔧 Implementation` — placeholder, will be replaced with plan tasks in Step 4
+2. `🔍 Pre-review: launch sub-agent` — see Step 5
+3. `📋 Handle pre-review suggestions` — see Step 6
+4. `💾 Commit: launch sub-agent` — see Step 7
+5. `📝 Update ticket context: launch sub-agent` — see Step 8
+6. `🚀 Push & PR` — see Step 9
+7. `✅ Final summary` — see Step 10
+
+These items act as a persistent checklist. Implementation tasks from the plan will be inserted as sub-items or replace item 1.
 
 ### Ticket Context Configuration
 
@@ -90,6 +105,8 @@ Include:
 - Testing approach
 - Any risks or considerations
 
+Do NOT include post-implementation steps in the plan — those are already pre-seeded in the todo list from Step 0.5 and will run automatically after implementation.
+
 Then proceed to **Step 3** (shared flow).
 
 ### Step 2B: Continuation
@@ -132,50 +149,33 @@ The plan should:
 - Include files to be created/modified
 - Include testing approach
 
+Do NOT include post-implementation steps in the plan — those are already pre-seeded in the todo list from Step 0.5 and will run automatically after implementation.
+
 Then proceed to **Step 3** (shared flow).
 
-### Step 3: Save the Plan with Checklist
+### Step 3: Save the Plan
 
-After exiting plan mode, save the plan to `.claude/plans/{TICKET_ID}.md`:
-- Ensure `.claude/plans/` directory exists (create if needed)
+After exiting plan mode, save the plan to `.local/plans/{TICKET_ID}.md`:
+- Ensure `.local/plans/` directory exists (create if needed)
 - Format as markdown with clear sections
 - This overwrites any previous plan for this ticket
+- Do NOT append a checklist section — post-implementation tracking is handled by TodoWrite (Step 0.5)
 
-**CRITICAL**: Append a `## Checklist` section at the end of the plan file. This is the persistent checklist that survives `/clear` because it lives on disk.
-
-The checklist must contain:
-1. One checkbox per implementation task from the plan (derived from the plan steps)
-2. The following fixed post-implementation checkboxes (always included, in this order):
-
-```markdown
-## Checklist
-
-### Implementation
-- [ ] {implementation task 1}
-- [ ] {implementation task 2}
-- [ ] ...
-
-### Post-Implementation
-- [ ] Pre-review: launch sub-agent (Step 5)
-- [ ] Handle pre-review suggestions (Step 6)
-- [ ] Commit: launch sub-agent (Step 7)
-- [ ] Update ticket context: launch sub-agent (Step 8)
-- [ ] Push & PR (Step 9)
-- [ ] Final summary (Step 10)
-```
+Note: `.local/` should be in the repo's `.gitignore`.
 
 ### Step 4: Implement the Plan (Sub-Agent)
+
+Before launching the sub-agent, use TodoWrite to replace the `🔧 Implementation` placeholder with specific implementation tasks from the plan. Each task should be a separate todo item.
 
 Launch a Task sub-agent to execute the implementation. This keeps the orchestrator context clean for post-implementation steps.
 
 **Sub-agent prompt:**
-> Implement the plan in `.claude/plans/{TICKET_ID}.md`.
+> Implement the plan in `.local/plans/{TICKET_ID}.md`.
 >
-> 1. Read `.claude/plans/{TICKET_ID}.md` to get the full plan and the `### Implementation` checklist
-> 2. Execute each implementation task from the checklist sequentially
-> 3. After completing each task, mark its checkbox in `.claude/plans/{TICKET_ID}.md`: change `- [ ]` to `- [x]`
-> 4. Run tests and verify as you go
-> 5. When all implementation tasks are done, return a summary:
+> 1. Read `.local/plans/{TICKET_ID}.md` to get the full plan
+> 2. Execute each implementation task sequentially
+> 3. Run tests and verify as you go
+> 4. When all implementation tasks are done, return a summary:
 >    - **What was accomplished**: brief description of the change
 >    - **Key decisions**: any implementation choices made during execution
 >    - **Files changed**: list of files created/modified/deleted
@@ -184,14 +184,16 @@ Launch a Task sub-agent to execute the implementation. This keeps the orchestrat
 
 After the sub-agent returns:
 1. Display the implementation summary to the user
-2. **Then continue to the Post-Implementation checklist items.** Do NOT stop after implementation.
-3. **After `/clear`**: Read `.claude/plans/{TICKET_ID}.md` to recover the checklist and resume from the first unchecked item.
+2. Use TodoWrite to mark `🔧 Implementation` (and its sub-tasks) as `completed`
+3. **Then continue to the post-implementation steps.** Do NOT stop after implementation.
 
 ## Post-Implementation Steps
 
-The following steps correspond to the Post-Implementation checkboxes in `.claude/plans/{TICKET_ID}.md`. Work through them in order — use Edit to mark each checkbox `- [x]` when done. After `/clear`, read the plan file to find where you left off.
+The following steps correspond to the todo items pre-seeded in Step 0.5. Work through them in order — use TodoWrite to mark each item `in_progress` when starting and `completed` when done.
 
 ### Step 5: Pre-Review Sub-Agent
+
+Mark `🔍 Pre-review: launch sub-agent` as `in_progress` via TodoWrite.
 
 Launch a Task sub-agent to review uncommitted changes for style, naming, and convention issues.
 
@@ -212,7 +214,11 @@ Launch a Task sub-agent to review uncommitted changes for style, naming, and con
 
 **Sub-agent allowed tools:** `Bash(git diff*), Read, Edit, Grep, Glob`
 
+Mark `🔍 Pre-review: launch sub-agent` as `completed` via TodoWrite.
+
 ### Step 6: Handle Pre-Review Suggestions
+
+Mark `📋 Handle pre-review suggestions` as `in_progress` via TodoWrite.
 
 If the pre-review sub-agent returned suggestions:
 1. Display the suggestions report to the user
@@ -222,7 +228,11 @@ If the pre-review sub-agent returned suggestions:
 
 If the pre-review returned no suggestions (only auto-fixes or clean pass), proceed silently.
 
+Mark `📋 Handle pre-review suggestions` as `completed` via TodoWrite.
+
 ### Step 7: Commit Sub-Agent
+
+Mark `💾 Commit: launch sub-agent` as `in_progress` via TodoWrite.
 
 Launch a Task sub-agent to commit all changes (implementation + any pre-review fixes).
 
@@ -250,7 +260,11 @@ Launch a Task sub-agent to commit all changes (implementation + any pre-review f
 
 **Sub-agent allowed tools:** `Bash(git *)`
 
+Mark `💾 Commit: launch sub-agent` as `completed` via TodoWrite.
+
 ### Step 8: Update Ticket Context
+
+Mark `📝 Update ticket context: launch sub-agent` as `in_progress` via TodoWrite.
 
 Use the Task tool with a subagent to update the ticket context document. Pass the subagent all session details:
 - Ticket ID: `{TICKET_ID}`
@@ -263,7 +277,11 @@ Use the Task tool with a subagent to update the ticket context document. Pass th
 
 The subagent should append a new session entry following the existing document format.
 
+Mark `📝 Update ticket context: launch sub-agent` as `completed` via TodoWrite.
+
 ### Step 9: Push & Create/Update PR
+
+Mark `🚀 Push & PR` as `in_progress` via TodoWrite.
 
 Push the branch and handle PR creation:
 
@@ -290,7 +308,11 @@ Push the branch and handle PR creation:
 
 Store the result (PR URL and number) for the final summary.
 
+Mark `🚀 Push & PR` as `completed` via TodoWrite.
+
 ### Step 10: Final Summary
+
+Mark `✅ Final summary` as `in_progress` via TodoWrite.
 
 Show what was implemented:
 ```
@@ -303,6 +325,8 @@ Committed: [yes — commit hash] or [no — reason]
 Ticket context updated: yes/no
 PR: created #N <url> (draft) / pushed to existing #N <url>
 ```
+
+Mark `✅ Final summary` as `completed` via TodoWrite.
 
 Suggest next steps:
 - `/ds:work-on <next change>` if more work needed
