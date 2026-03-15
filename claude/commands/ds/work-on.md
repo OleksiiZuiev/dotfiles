@@ -30,7 +30,7 @@ Additional context from user: "{{$ARGUMENTS}}"
 **Before doing anything else**, use TodoWrite to create the following fixed items. These ensure post-implementation steps are NEVER skipped — they will be visible in the todo list throughout the entire session.
 
 Create these todo items (all with status `pending`):
-1. `🔧 Implementation` — placeholder, will be replaced with plan tasks in Step 4
+1. `🔧 Implementation` — placeholder, will be replaced with plan tasks in Step 3
 2. `🔍 Pre-review: launch sub-agent` — see Step 5
 3. `📋 Handle pre-review suggestions` — see Step 6
 4. `💾 Commit: launch sub-agent` — see Step 7
@@ -153,39 +153,16 @@ Do NOT include post-implementation steps in the plan — those are already pre-s
 
 Then proceed to **Step 3** (shared flow).
 
-### Step 3: Save the Plan
+### Step 3: Implement the Plan
 
-After exiting plan mode, save the plan to `.local/plans/{TICKET_ID}.md`:
-- Ensure `.local/plans/` directory exists (create if needed)
-- Format as markdown with clear sections
-- This overwrites any previous plan for this ticket
-- Do NOT append a checklist section — post-implementation tracking is handled by TodoWrite (Step 0.5)
+Use TodoWrite to replace the `🔧 Implementation` placeholder with specific implementation tasks from the plan. Each task should be a separate todo item.
 
-Note: `.local/` should be in the repo's `.gitignore`.
+Implement the plan directly — do NOT use a sub-agent. The main agent has full context from the planning phase (codebase exploration, ticket details, clarifying questions) which leads to better implementation.
 
-### Step 4: Implement the Plan (Sub-Agent)
-
-Before launching the sub-agent, use TodoWrite to replace the `🔧 Implementation` placeholder with specific implementation tasks from the plan. Each task should be a separate todo item.
-
-**MANDATORY**: You MUST use the Agent tool to launch a sub-agent for implementation — even for trivial plans. The purpose is **context isolation**, not complexity delegation. Implementation generates file reads, edits, build logs, and test output that consume the orchestrator's context budget. Keeping this in a sub-agent preserves context for post-implementation steps (review, commit, PR). NEVER implement inline.
-
-**Sub-agent prompt:**
-> Implement the plan in `.local/plans/{TICKET_ID}.md`.
->
-> 1. Read `.local/plans/{TICKET_ID}.md` to get the full plan
-> 2. Execute each implementation task sequentially
-> 3. Run tests and verify as you go
-> 4. When all implementation tasks are done, return a summary:
->    - **What was accomplished**: brief description of the change
->    - **Key decisions**: any implementation choices made during execution
->    - **Files changed**: list of files created/modified/deleted
-
-**Sub-agent allowed tools:** `Bash, Read, Write, Edit, Grep, Glob, LSP`
-
-After the sub-agent returns:
-1. Display the implementation summary to the user
-2. Use TodoWrite to mark `🔧 Implementation` (and its sub-tasks) as `completed`
-3. **Then continue to the post-implementation steps.** Do NOT stop after implementation.
+1. Execute each implementation task sequentially
+2. Run tests and verify as you go
+3. Use TodoWrite to mark each implementation task as `completed` as you go
+4. **Then continue to the post-implementation steps.** Do NOT stop after implementation.
 
 ## Post-Implementation Steps
 
