@@ -37,6 +37,7 @@ Create these todo items (all with status `pending`):
 5. `📝 Update ticket context: launch sub-agent` — see Step 8
 6. `🚀 Push & PR` — see Step 9
 7. `✅ Final summary` — see Step 10
+8. `🔬 Session retrospective` — see Step 11
 
 These items act as a persistent checklist. Implementation tasks from the plan will be inserted as sub-items or replace item 1.
 
@@ -211,7 +212,9 @@ Mark `📋 Handle pre-review suggestions` as `completed` via TodoWrite.
 
 Mark `💾 Commit: launch sub-agent` as `in_progress` via TodoWrite.
 
-Launch a Task sub-agent to commit all changes (implementation + any pre-review fixes).
+Launch a **general-purpose** sub-agent (`subagent_type: "general-purpose"`) to commit all changes (implementation + any pre-review fixes).
+
+Do NOT use `subagent_type: "git-commit-writer"` — that agent type lacks Bash access and cannot run git commands.
 
 **Sub-agent prompt:**
 > Commit the current changes in the repo.
@@ -307,6 +310,27 @@ Mark `✅ Final summary` as `completed` via TodoWrite.
 
 Suggest next steps:
 - `/ds:work-on <next change>` if more work needed
+
+### Step 11: Session Retrospective
+
+Mark `🔬 Session retrospective` as `in_progress` via TodoWrite.
+
+Reflect on the session that just completed. Consider:
+- **Workflow friction**: Were there repeated manual steps that could be automated? Awkward handoffs between steps? Unnecessary waits or re-explorations?
+- **Tooling gaps**: Were there missing slash commands that would have helped? Permission issues that slowed things down? Tool limitations you had to work around?
+- **Other inefficiencies**: Anything else that made the work harder than it needed to be?
+
+If you identified friction:
+1. Print a short summary under the heading `Session retro`:
+   - List each friction point as a bullet (one line each)
+   - For each, briefly note what could improve it (e.g., "new command", "automation", "config change")
+2. Ask the user via AskUserQuestion: "Want to capture any of these as backlog items in the vibe-engineering project?"
+   - Options: "Yes — pick which ones" / "No — just noting for now"
+   - If yes, let the user indicate which items, then append them to the vibe-engineering tasks.md backlog
+
+If the session was smooth with no notable friction, skip silently.
+
+Mark `🔬 Session retrospective` as `completed` via TodoWrite.
 
 ### Important Notes
 
