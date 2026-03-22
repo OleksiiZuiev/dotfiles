@@ -1,11 +1,17 @@
 #!/bin/bash
 # Guard hook: block genuinely dangerous CLI patterns.
-# Style rules (no chaining, no git -C) are enforced by CLAUDE.md instructions.
+# Style rules (no chaining, no cd) are enforced by CLAUDE.md instructions.
 #
 # Extract only the command portion (before any quoted strings) to avoid
 # false positives from commit messages or string arguments.
 INPUT=$(cat)
 CMD_PART=$(echo "$INPUT" | sed "s/['\"].*//")
+
+# GIT_DIR/GIT_WORK_TREE env vars — use `git -C <path>` instead
+if echo "$CMD_PART" | grep -qE '^\s*(GIT_DIR|GIT_WORK_TREE)='; then
+  echo "BLOCKED: Use 'git -C <path>' instead of GIT_DIR/GIT_WORK_TREE env vars." >&2
+  exit 2
+fi
 
 # Force push — irreversible remote history loss
 if echo "$CMD_PART" | grep -qE 'git\s+push\s+.*--(force|force-with-lease)'; then

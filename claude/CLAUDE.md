@@ -11,11 +11,12 @@
 #Commandments for bash commands
 - NEVER use `cd` in Bash commands — not to the current directory, not to any other directory
 - NEVER chain commands with `&&` or `;` — each command must be its own separate Bash call
-- To run a command in a different directory, set the working directory on the Bash tool call itself (NOT with `cd`):
-  - Bad: `cd "C:\work\github\myrepo" && dotnet build`
-  - Bad: `cd "/path/to/worktree" && git add . && git commit -m "msg"`
-  - Good: run `dotnet build` with the Bash tool's working directory set to the target
-  - Good: run `git add .` as one Bash call, then `git commit -m "msg"` as a separate Bash call, both with working directory set to the target
+- NEVER prefix commands with `GIT_DIR=` or `GIT_WORK_TREE=` environment variables
+- For git commands in a different repo, use `git -C <path>`:
+  - Bad: `cd "C:\work\github\myrepo" && git status`
+  - Bad: `GIT_DIR="..." GIT_WORK_TREE="..." git status`
+  - Good: `git -C C:/work/github/myrepo status`
+- For non-git commands in a different directory, use absolute paths
 - This allows granular permission control per command
 
 # Local GitHub Repos
