@@ -18,10 +18,6 @@
   - Good: run `git add .` as one Bash call, then `git commit -m "msg"` as a separate Bash call, both with working directory set to the target
 - This allows granular permission control per command
 
-#Commandments for git commands
-- Do NOT use `git -C <path>` — it breaks permission patterns (e.g. `git -C /path add` won't match `git add:*`)
-- Instead, set the working directory on the Bash tool call itself
-
 # Local GitHub Repos
 
 > **IMPORTANT**: When the user mentions ANY repo, package, SDK, library, or dependency by name — even casually — ALWAYS check the local filesystem FIRST before searching the web or claiming you can't access it. This includes references like `unified-to/unified-csharp-sdk`, "the unified SDK", "check the platform repo", etc.
