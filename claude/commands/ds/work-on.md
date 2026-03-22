@@ -212,7 +212,7 @@ Mark `📋 Handle pre-review suggestions` as `completed` via TodoWrite.
 
 Mark `💾 Commit: launch sub-agent` as `in_progress` via TodoWrite.
 
-Launch a **general-purpose** sub-agent (`subagent_type: "general-purpose"`) to commit all changes (implementation + any pre-review fixes).
+Launch a **general-purpose** sub-agent (`subagent_type: "general-purpose"`, `model: "sonnet"`) to commit all changes (implementation + any pre-review fixes).
 
 Do NOT use `subagent_type: "git-commit-writer"` — that agent type lacks Bash access and cannot run git commands.
 
@@ -246,7 +246,7 @@ Mark `💾 Commit: launch sub-agent` as `completed` via TodoWrite.
 
 Mark `📝 Update ticket context: launch sub-agent` as `in_progress` via TodoWrite.
 
-Use the Task tool with a subagent to update the ticket context document. Pass the subagent all session details:
+Use the Task tool with a subagent (`model: "haiku"`) to update the ticket context document. Pass the subagent all session details:
 - Ticket ID: `{TICKET_ID}`
 - Context file path
 - Branch name
@@ -267,7 +267,7 @@ Push the branch and handle PR creation:
 
 1. Push the branch: `git push -u origin <branch-name>`
 2. Check if a PR already exists: `gh pr view --json url,number` (exit code 0 = exists)
-3. **If no PR exists**: launch a Task sub-agent to create a draft PR.
+3. **If no PR exists**: launch a Task sub-agent (`model: "sonnet"`) to create a draft PR.
 
 **Sub-agent prompt:**
 > Create a draft PR for the current branch.
