@@ -19,11 +19,13 @@ You are creating a pull request for an implemented ticket.
      > Could not extract ticket ID from branch name. Expected format: `{type}/{prefix-number}-{slug}` (e.g., `feature/eng-123-add-auth`).
 
 2. **Load Context**
-   - Fetch ticket details from Linear using `mcp__linear-server__get_issue` with the extracted ticket ID — use the ticket title and description for the PR summary
+   - Fetch ticket details from Linear using `mcp__linear-server__get_issue` with the extracted ticket ID
+     - Extract the **ticket title** and **description** (this is the goal/motivation)
+     - Extract the **ticket URL** for linking in the PR body (falls back to `https://linear.app/issue/{TICKET-ID}` if not available)
    - Check for ticket context file at `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET-ID}.md`
    - If the context file exists, read it to gather:
      - **Accomplishments** from session history — these become the PR summary
-     - **Key decisions** — worth mentioning in the PR description
+     - **Key decisions** — include in PR description if any exist
    - Combine Linear ticket context + ticket context document for the most informative PR description
 
 3. **Verify Git State**
@@ -36,11 +38,13 @@ You are creating a pull request for an implemented ticket.
    - Understand what was changed across all commits
    - This informs the PR description
 
-5. **Create Concise PR Description**
+5. **Create PR Description**
    - Title: `[TICKET-ID] <brief summary from ticket>`
-   - Body should include:
-     - High-level summary (2-3 sentences)
-     - Link to Linear ticket: `Closes TICKET-ID`
+   - Body structure:
+     - **Goal**: the motivation/why from the Linear ticket description (keep concise — 1-3 sentences)
+     - **Summary**: what was accomplished (from commits + ticket context accomplishments)
+     - **Key Decisions** (optional): from ticket context key decisions, only if any exist — omit this section entirely if there are none
+     - Linear ticket link at the bottom: `[TICKET-ID](<linear-url>)`
    - Keep it focused and scannable
 
 6. **Push and Create PR**
@@ -48,13 +52,20 @@ You are creating a pull request for an implemented ticket.
    - Create PR using `gh` CLI with HEREDOC format:
      ```bash
      gh pr create --title "[TICKET-ID] <title>" --draft --body "$(cat <<'EOF'
-     ## Summary
-     <2-3 sentences>
+     ## Goal
+     <motivation from Linear ticket description>
 
-     Closes TICKET-ID
+     ## Summary
+     <what was accomplished>
+
+     ## Key Decisions
+     - <decision>: <rationale>
+
+     [TICKET-ID](<linear-url>)
      EOF
      )"
      ```
+   - Omit the `## Key Decisions` section entirely if no decisions were captured
 {{#if (contains $ARGUMENTS "--ready")}}
    - **Note:** User passed `--ready` — omit the `--draft` flag to create a ready-for-review PR
 {{/if}}
