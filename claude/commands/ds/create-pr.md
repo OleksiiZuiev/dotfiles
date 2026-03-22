@@ -24,7 +24,6 @@ You are creating a pull request for an implemented ticket.
    - If the context file exists, read it to gather:
      - **Accomplishments** from session history — these become the PR summary
      - **Key decisions** — worth mentioning in the PR description
-     - **Files changed** — useful for the verification section
    - Combine Linear ticket context + ticket context document for the most informative PR description
 
 3. **Verify Git State**
@@ -42,7 +41,6 @@ You are creating a pull request for an implemented ticket.
    - Body should include:
      - High-level summary (2-3 sentences)
      - Link to Linear ticket: `Closes TICKET-ID`
-     - Brief test plan or verification steps
    - Keep it focused and scannable
 
 6. **Push and Create PR**
@@ -52,9 +50,6 @@ You are creating a pull request for an implemented ticket.
      gh pr create --title "[TICKET-ID] <title>" --draft --body "$(cat <<'EOF'
      ## Summary
      <2-3 sentences>
-
-     ## Verification
-     <bullet points>
 
      Closes TICKET-ID
      EOF
