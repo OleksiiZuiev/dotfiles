@@ -6,6 +6,16 @@ argument-hint: [extra context]
 
 You are helping the user work on a Linear ticket. This command auto-detects whether to start fresh or continue previous work.
 
+### Auto-Plan Mode
+
+{{#if $ARGUMENTS}}
+{{!-- Check if --auto-plan flag is present in arguments --}}
+If the text "{{$ARGUMENTS}}" contains `--auto-plan`, then **auto-plan mode is active**. In this mode:
+- You still enter plan mode and write a full plan
+- But you call `ExitPlanMode` and **immediately proceed to implementation** without waiting for user approval
+- Strip `--auto-plan` from the arguments before processing the rest as extra context
+{{/if}}
+
 ## Your Task
 
 ### Step 0: Extract Ticket ID from Branch Name
@@ -48,7 +58,8 @@ Context file: `{context-path}/{TICKET_ID}.md`
 
 ### Critical Rules
 - **MANDATORY**: You MUST call `EnterPlanMode` before any implementation work. NEVER write or modify code without an approved plan.
-- **MANDATORY**: After writing the plan, call `ExitPlanMode`. The user will get a permission prompt to review and approve. NEVER auto-proceed to implementation.
+- **If auto-plan mode is active**: After writing the plan, call `ExitPlanMode` and immediately proceed to Step 3 (implementation) without waiting for user approval. The plan is still displayed for transparency.
+- **If auto-plan mode is NOT active**: After writing the plan, call `ExitPlanMode`. The user will get a permission prompt to review and approve. NEVER auto-proceed to implementation.
 
 ### Step 1: Detect Phase
 
@@ -108,6 +119,8 @@ Include:
 
 Do NOT include post-implementation steps in the plan — those are already pre-seeded in the todo list from Step 0.5 and will run automatically after implementation.
 
+After writing the plan, call ExitPlanMode. If **auto-plan mode is active**, proceed directly to Step 3 without waiting for approval. Otherwise, wait for user approval before continuing.
+
 Then proceed to **Step 3** (shared flow).
 
 ### Step 2B: Continuation
@@ -151,6 +164,8 @@ The plan should:
 - Include testing approach
 
 Do NOT include post-implementation steps in the plan — those are already pre-seeded in the todo list from Step 0.5 and will run automatically after implementation.
+
+After writing the plan, call ExitPlanMode. If **auto-plan mode is active**, proceed directly to Step 3 without waiting for approval. Otherwise, wait for user approval before continuing.
 
 Then proceed to **Step 3** (shared flow).
 
