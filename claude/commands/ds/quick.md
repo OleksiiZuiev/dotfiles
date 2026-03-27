@@ -108,7 +108,7 @@ If this fails, inform the user and exit.
 
 ### Step 6: Launch Implementation Tab
 
-Open a new Windows Terminal tab pointing to the worktree, running `/ds:work-on --auto-plan`:
+Open a new Windows Terminal tab pointing to the worktree, running `/ds:work-on +auto-plan`:
 
 ```bash
 wt.exe -w 0 new-tab \
@@ -116,7 +116,7 @@ wt.exe -w 0 new-tab \
   --title "{TICKET_ID}" \
   --suppressApplicationTitle \
   --startingDirectory "{worktree-path-windows}" \
-  "{bash-win}" -c "{claude-path} \"/ds:work-on --auto-plan\""
+  "{bash-win}" -c "{claude-path} \"/ds:work-on +auto-plan\""
 ```
 
 Where:
@@ -131,7 +131,7 @@ Quick setup complete:
   Ticket:   {TICKET_ID} — {title}
   Branch:   {branch-name}
   Worktree: {worktree-path}
-  Tab:      launched with /ds:work-on --auto-plan
+  Tab:      launched with /ds:work-on +auto-plan
 
 Switch to the new tab (Ctrl+Tab) to monitor implementation.
 ```

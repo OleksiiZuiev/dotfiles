@@ -9,11 +9,11 @@ You are helping the user work on a Linear ticket. This command auto-detects whet
 ### Auto-Plan Mode
 
 {{#if $ARGUMENTS}}
-{{!-- Check if --auto-plan flag is present in arguments --}}
-If the text "{{$ARGUMENTS}}" contains `--auto-plan`, then **auto-plan mode is active**. In this mode:
+{{!-- Check if +auto-plan flag is present in arguments. Uses + prefix instead of -- to avoid Claude CLI consuming it as a CLI flag --}}
+If the text "{{$ARGUMENTS}}" contains `+auto-plan`, then **auto-plan mode is active**. In this mode:
 - You still enter plan mode and write a full plan
 - But you call `ExitPlanMode` and **immediately proceed to implementation** without waiting for user approval
-- Strip `--auto-plan` from the arguments before processing the rest as extra context
+- Strip `+auto-plan` from the arguments before processing the rest as extra context
 {{/if}}
 
 ## Your Task
