@@ -41,12 +41,13 @@ Additional context from user: "{{$ARGUMENTS}}"
 
 Create these todo items (all with status `pending`):
 1. `🔧 Implementation` — placeholder, will be replaced with plan tasks in Step 3
-2. `🔍 Pre-review: launch sub-agent` — see Step 5
-3. `📋 Handle pre-review suggestions` — see Step 6
-4. `💾 Commit: launch sub-agent` — see Step 7
-5. `📝 Update ticket context: launch sub-agent` — see Step 8
-6. `🚀 Push & PR` — see Step 9
-7. `✅ Final summary` — see Step 10
+2. `🧹 Simplify: launch sub-agent` — see Step 4
+3. `🔍 Pre-review: launch sub-agent` — see Step 5
+4. `📋 Handle pre-review suggestions` — see Step 6
+5. `💾 Commit: launch sub-agent` — see Step 7
+6. `📝 Update ticket context: launch sub-agent` — see Step 8
+7. `🚀 Push & PR` — see Step 9
+8. `✅ Final summary` — see Step 10
 
 These items act as a persistent checklist. Implementation tasks from the plan will be inserted as sub-items or replace item 1.
 
@@ -183,6 +184,30 @@ Implement the plan directly — do NOT use a sub-agent. The main agent has full 
 
 The following steps correspond to the todo items pre-seeded in Step 0.5. Work through them in order — use TodoWrite to mark each item `in_progress` when starting and `completed` when done.
 
+### Step 4: Simplify Sub-Agent
+
+Mark `🧹 Simplify: launch sub-agent` as `in_progress` via TodoWrite.
+
+Launch a Task sub-agent to review uncommitted changes for code reuse, quality, and efficiency issues — then fix any found.
+
+**Sub-agent prompt:**
+> Review the uncommitted changes in the current repo for code reuse, quality, and efficiency issues. Fix the issues you find.
+>
+> IMPORTANT: Ignore any gitStatus snapshot from the conversation context — it is stale. You MUST run fresh git commands to see the actual current state.
+>
+> 1. Get the diff: run `git diff` (unstaged) and `git diff --cached` (staged). Review both.
+> 2. Read the repo's `CLAUDE.md` at the repo root for conventions.
+> 3. Analyze the diff for: code duplication (copy-paste that could be extracted), quality issues (dead code, overly complex logic, unclear naming), and efficiency improvements (unnecessary operations, redundant work).
+> 4. Do NOT flag style issues, naming conventions, architecture, security, or test coverage — those are handled by other steps.
+> 5. For each finding, apply the fix directly using Edit. Prefer simple, targeted changes over large refactors.
+> 6. Return a structured report:
+>    - **Fixes applied**: list of changes made (file, line, description). Empty if none.
+>    - If nothing found, return: "Simplify passed — no issues found."
+
+**Sub-agent allowed tools:** `Bash(git diff*), Read, Edit, Grep, Glob`
+
+Mark `🧹 Simplify: launch sub-agent` as `completed` via TodoWrite.
+
 ### Step 5: Pre-Review Sub-Agent
 
 Mark `🔍 Pre-review: launch sub-agent` as `in_progress` via TodoWrite.
@@ -314,6 +339,7 @@ Work completed: {TICKET_ID}
 Phase: Fresh start / Continuation
 Change: [brief description of what was done]
 Files modified: [count]
+Simplify: [N fixes applied] or [clean]
 Pre-review: [N auto-fixes applied, M suggestions] or [clean]
 Committed: [yes — commit hash] or [no — reason]
 Ticket context updated: yes/no
