@@ -1,7 +1,7 @@
 ---
-description: Work on a Linear ticket — auto-detects fresh start vs continuation
+description: Work on a Linear ticket — auto-detects fresh start vs continuation. Flags: +auto-plan (skip approval gate), +no-simplify (skip refactor step for external repos)
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, AskUserQuestion, EnterPlanMode, TodoWrite
-argument-hint: [extra context]
+argument-hint: [+auto-plan] [+no-simplify] [extra context]
 ---
 
 You are helping the user work on a Linear ticket. This command auto-detects whether to start fresh or continue previous work.
