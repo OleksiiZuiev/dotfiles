@@ -16,6 +16,13 @@ If the text "{{$ARGUMENTS}}" contains `+auto-plan`, then **auto-plan mode is act
 - Strip `+auto-plan` from the arguments before processing the rest as extra context
 {{/if}}
 
+{{#if $ARGUMENTS}}
+If the text "{{$ARGUMENTS}}" contains `+no-simplify`, then **no-simplify mode is active**. In this mode:
+- Step 4 (Simplify sub-agent) is skipped entirely
+- Mark `🧹 Simplify: launch sub-agent` as `completed` immediately with note "Skipped (+no-simplify active)"
+- Strip `+no-simplify` from the arguments before processing the rest as extra context
+{{/if}}
+
 ## Your Task
 
 ### Step 0: Extract Ticket ID from Branch Name
@@ -188,7 +195,9 @@ The following steps correspond to the todo items pre-seeded in Step 0.5. Work th
 
 Mark `🧹 Simplify: launch sub-agent` as `in_progress` via TodoWrite.
 
-Launch a Task sub-agent to review uncommitted changes for code reuse, quality, and efficiency issues — then fix any found.
+If **no-simplify mode is active**: mark `🧹 Simplify: launch sub-agent` as `completed` immediately. Skip the rest of this step.
+
+Otherwise, launch a Task sub-agent to review uncommitted changes for code reuse, quality, and efficiency issues — then fix any found.
 
 **Sub-agent prompt:**
 > Review the uncommitted changes in the current repo for code reuse, quality, and efficiency issues. Fix the issues you find.
@@ -339,7 +348,7 @@ Work completed: {TICKET_ID}
 Phase: Fresh start / Continuation
 Change: [brief description of what was done]
 Files modified: [count]
-Simplify: [N fixes applied] or [clean]
+Simplify: [N fixes applied] or [clean] or [skipped (+no-simplify)]
 Pre-review: [N auto-fixes applied, M suggestions] or [clean]
 Committed: [yes — commit hash] or [no — reason]
 Ticket context updated: yes/no
