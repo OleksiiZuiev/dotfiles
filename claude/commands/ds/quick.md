@@ -15,11 +15,11 @@ Raw arguments: "{{$ARGUMENTS}}"
 {{/if}}
 
 Parse the arguments:
-- **First token** (`$1`): If it matches a ticket ID pattern (letters-digits, e.g. `INT-123`, `ENG-45`), treat it as a **parent task ID**. Otherwise treat it as a **Linear project name**.
+- **First token** (`$1`): **Optional.** If absent, set `target = none`. If present: treat as a **parent task ID** when it matches a ticket ID pattern (letters-digits, e.g. `INT-123`, `ENG-45`), otherwise treat it as a **Linear project name**.
 - **Remaining tokens**: treat as the change description (optional — can come from conversation instead).
 
 {{#unless $ARGUMENTS}}
-No arguments provided. You will ask about the target (project or parent task) and description during intake.
+No arguments provided. You will ask about the description and type during intake. No project or parent task will be set.
 {{/unless}}
 
 ### Step 2: Validate Git State
@@ -57,17 +57,12 @@ Ask with `AskUserQuestion` (combine into one round if possible):
    - `feat` — new functionality or capability
    - `fix` — bug fix or correction
    - `chore` — maintenance, config, tooling, refactoring
-
-If the target (project or parent task) wasn't provided in arguments, also ask:
-3. **Target**: "Where should the ticket live in Linear?" — options:
-   - Provide project name
-   - Provide parent ticket ID (e.g., INT-123)
 {{/unless}}
 
 By the end of this step you must have:
 - A clear understanding of the change
 - The branch type prefix (`feat/`, `fix/`, or `chore/`)
-- The Linear target (project name or parent task ID)
+- The Linear target (project name or parent task ID), or `none` if not provided
 
 ### Step 4: Create Linear Ticket
 
@@ -75,8 +70,9 @@ Use `mcp__linear-server__save_issue` to create the ticket:
 - `title`: concise title derived from intake
 - `team`: "INT"
 - `description`: brief description with acceptance criteria from the intake
-- `project`: set if target is a project name
-- `parentId`: set if target is a parent ticket ID
+- `project`: set only if target is a project name
+- `parentId`: set only if target is a parent task ID
+- If `target = none`, omit both fields
 - `state`: "In Progress"
 - `assignee`: "me"
 
