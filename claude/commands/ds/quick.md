@@ -104,21 +104,15 @@ If this fails, inform the user and exit.
 
 ### Step 6: Launch Implementation Tab
 
-Open a new Windows Terminal tab pointing to the worktree, running `/ds:work-on +auto-plan`:
+Open a new Windows Terminal tab pointing to the worktree, running `/ds:work-on +auto-plan`.
+
+Run this as a **single Bash command** — inline `$(...)` subshells resolve paths without needing separate lookup steps. Only substitute `{TICKET_ID}` and `{worktree-path}` (the Unix-style worktree path from Step 5):
 
 ```bash
-wt.exe -w 0 new-tab \
-  --profile "Git Bash" \
-  --title "{TICKET_ID}" \
-  --suppressApplicationTitle \
-  --startingDirectory "{worktree-path-windows}" \
-  "{bash-win}" -c "{claude-path} \"/ds:work-on +auto-plan\""
+wt.exe -w 0 new-tab --profile "Git Bash" --title "{TICKET_ID}" --suppressApplicationTitle --startingDirectory "$(cygpath -w {worktree-path})" "$(cygpath -w /usr/bin/bash)" -c "$HOME/.local/bin/claude.exe '/ds:work-on +auto-plan'"
 ```
 
-Where:
-- `{bash-win}` = output of `cygpath -w /usr/bin/bash`
-- `{worktree-path-windows}` = output of `cygpath -w {worktree-path}`
-- `{claude-path}` = `$HOME/.local/bin/claude.exe`
+**Important**: `/ds:work-on +auto-plan` is wrapped in single quotes so it is passed as **one argument** to the claude CLI. Without this quoting, `+auto-plan` becomes a separate argument and the auto-plan flag is silently lost.
 
 ### Step 7: Summary
 
