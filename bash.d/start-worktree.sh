@@ -9,11 +9,13 @@
 # Prerequisites (all must pass):
 #   - Must be in a git repo
 #   - Current path must NOT contain "worktrees" (must be in main repo)
-#   - Must be on main branch
 #   - Must have no uncommitted changes
 #
+# Base branch behavior:
+#   - On main: pulls latest with rebase, then creates worktree
+#   - On non-main: warns user and asks for confirmation (y/N), skips pull
+#
 # Actions:
-#   - Pulls latest with rebase
 #   - Strips branch prefix (feat/int-31-foo -> int-31-foo)
 #   - Creates worktree at ../repo-worktrees/<stripped-branch-name>
 #   - CDs into the new worktree
@@ -41,24 +43,30 @@ start-worktree() {
         return 1
     fi
 
-    # Validation 3: Must be on main branch
-    local current_branch=$(git branch --show-current)
-    if [[ "$current_branch" != "main" ]]; then
-        echo "Error: Must be on 'main' branch (currently on '$current_branch')"
-        return 1
-    fi
-
-    # Validation 4: Must have no uncommitted changes
+    # Validation 3: Must have no uncommitted changes
     if ! git diff --quiet || ! git diff --cached --quiet; then
         echo "Error: Uncommitted changes detected. Commit or stash them first."
         return 1
     fi
 
-    # Pull latest with rebase
-    echo "Pulling latest changes..."
-    if ! git pull -r; then
-        echo "Error: Failed to pull latest changes"
-        return 1
+    # Determine base branch behavior
+    local current_branch=$(git branch --show-current)
+    if [[ "$current_branch" == "main" ]]; then
+        # Pull latest with rebase when on main
+        echo "Pulling latest changes..."
+        if ! git pull -r; then
+            echo "Error: Failed to pull latest changes"
+            return 1
+        fi
+    else
+        # Branching from a non-main branch — ask for confirmation
+        echo "Warning: You are on branch '$current_branch', not 'main'."
+        echo "The new branch will be created from '$current_branch'."
+        read -r -p "Continue? (y/N) " confirm
+        if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+            echo "Aborted."
+            return 1
+        fi
     fi
 
     # Strip branch prefix (e.g., feat/int-31-foo -> int-31-foo)
