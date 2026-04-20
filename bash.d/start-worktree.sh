@@ -8,7 +8,7 @@
 #
 # Prerequisites (all must pass):
 #   - Must be in a git repo
-#   - Current path must NOT contain "worktrees" (must be in main repo)
+#   - Must be run from the main repo (not inside another worktree)
 #   - Must have no uncommitted changes
 #
 # Base branch behavior:
@@ -36,9 +36,11 @@ start-worktree() {
         return 1
     fi
 
-    # Validation 2: Must not be in a worktree (path must not contain "worktrees")
-    local current_dir="$(pwd)"
-    if [[ "$current_dir" == *"worktrees"* ]]; then
+    # Validation 2: Must not be in a worktree
+    # In a worktree, git-dir is an absolute path ending in .git/worktrees/<name>
+    local git_dir
+    git_dir=$(git rev-parse --git-dir)
+    if [[ "$git_dir" == *"/.git/worktrees/"* ]]; then
         echo "Error: Already in a worktree. Run this from the main repository."
         return 1
     fi
