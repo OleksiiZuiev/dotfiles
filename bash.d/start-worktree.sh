@@ -7,17 +7,19 @@
 #   - Remote-only branch: fetches and creates worktree for it
 #
 # Prerequisites (all must pass):
-#   - Must be in a git repo
-#   - Must be run from the main repo (not inside another worktree)
+#   - Must be in a git repo (main repo or any worktree)
 #   - Must have no uncommitted changes
 #
 # Base branch behavior:
 #   - On main: pulls latest with rebase, then creates worktree
-#   - On non-main: warns user and asks for confirmation (y/N), skips pull
+#   - On non-main (including from a worktree): warns user and asks for
+#     confirmation (y/N), skips pull. New branch is created from the
+#     current branch — useful for stacking PRs.
 #
 # Actions:
 #   - Strips branch prefix (feat/int-31-foo -> int-31-foo)
-#   - Creates worktree at ../repo-worktrees/<stripped-branch-name>
+#   - Creates worktree under the main repo's <repo>-worktrees directory,
+#     even when invoked from another worktree
 #   - CDs into the new worktree
 #   - Launches lclaude (new branches only)
 
@@ -36,16 +38,7 @@ start-worktree() {
         return 1
     fi
 
-    # Validation 2: Must not be in a worktree
-    # In a worktree, git-dir is an absolute path ending in .git/worktrees/<name>
-    local git_dir
-    git_dir=$(git rev-parse --git-dir)
-    if [[ "$git_dir" == *"/.git/worktrees/"* ]]; then
-        echo "Error: Already in a worktree. Run this from the main repository."
-        return 1
-    fi
-
-    # Validation 3: Must have no uncommitted changes
+    # Validation 2: Must have no uncommitted changes
     if ! git diff --quiet || ! git diff --cached --quiet; then
         echo "Error: Uncommitted changes detected. Commit or stash them first."
         return 1
@@ -74,9 +67,16 @@ start-worktree() {
     # Strip branch prefix (e.g., feat/int-31-foo -> int-31-foo)
     local stripped_branch="${branch#*/}"
 
-    # Get repo root and construct worktree directory
-    # e.g., /work/github/integrations-service -> /work/github/integrations-service-worktrees/<branch>
-    local repo_root=$(git rev-parse --show-toplevel)
+    # Get the main repo root (not the current worktree's root) and
+    # construct worktree directory.
+    # In a worktree, --show-toplevel returns the worktree root; we need
+    # the main repo root so all worktrees live under one shared folder.
+    # --git-common-dir returns the main repo's .git dir (absolute in a
+    # worktree, relative in the main repo), so we ask for absolute.
+    local main_git_dir
+    main_git_dir=$(git rev-parse --path-format=absolute --git-common-dir)
+    local repo_root
+    repo_root=$(dirname "$main_git_dir")
     local repo_name=$(basename "$repo_root")
     local repo_parent=$(dirname "$repo_root")
     local worktree_dir="$repo_parent/${repo_name}-worktrees/$stripped_branch"
