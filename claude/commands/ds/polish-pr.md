@@ -132,12 +132,8 @@ Address review comments for PR: **#{{$1}}**
       - Record the skipped comment and rationale for the reply phase
 
    e. **Handle Dismissed Comments**
-      - If user selected "Dismiss comment", ask for the rationale using `AskUserQuestion`:
-        - **"Use agent's reasoning"** - Use the thinking buddy assessment as the rationale
-        - **"Not applicable"** - The comment doesn't apply to current code
-        - **"Disagree with suggestion"** - Have a different technical opinion
-        - **"Custom explanation"** - Provide custom rationale
-      - Record the dismissed comment and rationale for the reply phase
+      - If user selected "Dismiss comment", automatically use the agent's thinking buddy assessment as the rationale — no additional prompt needed
+      - Record the dismissed comment with the agent's reasoning as rationale for the reply phase
 
    f. **Create Todo List**
       - After ALL comments are planned and approved, use TodoWrite
@@ -455,12 +451,8 @@ gh pr view --json number --jq '.number'
       - Record the skipped comment and rationale for the reply phase
 
    e. **Handle Dismissed Comments**
-      - If user selected "Dismiss comment", ask for the rationale using `AskUserQuestion`:
-        - **"Use agent's reasoning"** - Use the thinking buddy assessment as the rationale
-        - **"Not applicable"** - The comment doesn't apply to current code
-        - **"Disagree with suggestion"** - Have a different technical opinion
-        - **"Custom explanation"** - Provide custom rationale
-      - Record the dismissed comment and rationale for the reply phase
+      - If user selected "Dismiss comment", automatically use the agent's thinking buddy assessment as the rationale — no additional prompt needed
+      - Record the dismissed comment with the agent's reasoning as rationale for the reply phase
 
    f. **Create Todo List**
       - After ALL comments are planned and approved, use TodoWrite
