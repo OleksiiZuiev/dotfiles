@@ -7,6 +7,7 @@
 - Prefer simple solutions
 - When possible use TDD: write a test, check that it is failing, write the code and check it is passing
 - Add explaining comments, only when it is not clear from the code itself. Or when asked explicitly. Prefer expressive code to comments.
+- Comments must describe what the code does now, not what changed to get here. Especially during refactoring: never write "refactored from X", "now uses Y instead of Z", "previously did W", "moved from A". Once the refactor is in the past, these comments become noise that misleads readers. Write comments that would still make sense to someone reading the code a year from now with no knowledge of its history.
 
 #Commandments for bash commands
 - NEVER use `cd` in Bash commands — not to the current directory, not to any other directory
