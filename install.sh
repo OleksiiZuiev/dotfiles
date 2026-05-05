@@ -158,6 +158,10 @@ if [ -d "$DOTFILES_DIR/claude/hooks" ]; then
         [ -e "$hook" ] || continue
         create_link "$hook" "$TARGET_HOME/.claude/hooks/$(basename "$hook")"
     done
+    for hook in "$DOTFILES_DIR"/claude/hooks/*.ps1; do
+        [ -e "$hook" ] || continue
+        create_link "$hook" "$TARGET_HOME/.claude/hooks/$(basename "$hook")"
+    done
 fi
 
 # Install VS Code settings
