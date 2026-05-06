@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"%USERPROFILE%\\.claude\\hooks\\toast.ps1\" -EventName Stop"
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$USERPROFILE\\.claude\\hooks\\toast.ps1\" -EventName Stop"
           }
         ]
       }
@@ -49,7 +49,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"%USERPROFILE%\\.claude\\hooks\\toast.ps1\" -EventName Notification"
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$USERPROFILE\\.claude\\hooks\\toast.ps1\" -EventName Notification"
           }
         ]
       }
@@ -85,5 +85,6 @@
         "http://localhost:9222"
       ]
     }
-  }
+  },
+  "model": "sonnet"
 }
