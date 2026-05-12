@@ -246,10 +246,25 @@ Mark `🔍 Pre-review: launch sub-agent` as `completed` via TodoWrite.
 Mark `📋 Handle pre-review suggestions` as `in_progress` via TodoWrite.
 
 If the pre-review sub-agent returned suggestions:
-1. Display the suggestions report to the user
-2. Use AskUserQuestion: "Apply all suggestions / Skip"
-3. If **"Apply all"**: apply each suggestion using the Edit tool
-4. If **"Skip"**: proceed without changes
+
+1. **Print the full suggestions report as a regular text message** before calling any other tool. The user can only see your text output and the `AskUserQuestion` UI — they cannot see the sub-agent's return value. So you MUST render every suggestion, with file, line, description, and the proposed change. Do not summarize, do not just say "N suggestions found", and do not bundle this content into the `AskUserQuestion` description.
+
+   Use this format:
+
+   ```
+   ## Pre-review suggestions
+
+   1. `path/to/file:line` — short description
+      Proposed change: <what would be applied>
+
+   2. `path/to/file:line` — short description
+      Proposed change: <what would be applied>
+   ```
+
+2. Only after the report has been printed, call `AskUserQuestion` with the choice **"Apply all suggestions / Skip"**.
+
+3. If **"Apply all"**: apply each suggestion using the Edit tool.
+4. If **"Skip"**: proceed without changes.
 
 If the pre-review returned no suggestions (only auto-fixes or clean pass), proceed silently.
 
