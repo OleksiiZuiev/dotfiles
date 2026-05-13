@@ -22,7 +22,7 @@ Take the first whitespace-delimited token from `$ARGUMENTS` as the identifier; e
 Run via Bash:
 
 ```
-python ~/dotfiles/claude/scripts/mlflow_dump.py session <uuid> --experiment <exp_id>
+python ~/.claude/scripts/mlflow_dump.py session <uuid> --experiment <exp_id>
 ```
 
 The script prints one absolute path per line on stdout — one for `index.md`, one for `summary.json`, and one `<trace_id>.tree.txt` per trace in the session. **Do not** read every tree file eagerly.
@@ -45,7 +45,7 @@ If you need trace-level metadata (full token usage, cost breakdown, branch, user
 If the tree points at a single suspicious span (the failing tool call, the unexpectedly large LLM response, etc.) and you need the actual payload, look up the `span_id` from `<trace_id>.spans.json` (the indexed list) and run:
 
 ```
-python ~/dotfiles/claude/scripts/mlflow_dump.py span <trace_id> <span_id>
+python ~/.claude/scripts/mlflow_dump.py span <trace_id> <span_id>
 ```
 
 It prints the path to a single-span JSON containing `inputs`, `outputs`, `attributes`, `events`. `Read` that file. This is the only intentionally large read in the whole flow — skip it unless a specific span needs it.

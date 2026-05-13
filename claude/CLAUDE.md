@@ -115,6 +115,6 @@ Regenerate: `bash ~/dotfiles/claude/scripts/update-repo-map.sh`
   `GET /ajax-api/2.0/mlflow/get-trace-artifact` is the pre-3.3.0 artifact path
   and returns only a UI subset of spans — do not use it on this server.
 - Responses regularly exceed 10 MB. **Do not pull traces through `WebFetch`.**
-  Use `~/dotfiles/claude/scripts/mlflow_dump.py` instead — it writes compact projections
+  Use `~/.claude/scripts/mlflow_dump.py` instead — it writes compact projections
   to `~/.cache/mlflow-dump/` and only emits full span payloads on demand.
   The `/ds:analyze-mlflow` slash command wraps this for chat-session analysis.

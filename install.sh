@@ -164,6 +164,17 @@ if [ -d "$DOTFILES_DIR/claude/hooks" ]; then
     done
 fi
 
+# Claude scripts
+if [ -d "$DOTFILES_DIR/claude/scripts" ]; then
+    mkdir -p "$TARGET_HOME/.claude/scripts"
+    for ext in sh py ps1; do
+        for script in "$DOTFILES_DIR"/claude/scripts/*."$ext"; do
+            [ -e "$script" ] || continue
+            create_link "$script" "$TARGET_HOME/.claude/scripts/$(basename "$script")"
+        done
+    done
+fi
+
 # Install VS Code settings
 echo ""
 echo "Installing VS Code configuration..."
