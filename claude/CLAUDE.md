@@ -105,3 +105,16 @@ export CLAUDE_REPO_MAP="/c/work/claude-data/repo-map.md"
 Default: `/c/work/claude-data/repo-map.md`
 
 Regenerate: `bash ~/dotfiles/claude/scripts/update-repo-map.sh`
+
+# MLflow telemetry (dev env)
+
+- Server: `https://mlflow-devweu.devds.net`, experiment id `9` (DataSnipper agents-and-tools dev).
+- Chat-session UUID lives in trace `request_metadata` under `mlflow.trace.session`.
+  Search filter: `metadata.\`mlflow.trace.session\` = '<uuid>'` (NOT `tags.`).
+- For full per-trace span data, use `GET /api/3.0/mlflow/traces/get?trace_id=…`.
+  `GET /ajax-api/2.0/mlflow/get-trace-artifact` is the pre-3.3.0 artifact path
+  and returns only a UI subset of spans — do not use it on this server.
+- Responses regularly exceed 10 MB. **Do not pull traces through `WebFetch`.**
+  Use `~/dotfiles/claude/scripts/mlflow_dump.py` instead — it writes compact projections
+  to `~/.cache/mlflow-dump/` and only emits full span payloads on demand.
+  The `/ds:analyze-mlflow` slash command wraps this for chat-session analysis.
