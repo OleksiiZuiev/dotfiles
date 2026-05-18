@@ -4,12 +4,17 @@ allowed-tools: Bash(git *), Bash(gh *), Read, Write, Edit, Grep, Glob, Task, Ask
 argument-hint: [<pr-number>]
 ---
 
-You are performing a substantive review of a pull request. The goal is to absorb the mechanical reviewer effort on bigger PRs by surfacing the issues a thoughtful human reviewer would actually raise across six dimensions: **simplicity, performance, codebase consistency, readability, extraction/duplication, and test coverage**. You then ask the user which findings to apply, apply them, commit, push, and keep PR description + ticket context in sync.
+You are performing a substantive review of a pull request. The goal is to absorb the mechanical reviewer effort on bigger PRs by surfacing the issues a thoughtful human reviewer would actually raise across six dimensions: **simplicity, performance, codebase consistency, readability, extraction/duplication, and test coverage**.
+
+The command auto-detects which of two modes to run, based on PR authorship:
+
+- **`MODE=own`** (PR author == you): ask the user which findings to apply, apply them, commit, push, refresh PR description, and update ticket context.
+- **`MODE=draft-comments`** (PR author ≠ you): produce a `Draft comment:` block per finding and print the selected ones grouped by `file:line` for copy-paste into GitHub. No edits, commits, pushes, PR-description updates, or ticket-context writes.
 
 **Distinction from siblings:**
 - `/ds:pre-review` — style/naming/conventions on the local diff, before push. Cosmetic.
 - `/ds:polish-pr` — addresses *human* reviewer comments already posted on the PR.
-- `/ds:review` (this command) — substantive code-quality review of the PR, before/between human review rounds.
+- `/ds:review` (this command) — substantive code-quality review of the PR, before/between human review rounds (own or someone else's).
 
 ## Your Task
 
@@ -32,23 +37,43 @@ You are performing a substantive review of a pull request. The goal is to absorb
    - Strip everything before the first `/`, take the first two hyphen-separated segments, uppercase them (e.g., `feature/eng-123-foo` → `ENG-123`)
    - If the branch does not match the pattern, set `TICKET_ID=null` and continue without Linear / ticket-context lookups. This is NOT a fatal error.
 
-3. **Base branch & diff:**
+3. **PR metadata** (now fetched up front — author is needed for mode detection, base ref for the diff fetch):
    ```bash
-   gh pr view <pr-number> --json baseRefName --jq '.baseRefName'
-   git diff origin/<base>...HEAD --stat
-   git diff origin/<base>...HEAD
+   gh pr view <pr-number> --json title,body,url,author,baseRefName
    ```
-   If the diff is empty, stop:
-   > No changes on this branch versus `origin/<base>`. Nothing to review.
+   Capture: `PR_TITLE`, `PR_BODY`, `PR_URL`, `PR_AUTHOR=.author.login`, `BASE=.baseRefName`.
 
-4. **PR metadata:**
+4. **Mode detection** — auto-decides whether this is your own PR or someone else's:
    ```bash
-   gh pr view <pr-number> --json title,body,url
+   gh api user --jq '.login'   # ME
    ```
+   - If `PR_AUTHOR == ME` → `MODE=own` (existing flow: analysis → findings → apply → commit → push → PR-desc → ticket-context).
+   - Else → `MODE=draft-comments` (analysis → findings → print copy-paste-ready PR comments → stop; no edits, no commits, no pushes, no PR-description or ticket-context writes).
+
+   Print a one-liner so the mode is visible up front:
+   - `MODE=own`: `> Mode: own (PR authored by <ME>) — selected findings will be applied, committed, and pushed.`
+   - `MODE=draft-comments`: `> Mode: draft-comments (PR authored by <PR_AUTHOR>, you are <ME>) — no edits/commits/pushes; selected findings print as draft PR comments.`
+
+5. **Diff** (mode-aware — `MODE=own` reads the local working tree, `MODE=draft-comments` pulls directly from GitHub so you can be on any branch):
+   - **If `MODE=own`:**
+     ```bash
+     git diff origin/<BASE>...HEAD --stat
+     git diff origin/<BASE>...HEAD
+     ```
+   - **If `MODE=draft-comments`:**
+     ```bash
+     gh pr diff <pr-number> --name-only   # files-changed list for the context banner
+     gh pr diff <pr-number>               # the full unified diff body
+     ```
+
+   If the diff is empty, stop:
+   > No changes on this PR. Nothing to review.
 
 ### Step 0.5: Pre-Seed Post-Implementation Todo Items
 
-Before doing anything else, use TodoWrite to create these fixed items. They make the multi-step flow survive a long session — same pattern as `/ds:work-on` Step 0.5.
+Before doing anything else, use TodoWrite to create the per-mode checklist. The seed list mirrors what will actually run so the multi-step flow survives a long session — same pattern as `/ds:work-on` Step 0.5.
+
+**If `MODE=own`:**
 
 1. `🔬 Analysis: launch review sub-agents`
 2. `📋 Findings report & user selection`
@@ -58,6 +83,13 @@ Before doing anything else, use TodoWrite to create these fixed items. They make
 6. `📝 Update PR description (if scope changed)`
 7. `📝 Update ticket context`
 8. `✅ Final summary`
+
+**If `MODE=draft-comments`:**
+
+1. `🔬 Analysis: launch review sub-agents`
+2. `📋 Findings report & user selection`
+3. `🗒️ Print draft PR comments`
+4. `✅ Final summary`
 
 ### Step 1: Load Shared Context
 
@@ -133,6 +165,30 @@ Launch the six reviewers below **in a single message with six parallel `Task` to
 > - Do NOT propose changes that violate the ticket A/C or any prior decision listed above.
 > - You may use `git show`, `Grep`, and `Glob` to look at the surrounding code for context — but stay within your dimension's lane.
 
+#### Draft-comments addendum (`MODE=draft-comments` only)
+
+When `MODE=draft-comments`, append the following to the shared brief **before** the per-dimension addendum. It extends the output contract so every finding ships with a copy-paste-ready PR comment.
+
+> **Additional output requirement (draft-comments mode):** for every finding, append a `**Draft comment:**` block immediately after `**Proposed change:**`. Updated per-finding shape:
+>
+> ```
+> 1. `path/to/file:line-range` — <one-line summary>
+>    **Severity:** high | medium | low
+>    **Why:** <1–2 sentence reasoning>
+>    **Proposed change:** <concrete, actionable description>
+>    **Draft comment:**
+>    > <GitHub-flavored markdown — see drafting rules below>
+> ```
+>
+> **Drafting rules for the comment:**
+> - Write from the reviewer's voice, addressing the PR author directly.
+> - Open with the problem in one sentence — no "I noticed that…" / "It seems like…" filler.
+> - Follow with a concrete suggestion: actionable, not a vague concern.
+> - Prefer a fenced ` ```suggestion ` block when the change is a single small edit GitHub can apply directly. Skip the suggestion block for structural changes.
+> - 1–3 sentences total. No restating of severity (that's reviewer mental model, not author-facing).
+> - Avoid hedging adjectives ("maybe", "perhaps could possibly"); stay direct but collaborative.
+> - Do NOT include the `**Draft comment:**` block on the `No issues found.` short-circuit.
+
 #### Per-dimension prompt addendum
 
 After the shared brief, append the dimension-specific instruction:
@@ -187,18 +243,54 @@ Mark `📋 Findings report & user selection` as `in_progress`.
 3. **Zero-findings short-circuit:** if total findings == 0, print:
    > **Review passed — no substantive findings.**
 
-   Skip Steps 4–6. Still proceed to Step 7 (ticket context update gets a "Review passed" session entry).
+   - **If `MODE=own`:** skip Steps 4–6. Still proceed to Step 7 (ticket context update gets a "Review passed" session entry).
+   - **If `MODE=draft-comments`:** skip directly to Step 9 (final summary). Nothing to draft, no context to write.
 
 4. **User selection** via `AskUserQuestion` with `multiSelect: true`:
    - One option per finding. **Label:** `#N — <dimension> — <short summary>` (truncate to fit). **Description:** `<file:line> (<severity>)`.
    - **If total findings > 12**: skip `AskUserQuestion` entirely (the UI grows unwieldy). Print: *"Reply with comma-separated finding numbers to apply, or `all`, or `none`."* — then wait for a regular text reply and parse it.
    - For the ≤12 path, after the per-finding options, the user can additionally select "Other" and type `all` or `none` to apply everything or skip everything.
 
-5. Record selected finding IDs. If the user selected `none` or nothing, skip Steps 4–6 (still update ticket context).
+5. Record selected finding IDs. If the user selected `none` or nothing:
+   - **If `MODE=own`:** skip Steps 4–6 (still update ticket context in Step 7).
+   - **If `MODE=draft-comments`:** skip Step 3.5 and go to Step 9 with "Selected: 0".
 
 Mark `📋 Findings report & user selection` as `completed`.
 
-### Step 4: Implement Selected Findings
+### Mode branch
+
+- **If `MODE=own`:** proceed to **Step 4** (Implement Selected Findings) below. Steps 4–8 are the own-PR flow.
+- **If `MODE=draft-comments`:** skip Steps 4–8 entirely and jump to **Step 3.5** (Print Draft PR Comments) immediately after this notice, then go to Step 9.
+
+### Step 3.5: Print Draft PR Comments (`MODE=draft-comments` only)
+
+Mark `🗒️ Print draft PR comments` as `in_progress`.
+
+For each finding the user kept in Step 3, print a focused copy-paste block. Group entries by `file:line` (sort alphabetically by file path, then ascending by starting line number). If the same `file:line` carries findings from two different dimensions, include both blocks, each prefixed with `(<dimension>)`.
+
+Use this exact layout:
+
+```
+## Draft PR comments — PR #<N> (<PR_TITLE>)
+Mode: draft-comments — copy-paste these into GitHub as line comments.
+
+### `path/to/file:line-range`
+<draft comment markdown verbatim from the finding's Draft comment: block>
+
+### `path/to/other-file:42-48`
+(<dimension>) <draft comment markdown>
+
+(<dimension>) <draft comment markdown>
+...
+```
+
+Special cases:
+- Zero selected: print `> No findings selected — nothing to draft.` and continue.
+- Zero total (from the zero-findings short-circuit): you are not in this step — Step 3 jumped you straight to Step 9.
+
+Mark `🗒️ Print draft PR comments` as `completed`, then jump to **Step 9**.
+
+### Step 4: Implement Selected Findings (`MODE=own` only — skip in draft-comments mode)
 
 Mark `🛠️ Implement selected findings` as `in_progress`.
 
@@ -213,7 +305,7 @@ If applying a finding turns out to be infeasible (would break a test, contradict
 
 Mark `🛠️ Implement selected findings` as `completed`.
 
-### Step 5: Commit Sub-Agent
+### Step 5: Commit Sub-Agent (`MODE=own` only — skip in draft-comments mode)
 
 Mark `💾 Commit selected fixes` as `in_progress`.
 
@@ -245,7 +337,7 @@ Launch a `general-purpose` sub-agent (`model: "sonnet"`) to commit the applied f
 
 Mark `💾 Commit selected fixes` as `completed`.
 
-### Step 6: Push
+### Step 6: Push (`MODE=own` only — skip in draft-comments mode)
 
 Mark `🚀 Push to PR` as `in_progress`.
 
@@ -256,7 +348,7 @@ git push -u origin <branch-name>
 
 Mark `🚀 Push to PR` as `completed`.
 
-### Step 7: Update PR Description (if scope changed)
+### Step 7: Update PR Description (if scope changed) (`MODE=own` only — skip in draft-comments mode)
 
 Mark `📝 Update PR description (if scope changed)` as `in_progress`.
 
@@ -296,9 +388,11 @@ Otherwise, mirror `/ds:polish-pr` Step 8:
 
 Mark `📝 Update PR description (if scope changed)` as `completed`.
 
-### Step 8: Update Ticket Context
+### Step 8: Update Ticket Context (`MODE=own` only — skip in draft-comments mode)
 
 Mark `📝 Update ticket context` as `in_progress`.
+
+If `MODE=draft-comments`, this step does not exist in the per-mode checklist — skip silently. Reviewing someone else's PR is not your ticket work; no audit entry is written.
 
 If `TICKET_ID` is `null`, mark this step `completed` with note "No ticket ID — ticket context not updated" and continue.
 
@@ -321,7 +415,9 @@ Mark `📝 Update ticket context` as `completed`.
 
 Mark `✅ Final summary` as `in_progress`.
 
-Print:
+The summary format differs by mode.
+
+**If `MODE=own`:**
 
 ```
 /ds:review — PR #<N> (<title>)
@@ -342,10 +438,26 @@ Suggest next steps:
 - Re-run `/ds:review` after addressing major findings if more rounds needed.
 - Proceed to human review (mark PR ready with `gh pr ready` if it's a draft).
 
+**If `MODE=draft-comments`:**
+
+```
+/ds:review (draft-comments mode) — PR #<N> (<title>)
+PR author: <PR_AUTHOR>   You: <ME>
+Findings: <T> total — H high, M medium, L low — across 6 dimensions
+Selected for drafting: <count>
+Skipped (not selected by user): <count>
+No changes were made to the branch, PR, or ticket context.
+```
+
+Suggest next steps:
+- Copy the draft comments above into the GitHub PR review.
+- Re-run `/ds:review <pr-number>` after the author pushes updates.
+
 Mark `✅ Final summary` as `completed`.
 
 ## Important Notes
 
+- **Mode-aware flow**: the command auto-detects `own` vs `draft-comments` mode from PR author at Step 0.4. In `draft-comments` mode, Steps 4–8 are skipped entirely and the selected findings produce copy-paste draft comments only — no edits, commits, pushes, PR-description updates, or ticket-context writes.
 - **Render findings as text first**: never bundle the report into the `AskUserQuestion` description. The user only sees text messages and the `AskUserQuestion` UI. This is a hard rule, identical to `/ds:work-on` Step 6.
 - **Sub-agents are read-only during analysis**: only the main agent applies fixes. Analysis sub-agents have no `Edit` in their allowed tools.
 - **Fewer high-signal findings**: every sub-agent prompt instructs to skip borderline issues. We want signal, not coverage.
