@@ -1,10 +1,10 @@
 ---
-description: Multi-dimensional code review of the current PR — simplicity, performance, consistency, readability, extraction. Pick findings to apply, then push.
+description: Multi-dimensional code review of the current PR — simplicity, performance, consistency, readability, extraction, test coverage. Pick findings to apply, then push.
 allowed-tools: Bash(git *), Bash(gh *), Read, Write, Edit, Grep, Glob, Task, AskUserQuestion, TodoWrite, mcp__linear-server__get_issue
 argument-hint: [<pr-number>]
 ---
 
-You are performing a substantive review of a pull request. The goal is to absorb the mechanical reviewer effort on bigger PRs by surfacing the issues a thoughtful human reviewer would actually raise across five dimensions: **simplicity, performance, codebase consistency, readability, and extraction/duplication**. You then ask the user which findings to apply, apply them, commit, push, and keep PR description + ticket context in sync.
+You are performing a substantive review of a pull request. The goal is to absorb the mechanical reviewer effort on bigger PRs by surfacing the issues a thoughtful human reviewer would actually raise across six dimensions: **simplicity, performance, codebase consistency, readability, extraction/duplication, and test coverage**. You then ask the user which findings to apply, apply them, commit, push, and keep PR description + ticket context in sync.
 
 **Distinction from siblings:**
 - `/ds:pre-review` — style/naming/conventions on the local diff, before push. Cosmetic.
@@ -87,9 +87,9 @@ Context file: loaded / not found / no ticket
 
 Mark `🔬 Analysis: launch review sub-agents` as `in_progress`.
 
-Launch the five reviewers below **in a single message with five parallel `Task` tool calls**. Each call uses `subagent_type: "general-purpose"`. Apply the model tiering shown.
+Launch the six reviewers below **in a single message with six parallel `Task` tool calls**. Each call uses `subagent_type: "general-purpose"`. Apply the model tiering shown.
 
-**Sub-agent allowed tools (all five):** `Bash(git diff*), Bash(git log*), Bash(git show*), Read, Grep, Glob`. NO Edit — sub-agents find, the main agent applies.
+**Sub-agent allowed tools (all six):** `Bash(git diff*), Bash(git log*), Bash(git show*), Read, Grep, Glob`. NO Edit — sub-agents find, the main agent applies.
 
 #### Shared brief — prepend to every sub-agent prompt
 
@@ -144,8 +144,9 @@ After the shared brief, append the dimension-specific instruction:
 | **Consistency** | sonnet | "Your dimension is **codebase consistency**. Compare patterns introduced by the diff against existing patterns for similar problems (use Grep/Glob to find neighbours). Flag: new patterns where an established one exists, inconsistent naming/structure compared with siblings, deviations from repo CLAUDE.md not caught by /ds:pre-review." |
 | **Readability** | sonnet | "Your dimension is **readability**. Is the intent of each non-trivial change obvious from the code alone? Flag: unclear names, missing-but-needed early returns, deeply nested conditionals, long functions doing multiple things, magic literals lacking a named constant. Do NOT suggest adding comments — prefer expressive code per repo conventions." |
 | **Extraction/Duplication** | sonnet | "Your dimension is **extraction and duplication**. Use Grep to verify duplication is real (not just superficially similar). Flag: duplicated logic within the diff or between the diff and existing code, copy-paste blocks differing only in literals, extract-method candidates. Each finding must reference both/all duplicated sites." |
+| **Test Coverage** | sonnet | "Your dimension is **test coverage**. For every non-trivial behavior change in the diff — new functions/methods with logic, new conditional branches, new error paths, new public APIs, modified business rules — check whether a test exercises it. Use Grep/Glob to (a) locate test files for the changed code (test-file naming conventions vary by repo: deduce from neighbours and `CLAUDE.md`), and (b) find tests for analogous existing code so you know what 'covered' looks like in *this* repo. Flag: new logic with no test, new conditional branch covered only on the happy path, modified behavior whose existing test was not updated, new public/exported surface without an integration test where the repo's convention requires one. Skip: trivial getters/setters, pure renames, comment/doc-only changes, formatting, generated code, infra/YAML/config, and anything in directories the repo's existing tests do not cover (deduce). Respect the repo's testing posture — if `CLAUDE.md` or neighbour evidence says 'no tests for X', do not invent a requirement. Reference both the diff location and the expected test location (or analogue) in every finding." |
 
-Mark `🔬 Analysis: launch review sub-agents` as `completed` after all five sub-agents return.
+Mark `🔬 Analysis: launch review sub-agents` as `completed` after all six sub-agents return.
 
 ### Step 3: Aggregate & Present Findings
 
@@ -175,6 +176,9 @@ Mark `📋 Findings report & user selection` as `in_progress`.
    ...
 
    ### Extraction/Duplication (M findings)
+   ...
+
+   ### Test Coverage (M findings)
    ...
 
    **Summary:** <T> findings — H high, M medium, L low.
@@ -321,7 +325,7 @@ Print:
 
 ```
 /ds:review — PR #<N> (<title>)
-Findings: <T> total — H high, M medium, L low — across 5 dimensions
+Findings: <T> total — H high, M medium, L low — across 6 dimensions
 Applied: <count>
   - `file:line` — <summary>
   - ...
@@ -349,4 +353,4 @@ Mark `✅ Final summary` as `completed`.
 - **Scope-shift gating**: PR description update is only offered when the post-fix diff materially differs from what the description claims. Pure readability/style fixes don't trigger it.
 - **Always update ticket context** (when a ticket is detected) — including on the zero-findings path. The audit trail matters.
 - **`/ds:review` is not `/ultrareview`**: this command is local-only, free, and agent-driven. Do not invoke or reference the cloud `/ultrareview`.
-- **Parallel sub-agents**: launch all five reviewers in a single tool-use turn so they run concurrently. Do not chain them.
+- **Parallel sub-agents**: launch all six reviewers in a single tool-use turn so they run concurrently. Do not chain them.
