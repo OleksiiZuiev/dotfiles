@@ -1,15 +1,17 @@
 ---
-description: Multi-dimensional code review of the current PR — simplicity, performance, consistency, readability, extraction, test coverage. Pick findings to apply, then push.
-allowed-tools: Bash(git *), Bash(gh *), Read, Write, Edit, Grep, Glob, Task, AskUserQuestion, TodoWrite, mcp__linear-server__get_issue
+description: Multi-dimensional review of the current PR — surfaces confident findings and smells across simplicity, performance, consistency, readability, extraction, test coverage.
+allowed-tools: Bash(git *), Bash(gh *), Read, Grep, Glob, Task, TodoWrite, mcp__linear-server__get_issue
 argument-hint: [<pr-number>]
 ---
 
 You are performing a substantive review of a pull request. The goal is to absorb the mechanical reviewer effort on bigger PRs by surfacing the issues a thoughtful human reviewer would actually raise across six dimensions: **simplicity, performance, codebase consistency, readability, extraction/duplication, and test coverage**.
 
-The command auto-detects which of two modes to run, based on PR authorship:
+Every finding is categorized at capture time as either **confident** (concrete proposed change with a trivial/empty counter-argument) or **smell** (real trade-off surfaced by the counter-argument, or no concrete fix). Smells are first-class output — they don't need to come with a fix, and they are not posted as draft PR comments.
 
-- **`MODE=own`** (PR author == you): ask the user which findings to apply, apply them, commit, push, refresh PR description, and update ticket context.
-- **`MODE=draft-comments`** (PR author ≠ you): produce a `Draft comment:` block per finding and print the selected ones grouped by `file:line` for copy-paste into GitHub. No edits, commits, pushes, PR-description updates, or ticket-context writes.
+The command does not apply changes, commit, or push. It surfaces findings in chat for the user to read and act on selectively in follow-up prompts. The mode-aware behavior:
+
+- **`MODE=own`** (PR author == you): print the full categorized report and write an audit entry to ticket context.
+- **`MODE=draft-comments`** (PR author ≠ you): print the full categorized report and additionally render copy-paste-ready `Draft comment:` blocks for **confident findings only**, grouped by `file:line`. Smells appear in the report for your private read but are not drafted as PR comments. No ticket-context writes.
 
 **Distinction from siblings:**
 - `/ds:pre-review` — style/naming/conventions on the local diff, before push. Cosmetic.
@@ -47,12 +49,12 @@ The command auto-detects which of two modes to run, based on PR authorship:
    ```bash
    gh api user --jq '.login'   # ME
    ```
-   - If `PR_AUTHOR == ME` → `MODE=own` (existing flow: analysis → findings → apply → commit → push → PR-desc → ticket-context).
-   - Else → `MODE=draft-comments` (analysis → findings → print copy-paste-ready PR comments → stop; no edits, no commits, no pushes, no PR-description or ticket-context writes).
+   - If `PR_AUTHOR == ME` → `MODE=own` (analysis → report → ticket-context audit).
+   - Else → `MODE=draft-comments` (analysis → report → draft PR comments for confident findings; no ticket-context write).
 
    Print a one-liner so the mode is visible up front:
-   - `MODE=own`: `> Mode: own (PR authored by <ME>) — selected findings will be applied, committed, and pushed.`
-   - `MODE=draft-comments`: `> Mode: draft-comments (PR authored by <PR_AUTHOR>, you are <ME>) — no edits/commits/pushes; selected findings print as draft PR comments.`
+   - `MODE=own`: `> Mode: own (PR authored by <ME>) — report will be printed and ticket context updated.`
+   - `MODE=draft-comments`: `> Mode: draft-comments (PR authored by <PR_AUTHOR>, you are <ME>) — report plus draft PR comments for confident findings will be printed; nothing else is written.`
 
 5. **Diff** (mode-aware — `MODE=own` reads the local working tree, `MODE=draft-comments` pulls directly from GitHub so you can be on any branch):
    - **If `MODE=own`:**
@@ -76,19 +78,15 @@ Before doing anything else, use TodoWrite to create the per-mode checklist. The 
 **If `MODE=own`:**
 
 1. `🔬 Analysis: launch review sub-agents`
-2. `📋 Findings report & user selection`
-3. `🛠️ Implement selected findings`
-4. `💾 Commit selected fixes`
-5. `🚀 Push to PR`
-6. `📝 Update PR description (if scope changed)`
-7. `📝 Update ticket context`
-8. `✅ Final summary`
+2. `📋 Findings report`
+3. `📝 Update ticket context`
+4. `✅ Final summary`
 
 **If `MODE=draft-comments`:**
 
 1. `🔬 Analysis: launch review sub-agents`
-2. `📋 Findings report & user selection`
-3. `🗒️ Print draft PR comments`
+2. `📋 Findings report`
+3. `🗒️ Print draft PR comments (confident only)`
 4. `✅ Final summary`
 
 ### Step 1: Load Shared Context
@@ -121,7 +119,7 @@ Mark `🔬 Analysis: launch review sub-agents` as `in_progress`.
 
 Launch the six reviewers below **in a single message with six parallel `Task` tool calls**. Each call uses `subagent_type: "general-purpose"`. Apply the model tiering shown.
 
-**Sub-agent allowed tools (all six):** `Bash(git diff*), Bash(git log*), Bash(git show*), Read, Grep, Glob`. NO Edit — sub-agents find, the main agent applies.
+**Sub-agent allowed tools (all six):** `Bash(git diff*), Bash(git log*), Bash(git show*), Read, Grep, Glob`. NO Edit — sub-agents surface findings only; nothing in this command modifies the working tree.
 
 #### Shared brief — prepend to every sub-agent prompt
 
@@ -152,30 +150,51 @@ Launch the six reviewers below **in a single message with six parallel `Task` to
 >
 > 1. `path/to/file:line-range` — <one-line summary>
 >    **Severity:** high | medium | low
+>    **Category:** confident | smell
 >    **Why:** <1–2 sentence reasoning>
->    **Proposed change:** <concrete, actionable description>
+>    **Counter-argument:** <strongest case against this finding; "none" if no real case exists>
+>    **Proposed change:** <concrete description, OR "(needs unpacking)" for smells with no obvious fix>
+>    **Code context:**
+>    ```diff
+>    <~5–10 lines of surrounding code with the proposed change rendered as a unified diff>
+>    ```
 >
 > 2. ...
 > ```
 >
 > If clean, return exactly: `## Findings — <Your Dimension>\n\nNo issues found.`
 >
+> **Categorization criteria — set `Category` per finding:**
+> - **confident** = the proposed change is concrete AND the counter-argument is empty or trivial. Genuine no-brainers (e.g., O(n²) where O(n) is straightforward) land here — their counter-argument is honestly "none".
+> - **smell** = the counter-argument exposes a real trade-off a human would need to weigh, OR you cannot articulate a concrete fix. `Proposed change:` may be `(needs unpacking)` for smells; the human will decide what (if anything) to do.
+> - **drop entirely** = if writing the counter-argument talks you out of the finding, do not include it. The exercise of writing the counter-argument is part of the bar; weak findings self-prune here.
+>
 > **Rules of engagement:**
 > - Return ONLY findings a thoughtful human reviewer would actually raise. If you have to reach for a finding, skip it. Fewer high-signal findings > many low-signal findings.
+> - Every finding MUST have a non-empty `Counter-argument:` field. "none" is acceptable when the finding really has no real case against it (genuine no-brainer) — but the field must be present.
+> - Every finding MUST have a `Code context:` block — a unified-diff fenced block showing ~5–10 lines of surrounding code with the change applied as `-`/`+` lines. For smells where `Proposed change:` is `(needs unpacking)`, include the unmodified code excerpt (no diff markers needed) so the reader sees the area in question.
 > - Do NOT propose changes that violate the ticket A/C or any prior decision listed above.
 > - You may use `git show`, `Grep`, and `Glob` to look at the surrounding code for context — but stay within your dimension's lane.
 
 #### Draft-comments addendum (`MODE=draft-comments` only)
 
-When `MODE=draft-comments`, append the following to the shared brief **before** the per-dimension addendum. It extends the output contract so every finding ships with a copy-paste-ready PR comment.
+When `MODE=draft-comments`, append the following to the shared brief **before** the per-dimension addendum. It extends the output contract so every confident finding ships with a copy-paste-ready PR comment.
 
-> **Additional output requirement (draft-comments mode):** for every finding, append a `**Draft comment:**` block immediately after `**Proposed change:**`. Updated per-finding shape:
+> **Additional output requirement (draft-comments mode):** for every finding with `Category: confident`, append a `**Draft comment:**` block immediately after `**Code context:**`. Smells get no draft comment — they appear in the report but are not posted to the PR.
+>
+> Updated per-confident-finding shape:
 >
 > ```
 > 1. `path/to/file:line-range` — <one-line summary>
 >    **Severity:** high | medium | low
+>    **Category:** confident
 >    **Why:** <1–2 sentence reasoning>
+>    **Counter-argument:** <strongest case against this finding; "none" if no real case exists>
 >    **Proposed change:** <concrete, actionable description>
+>    **Code context:**
+>    ```diff
+>    <~5–10 lines as unified diff>
+>    ```
 >    **Draft comment:**
 >    > <GitHub-flavored markdown — see drafting rules below>
 > ```
@@ -187,6 +206,7 @@ When `MODE=draft-comments`, append the following to the shared brief **before** 
 > - Prefer a fenced ` ```suggestion ` block when the change is a single small edit GitHub can apply directly. Skip the suggestion block for structural changes.
 > - 1–3 sentences total. No restating of severity (that's reviewer mental model, not author-facing).
 > - Avoid hedging adjectives ("maybe", "perhaps could possibly"); stay direct but collaborative.
+> - Do NOT include the `**Draft comment:**` block on smells (`Category: smell`) — smells are reviewer-only notes.
 > - Do NOT include the `**Draft comment:**` block on the `No issues found.` short-circuit.
 
 #### Per-dimension prompt addendum
@@ -206,73 +226,87 @@ Mark `🔬 Analysis: launch review sub-agents` as `completed` after all six sub-
 
 ### Step 3: Aggregate & Present Findings
 
-Mark `📋 Findings report & user selection` as `in_progress`.
+Mark `📋 Findings report` as `in_progress`.
 
 1. Parse each sub-agent's structured findings block.
 
-2. **Print the full aggregated report as a regular text message** before calling any other tool. The user can ONLY see your text output and the `AskUserQuestion` UI — they cannot see sub-agent return values. Do NOT bundle findings into an `AskUserQuestion` description, do NOT just summarize, do NOT just say "N findings".
+2. **Print the full aggregated report as a regular text message** before calling any other tool. The user can ONLY see your text output — they cannot see sub-agent return values.
 
-   Use this format, with a flat 1..N numbering across the entire report so the multi-select can reference findings unambiguously:
+   Within each dimension, split findings into two subsections by `Category`: **Confident** then **Smells**. Use a flat 1..N numbering across the entire report so individual findings can be referenced unambiguously in follow-up chat.
 
    ```
    ## /ds:review findings — PR #<N> (<title>)
 
-   ### Simplicity (M findings)
+   ### Simplicity
+   **Confident** (M findings)
    1. `path/to/file:line-range` — <summary> (severity)
       Why: ...
+      Counter-argument: ...
       Proposed: ...
+      Code context:
+      ```diff
+      ...
+      ```
 
-   ### Performance (M findings)
-   2. ...
+   **Smells** (K findings)
+   2. `path/to/file:line-range` — <summary> (severity)
+      Why: ...
+      Counter-argument: ...
+      Proposed: (needs unpacking) or <description>
+      Code context:
+      ```diff
+      ...
+      ```
 
-   ### Consistency (M findings)
+   ### Performance
+   **Confident** (M findings)
+   ...
+   **Smells** (K findings)
    ...
 
-   ### Readability (M findings)
+   ### Consistency
    ...
 
-   ### Extraction/Duplication (M findings)
+   ### Readability
    ...
 
-   ### Test Coverage (M findings)
+   ### Extraction/Duplication
    ...
 
-   **Summary:** <T> findings — H high, M medium, L low.
+   ### Test Coverage
+   ...
+
+   **Summary:** <T> findings — <C> confident, <S> smells — across 6 dimensions (H high, M medium, L low).
    ```
+
+   Omit the **Confident** or **Smells** subsection header for any dimension where that subsection is empty (don't print empty `(0 findings)` headers).
 
 3. **Zero-findings short-circuit:** if total findings == 0, print:
    > **Review passed — no substantive findings.**
 
-   - **If `MODE=own`:** skip Steps 4–6. Still proceed to Step 7 (ticket context update gets a "Review passed" session entry).
-   - **If `MODE=draft-comments`:** skip directly to Step 9 (final summary). Nothing to draft, no context to write.
+   - **If `MODE=own`:** proceed to Step 8 (ticket context gets a "Review passed" session entry), then Step 9.
+   - **If `MODE=draft-comments`:** skip directly to Step 9 (final summary).
 
-4. **User selection** via `AskUserQuestion` with `multiSelect: true`:
-   - One option per finding. **Label:** `#N — <dimension> — <short summary>` (truncate to fit). **Description:** `<file:line> (<severity>)`.
-   - **If total findings > 12**: skip `AskUserQuestion` entirely (the UI grows unwieldy). Print: *"Reply with comma-separated finding numbers to apply, or `all`, or `none`."* — then wait for a regular text reply and parse it.
-   - For the ≤12 path, after the per-finding options, the user can additionally select "Other" and type `all` or `none` to apply everything or skip everything.
-
-5. Record selected finding IDs. If the user selected `none` or nothing:
-   - **If `MODE=own`:** skip Steps 4–6 (still update ticket context in Step 7).
-   - **If `MODE=draft-comments`:** skip Step 3.5 and go to Step 9 with "Selected: 0".
-
-Mark `📋 Findings report & user selection` as `completed`.
+Mark `📋 Findings report` as `completed`.
 
 ### Mode branch
 
-- **If `MODE=own`:** proceed to **Step 4** (Implement Selected Findings) below. Steps 4–8 are the own-PR flow.
-- **If `MODE=draft-comments`:** skip Steps 4–8 entirely and jump to **Step 3.5** (Print Draft PR Comments) immediately after this notice, then go to Step 9.
+- **If `MODE=own`:** proceed to **Step 8** (Update Ticket Context).
+- **If `MODE=draft-comments`:** proceed to **Step 3.5** (Print Draft PR Comments), then **Step 9**.
 
 ### Step 3.5: Print Draft PR Comments (`MODE=draft-comments` only)
 
-Mark `🗒️ Print draft PR comments` as `in_progress`.
+Mark `🗒️ Print draft PR comments (confident only)` as `in_progress`.
 
-For each finding the user kept in Step 3, print a focused copy-paste block. Group entries by `file:line` (sort alphabetically by file path, then ascending by starting line number). If the same `file:line` carries findings from two different dimensions, include both blocks, each prefixed with `(<dimension>)`.
+For every finding with `Category: confident`, print a focused copy-paste block. **Smells are excluded entirely from this step** — they appeared in Step 3's report for your private read; they are not posted to the PR.
+
+Group entries by `file:line` (sort alphabetically by file path, then ascending by starting line number). If the same `file:line` carries confident findings from two different dimensions, include both blocks, each prefixed with `(<dimension>)`.
 
 Use this exact layout:
 
 ```
 ## Draft PR comments — PR #<N> (<PR_TITLE>)
-Mode: draft-comments — copy-paste these into GitHub as line comments.
+Mode: draft-comments — copy-paste these into GitHub as line comments. Confident findings only; smells (see report above) are not drafted.
 
 ### `path/to/file:line-range`
 <draft comment markdown verbatim from the finding's Draft comment: block>
@@ -285,108 +319,10 @@ Mode: draft-comments — copy-paste these into GitHub as line comments.
 ```
 
 Special cases:
-- Zero selected: print `> No findings selected — nothing to draft.` and continue.
+- Zero confident findings (only smells surfaced): print `> No confident findings to draft — the report above lists smells for your private review.` and continue.
 - Zero total (from the zero-findings short-circuit): you are not in this step — Step 3 jumped you straight to Step 9.
 
-Mark `🗒️ Print draft PR comments` as `completed`, then jump to **Step 9**.
-
-### Step 4: Implement Selected Findings (`MODE=own` only — skip in draft-comments mode)
-
-Mark `🛠️ Implement selected findings` as `in_progress`.
-
-The **main agent** applies the changes directly — no sub-agent. Applying needs the diff context and judgment, and the `/ds:work-on` Step 3 precedent is "main agent implements."
-
-For each selected finding:
-1. Read the target file(s) with `Read`.
-2. Apply the proposed change with `Edit`. If editing reveals the proposed-change sentence was too coarse, exercise judgment and adjust — note the divergence for the final summary.
-3. If multiple findings touch the same file, apply them sequentially.
-
-If applying a finding turns out to be infeasible (would break a test, contradicts a constraint discovered while editing, etc.), record it as **deferred** with the reason and continue with the rest. Surface deferrals in the final summary.
-
-Mark `🛠️ Implement selected findings` as `completed`.
-
-### Step 5: Commit Sub-Agent (`MODE=own` only — skip in draft-comments mode)
-
-Mark `💾 Commit selected fixes` as `in_progress`.
-
-Launch a `general-purpose` sub-agent (`model: "sonnet"`) to commit the applied fixes. Same pattern as `/ds:work-on` Step 7.
-
-**Sub-agent prompt:**
-> Commit the current uncommitted changes in the repo.
->
-> IMPORTANT: Ignore any gitStatus snapshot from the conversation context — it is stale. You MUST run fresh git commands to see the actual current state.
->
-> 1. Run `git status` to see all changes
-> 2. Run `git diff` and `git diff --cached` to understand what changed
-> 3. Run `git log --oneline -5` to see recent commit message style
-> 4. Stage relevant files with `git add <specific files>` (avoid .env, credentials, etc.)
-> 5. Generate a commit message. Use the title format: `Review fixes (ds:review): <one-line summary>`. Body: one bullet per applied finding (file:line — short description).
-> 6. Commit using HEREDOC format:
->    ```bash
->    git commit -m "$(cat <<'EOF'
->    <message>
->
->    Co-Authored-By: Claude <noreply@anthropic.com>
->    EOF
->    )"
->    ```
-> 7. Run `git status` to verify the commit succeeded
-> 8. Do NOT push.
-
-**Sub-agent allowed tools:** `Bash(git *)`
-
-Mark `💾 Commit selected fixes` as `completed`.
-
-### Step 6: Push (`MODE=own` only — skip in draft-comments mode)
-
-Mark `🚀 Push to PR` as `in_progress`.
-
-Run `git push`. If the branch has no upstream yet:
-```bash
-git push -u origin <branch-name>
-```
-
-Mark `🚀 Push to PR` as `completed`.
-
-### Step 7: Update PR Description (if scope changed) (`MODE=own` only — skip in draft-comments mode)
-
-Mark `📝 Update PR description (if scope changed)` as `in_progress`.
-
-If Steps 4–6 were skipped (no findings, or user picked `none`), skip this step too — there is nothing to refresh.
-
-Otherwise, mirror `/ds:polish-pr` Step 8:
-
-1. Fetch current PR description:
-   ```bash
-   gh pr view <pr-number> --json body --jq '.body'
-   ```
-2. Compare against the post-fix diff stat:
-   ```bash
-   git diff origin/<base>...HEAD --stat
-   ```
-3. Detect scope shift — any "yes" means an update is needed:
-   - New files in the diff not mentioned in the description?
-   - Files removed or significantly changed that the description doesn't reflect?
-   - Tests added or removed (Verification / Test plan section stale)?
-   - Documentation (README, CLAUDE.md, etc.) added or updated?
-   - Did the approach or design change from what the Summary describes?
-   - New dependencies, helpers, or utilities introduced?
-
-4. If no scope shift, skip silently.
-
-5. If scope shift detected, present findings and ask via `AskUserQuestion`:
-   - **"Update description"** — Revise the PR description to match current state.
-   - **"Skip"** — Keep the existing description as-is.
-
-6. If approved, update via `gh pr edit`, preserving existing structure (Goal / Summary / Key Decisions / Linear link per the 2026-03-22 PR-body convention):
-   ```bash
-   gh pr edit <pr-number> --body "$(cat <<'EOF'
-   <updated PR body>
-   EOF
-   )"
-   ```
-
-Mark `📝 Update PR description (if scope changed)` as `completed`.
+Mark `🗒️ Print draft PR comments (confident only)` as `completed`, then jump to **Step 9**.
 
 ### Step 8: Update Ticket Context (`MODE=own` only — skip in draft-comments mode)
 
@@ -398,12 +334,12 @@ If `TICKET_ID` is `null`, mark this step `completed` with note "No ticket ID —
 
 Otherwise, launch a `general-purpose` sub-agent (`model: "haiku"`) to append a new session entry to `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET_ID}.md`. Pass it:
 
-- **Session title:** `Review fixes via /ds:review` (or `Review passed (no findings)` if zero-findings path)
+- **Session title:** `Review via /ds:review` (or `Review passed (no findings)` for the zero-findings path)
 - **Branch name** (from `git branch --show-current`)
 - **Repository name** (from `git remote get-url origin` or `gh repo view --json name`)
-- **Accomplished:** bullet list of applied findings (file:line — summary). Empty if zero-findings path.
-- **Key decisions:** any divergence from the original proposed change, plus user-selected dismissals where the reasoning is non-trivial.
-- **Files changed:** from `git diff HEAD~1 --name-only` (skip if zero-findings path — no commit was made).
+- **Accomplished:** one line — `<T> findings surfaced — <C> confident, <S> smells across 6 dimensions.` On the zero-findings path: `Review passed — no substantive findings across 6 dimensions.`
+- **Key decisions:** notable smells worth offline follow-up — pull the 1–3 highest-severity / most load-bearing smells from the report as bullets, each `<file:line> — <one-line summary>`. Omit the section entirely if there are no smells or none feels load-bearing.
+- **Files changed:** omit. This command does not modify the working tree.
 
 The sub-agent should append a new section under `## Sessions` following the existing document template (see `~/dotfiles/claude/CLAUDE.md` "Ticket Context Documents" → Document Template). If the file does not exist, create it.
 
@@ -421,21 +357,13 @@ The summary format differs by mode.
 
 ```
 /ds:review — PR #<N> (<title>)
-Findings: <T> total — H high, M medium, L low — across 6 dimensions
-Applied: <count>
-  - `file:line` — <summary>
-  - ...
-Deferred (selected but couldn't apply): <count>
-  - `file:line` — <summary>: <reason>
-Skipped (not selected by user): <count>
-Commit: <sha> or n/a
-Pushed: yes / no
-PR description updated: yes / no / not needed
+Findings: <T> total — <C> confident, <S> smells — across 6 dimensions (H high, M medium, L low)
 Ticket context updated: yes / no — <reason if no>
 ```
 
 Suggest next steps:
-- Re-run `/ds:review` after addressing major findings if more rounds needed.
+- Engage with individual findings in chat (reference by `#N`) to discuss, dismiss, or act on them.
+- Re-run `/ds:review` after addressing the major findings if more rounds are needed.
 - Proceed to human review (mark PR ready with `gh pr ready` if it's a draft).
 
 **If `MODE=draft-comments`:**
@@ -443,26 +371,27 @@ Suggest next steps:
 ```
 /ds:review (draft-comments mode) — PR #<N> (<title>)
 PR author: <PR_AUTHOR>   You: <ME>
-Findings: <T> total — H high, M medium, L low — across 6 dimensions
-Selected for drafting: <count>
-Skipped (not selected by user): <count>
+Findings: <T> total — <C> confident, <S> smells — across 6 dimensions (H high, M medium, L low)
+Drafted as PR comments: <C> (confident only — smells excluded)
 No changes were made to the branch, PR, or ticket context.
 ```
 
 Suggest next steps:
 - Copy the draft comments above into the GitHub PR review.
+- Use the smells (above the draft section) as a private prompt list for offline discussion with the author.
 - Re-run `/ds:review <pr-number>` after the author pushes updates.
 
 Mark `✅ Final summary` as `completed`.
 
 ## Important Notes
 
-- **Mode-aware flow**: the command auto-detects `own` vs `draft-comments` mode from PR author at Step 0.4. In `draft-comments` mode, Steps 4–8 are skipped entirely and the selected findings produce copy-paste draft comments only — no edits, commits, pushes, PR-description updates, or ticket-context writes.
-- **Render findings as text first**: never bundle the report into the `AskUserQuestion` description. The user only sees text messages and the `AskUserQuestion` UI. This is a hard rule, identical to `/ds:work-on` Step 6.
-- **Sub-agents are read-only during analysis**: only the main agent applies fixes. Analysis sub-agents have no `Edit` in their allowed tools.
-- **Fewer high-signal findings**: every sub-agent prompt instructs to skip borderline issues. We want signal, not coverage.
+- **Mode-aware flow**: the command auto-detects `own` vs `draft-comments` mode from PR author at Step 0.4. Both modes print the full categorized report; `own` additionally writes a ticket-context audit entry, `draft-comments` additionally prints copy-paste-ready draft comments for confident findings only.
+- **No apply / commit / push**: this command surfaces findings only. It does not edit files, commit, or push. The user reads the report and acts on individual findings in follow-up chat as needed.
+- **Render findings as text**: the report is printed as a regular text message. There is no selection prompt — the report is the deliverable.
+- **Sub-agents are read-only**: analysis sub-agents have no `Edit`/`Write` in their allowed tools. The main agent never edits the working tree.
+- **Fewer high-signal findings**: every sub-agent prompt instructs to skip borderline issues. The mandatory `Counter-argument` field is part of the bar — if writing it talks the reviewer out of the finding, the finding self-prunes.
+- **Categorization is at capture**: each finding is `confident` or `smell` based on whether the proposed fix is concrete and whether the counter-argument is trivial. Smells are first-class; they need no proposed change (`(needs unpacking)` is acceptable).
 - **Respect prior decisions**: the ticket-context summary in the shared brief is authoritative — sub-agents must not re-litigate.
-- **Scope-shift gating**: PR description update is only offered when the post-fix diff materially differs from what the description claims. Pure readability/style fixes don't trigger it.
-- **Always update ticket context** (when a ticket is detected) — including on the zero-findings path. The audit trail matters.
+- **Always update ticket context** (when a ticket is detected in `MODE=own`) — including on the zero-findings path. The audit trail matters.
 - **`/ds:review` is not `/ultrareview`**: this command is local-only, free, and agent-driven. Do not invoke or reference the cloud `/ultrareview`.
 - **Parallel sub-agents**: launch all six reviewers in a single tool-use turn so they run concurrently. Do not chain them.
