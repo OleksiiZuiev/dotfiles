@@ -119,6 +119,16 @@ start-worktree() {
     echo "Changing to: $worktree_dir"
     cd "$worktree_dir"
 
+    # Record worktree in ~/.claude_repos so cd-repo can find it later.
+    # Runs for all branch states; for new branches lclaude (below) de-dups.
+    local history_file="$HOME/.claude_repos"
+    local max_history=30
+    touch "$history_file"
+    local temp_file=$(mktemp)
+    echo "$worktree_dir" > "$temp_file"
+    grep -v "^${worktree_dir}$" "$history_file" 2>/dev/null | head -n $((max_history - 1)) >> "$temp_file"
+    mv "$temp_file" "$history_file"
+
     # Launch lclaude only for new branches
     if [[ "$local_exists" == false && "$remote_exists" == false ]]; then
         lclaude
