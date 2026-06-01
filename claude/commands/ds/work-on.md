@@ -49,7 +49,7 @@ Create these todo items (all with status `pending`):
 1. `🔧 Implementation` — placeholder, will be replaced with plan tasks in Step 3
 2. `🧹 Simplify: launch sub-agent` — see Step 4
 3. `🔍 Pre-review: launch sub-agent` — see Step 5
-4. `📋 Handle pre-review suggestions` — see Step 6
+4. `📋 Surface low-confidence pre-review findings` — see Step 6
 5. `💾 Commit: launch sub-agent` — see Step 7
 6. `📝 Update ticket context: launch sub-agent` — see Step 8
 7. `🚀 Push & PR` — see Step 9
@@ -220,55 +220,37 @@ Mark `🧹 Simplify: launch sub-agent` as `completed` via TodoWrite.
 
 Mark `🔍 Pre-review: launch sub-agent` as `in_progress` via TodoWrite.
 
-Launch a Task sub-agent to review uncommitted changes for style, naming, and convention issues.
+Launch a Task sub-agent to review uncommitted changes for style, naming, and convention issues, triaging each finding by confidence.
 
 **Sub-agent prompt:**
-> Review the uncommitted changes in the current repo for style, naming, and convention issues.
+> Review the uncommitted changes in the current repo for style, naming, and convention issues. Triage each finding by your confidence in the change.
 >
 > IMPORTANT: Ignore any gitStatus snapshot from the conversation context — it is stale. You MUST run fresh git commands to see the actual current state.
 >
 > 1. Get the diff: run `git diff` (unstaged) and `git diff --cached` (staged). Review both.
 > 2. Read the repo's `CLAUDE.md` at the repo root for conventions.
 > 3. Analyze the diff for: style issues, naming violations, obvious refactorings, convention violations. Do NOT flag architecture, logic, test coverage, performance, or security issues.
-> 4. For each finding, classify as `auto-fix` (obvious, safe — apply it directly using Edit) or `suggestion` (requires judgment — report it back).
-> 5. Apply all auto-fixes directly. For each auto-fix applied, note the file, line, and what you changed.
-> 6. Return a structured report:
->    - **Auto-fixes applied**: list of changes made (file, line, description). Empty if none.
->    - **Suggestions**: list of suggestions for the user to consider (file, line, description, proposed change). Empty if none.
+> 4. Triage each finding by confidence:
+>    - **Confident** (obvious and safe, no judgment call — e.g. trailing whitespace, a naming convention applied consistently, a missing blank line): apply the fix directly using Edit.
+>    - **Not confident** (requires judgment or has a trade-off — e.g. renaming a public API, extracting a method, simplifying a conditional that might hurt readability): do NOT apply it. Report it back instead.
+> 5. Return a structured report:
+>    - **Fixes applied** (confident): list of changes made (file, line, description). Empty if none.
+>    - **Low-confidence findings** (not applied): list of findings for the user to consider (file, line, description, proposed change). Empty if none.
 >    - If nothing found, return: "Pre-review passed — no issues found."
 
 **Sub-agent allowed tools:** `Bash(git diff*), Read, Edit, Grep, Glob`
 
 Mark `🔍 Pre-review: launch sub-agent` as `completed` via TodoWrite.
 
-### Step 6: Handle Pre-Review Suggestions
+### Step 6: Surface Low-Confidence Findings
 
-Mark `📋 Handle pre-review suggestions` as `in_progress` via TodoWrite.
+Mark `📋 Surface low-confidence pre-review findings` as `in_progress` via TodoWrite.
 
-If the pre-review sub-agent returned suggestions:
+If the pre-review sub-agent returned low-confidence findings, **do NOT prompt the user and do NOT apply them**. Carry them forward verbatim (file, line, description, proposed change) so they can be listed in the Final Summary (Step 10).
 
-1. **Print the full suggestions report as a regular text message** before calling any other tool. The user can only see your text output and the `AskUserQuestion` UI — they cannot see the sub-agent's return value. So you MUST render every suggestion, with file, line, description, and the proposed change. Do not summarize, do not just say "N suggestions found", and do not bundle this content into the `AskUserQuestion` description.
+If the pre-review returned no low-confidence findings (only applied fixes or a clean pass), there is nothing to carry forward.
 
-   Use this format:
-
-   ```
-   ## Pre-review suggestions
-
-   1. `path/to/file:line` — short description
-      Proposed change: <what would be applied>
-
-   2. `path/to/file:line` — short description
-      Proposed change: <what would be applied>
-   ```
-
-2. Only after the report has been printed, call `AskUserQuestion` with the choice **"Apply all suggestions / Skip"**.
-
-3. If **"Apply all"**: apply each suggestion using the Edit tool.
-4. If **"Skip"**: proceed without changes.
-
-If the pre-review returned no suggestions (only auto-fixes or clean pass), proceed silently.
-
-Mark `📋 Handle pre-review suggestions` as `completed` via TodoWrite.
+Mark `📋 Surface low-confidence pre-review findings` as `completed` via TodoWrite.
 
 ### Step 7: Commit Sub-Agent
 
@@ -363,10 +345,22 @@ Phase: Fresh start / Continuation
 Change: [brief description of what was done]
 Files modified: [count]
 Simplify: [N fixes applied] or [clean] or [skipped (use +simplify to enable)]
-Pre-review: [N auto-fixes applied, M suggestions] or [clean]
+Pre-review: [N fixes applied (confident), M low-confidence findings not applied] or [clean]
 Committed: [yes — commit hash] or [no — reason]
 Ticket context updated: yes/no
 PR: created #N <url> (draft) / pushed to existing #N <url>
+```
+
+If the pre-review surfaced low-confidence findings (Step 6), list them after the summary so the user can act on them later. This is informational — do NOT prompt:
+
+```
+## Pre-review findings not applied (low confidence)
+
+1. `path/to/file:line` — short description
+   Proposed change: <what would be applied>
+
+2. `path/to/file:line` — short description
+   Proposed change: <what would be applied>
 ```
 
 Mark `✅ Final summary` as `completed` via TodoWrite.
