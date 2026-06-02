@@ -1,7 +1,7 @@
 ---
-description: Work on a Linear ticket — auto-detects fresh start vs continuation. Flags: +auto-plan (skip approval gate), +simplify (run refactor step)
+description: Work on a Linear ticket — auto-detects fresh start vs continuation. Flags: +auto-plan (skip approval gate), +no-simplify (skip refactor step)
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, AskUserQuestion, EnterPlanMode, TodoWrite
-argument-hint: [+auto-plan] [+simplify] [extra context]
+argument-hint: [+auto-plan] [+no-simplify] [extra context]
 ---
 
 You are helping the user work on a Linear ticket. This command auto-detects whether to start fresh or continue previous work.
@@ -17,9 +17,10 @@ If the text "{{$ARGUMENTS}}" contains `+auto-plan`, then **auto-plan mode is act
 {{/if}}
 
 {{#if $ARGUMENTS}}
-If the text "{{$ARGUMENTS}}" contains `+simplify`, then **simplify mode is active**. In this mode:
-- Step 4 (Simplify sub-agent) runs normally
-- Strip `+simplify` from the arguments before processing the rest as extra context
+{{!-- Simplify runs by default. The +no-simplify flag opts out. --}}
+If the text "{{$ARGUMENTS}}" contains `+no-simplify`, then **simplify mode is disabled**. Otherwise simplify mode is active by default. When disabled:
+- Step 4 (Simplify sub-agent) is skipped
+- Strip `+no-simplify` from the arguments before processing the rest as extra context
 {{/if}}
 
 ## Your Task
@@ -194,7 +195,7 @@ The following steps correspond to the todo items pre-seeded in Step 0.5. Work th
 
 Mark `🧹 Simplify: launch sub-agent` as `in_progress` via TodoWrite.
 
-If **simplify mode is NOT active**: mark `🧹 Simplify: launch sub-agent` as `completed` immediately with note "Skipped (use +simplify to enable)". Skip the rest of this step.
+If **simplify mode is disabled** (`+no-simplify` present): mark `🧹 Simplify: launch sub-agent` as `completed` immediately with note "Skipped (+no-simplify)". Skip the rest of this step.
 
 Otherwise, launch a Task sub-agent to review uncommitted changes for code reuse, quality, and efficiency issues — then fix any found.
 
@@ -344,7 +345,7 @@ Work completed: {TICKET_ID}
 Phase: Fresh start / Continuation
 Change: [brief description of what was done]
 Files modified: [count]
-Simplify: [N fixes applied] or [clean] or [skipped (use +simplify to enable)]
+Simplify: [N fixes applied] or [clean] or [skipped (+no-simplify)]
 Pre-review: [N fixes applied (confident), M low-confidence findings not applied] or [clean]
 Committed: [yes — commit hash] or [no — reason]
 Ticket context updated: yes/no
