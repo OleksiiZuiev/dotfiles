@@ -117,7 +117,13 @@ start-worktree() {
 
     # CD into worktree
     echo "Changing to: $worktree_dir"
-    cd "$worktree_dir"
+    cd "$worktree_dir" || return 1
+
+    # Record the worktree under the shell's pwd form (e.g. /c/... on Git Bash).
+    # git rev-parse yields a drive-letter path (C:/...) that lclaude and cd-repo,
+    # which compare against pwd, would treat as a distinct entry — surfacing the
+    # same worktree twice in their pickers.
+    worktree_dir="$(pwd)"
 
     # Record worktree in ~/.claude_repos so cd-repo can find it later.
     # Runs for all branch states; for new branches lclaude (below) de-dups.
