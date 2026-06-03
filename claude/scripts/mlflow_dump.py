@@ -10,10 +10,15 @@ Three subcommands:
   trace   <trace_id>       — full tree + meta + span index for one trace
   span    <trace_id> <id>  — single span's full payload (inputs/outputs/attrs)
 
+Environment:
+  --env dev|stg|prd (or devweu|deveus|stgweu|stgeus|prdweu|prdeus) resolves the
+  tracking URI and, for `session`, the experiment id. --env overrides
+  MLFLOW_TRACKING_URI. Without --env the env var (or dev default) is used.
+
 Defaults:
   --out  ~/.cache/mlflow-dump/<session_or_trace_id>/
   MLFLOW_TRACKING_URI env var (default https://mlflow-devweu.devds.net)
-  --experiment 9   (only for `session`)
+  --experiment 9   (only for `session`, when no --env/--experiment given)
 
 Stdlib only — no mlflow, no requests. Re-runs are cached unless --no-cache.
 Every file written or hit-from-cache is printed (absolute path, one per line)
@@ -26,6 +31,7 @@ import argparse
 import json
 import os
 import re
+import socket
 import sys
 import urllib.error
 import urllib.parse
@@ -39,6 +45,83 @@ DEFAULT_CACHE_ROOT = Path.home() / ".cache" / "mlflow-dump"
 TREE_FIELD_MAX = 1024
 TOOL_OUTPUT_PREVIEW = 80
 HTTP_TIMEOUT_SECONDS = 60
+
+# alias -> (tracking URI, experiment id or None when not yet verified).
+# Source: agents-and-tools infrastructure agentserver-<env>.tfvars (mlflow_tracking_uri).
+ENV_MATRIX: dict[str, tuple[str, str | None]] = {
+    "devweu": ("https://mlflow-devweu.devds.net", "9"),
+    "deveus": ("https://mlflow-deveus.devds.net", None),
+    "stgweu": ("https://mlflow-stgweu.devds.net", None),
+    "stgeus": ("https://mlflow-stgeus.devds.net", None),
+    "prdweu": ("https://mlflow-prdweu.devds.net", "1"),
+    "prdeus": ("https://mlflow-prdeus.devds.net", None),
+}
+ENV_ALIASES: dict[str, str] = {
+    "dev": "devweu",
+    "stg": "stgweu",
+    "stage": "stgweu",
+    "staging": "stgweu",
+    "prd": "prdweu",
+    "prod": "prdweu",
+}
+
+
+def resolve_env(env: str) -> tuple[str, str | None]:
+    """Map an env alias or canonical name to its tracking URI + experiment id."""
+    key = env.strip().lower()
+    canonical = ENV_ALIASES.get(key, key)
+    if canonical not in ENV_MATRIX:
+        known = ", ".join(sorted(ENV_MATRIX))
+        aliases = ", ".join(sorted(ENV_ALIASES))
+        raise ValueError(f"unknown env '{env}'. Known: {known} (aliases: {aliases})")
+    uri, experiment = ENV_MATRIX[canonical]
+    return uri.rstrip("/"), experiment
+
+
+def resolve_env_or_exit(env: str) -> tuple[str, str | None]:
+    try:
+        return resolve_env(env)
+    except ValueError as e:
+        raise SystemExit(str(e))
+
+
+def looks_like_trace_id(identifier: str) -> bool:
+    return identifier.startswith("tr-")
+
+
+def effective_uri(args: argparse.Namespace) -> str:
+    """--env wins over the inherited MLFLOW_TRACKING_URI, which wins over the default."""
+    env = getattr(args, "env", None)
+    if env:
+        return resolve_env_or_exit(env)[0]
+    return tracking_uri()
+
+
+def effective_experiment(args: argparse.Namespace) -> str:
+    """Explicit --experiment wins, then the env's known id, then the dev default."""
+    if args.experiment:
+        return args.experiment
+    env = getattr(args, "env", None)
+    if env:
+        _, experiment = resolve_env_or_exit(env)
+        if experiment is None:
+            raise SystemExit(
+                f"experiment id for env '{env}' is unknown; pass --experiment <id> "
+                f"(it's the experiment named 'agent-server')"
+            )
+        return experiment
+    return DEFAULT_EXPERIMENT_ID
+
+
+def connection_error_message(url: str, reason: object) -> str:
+    """A DNS failure on a *.devds.net host almost always means the VPN is off."""
+    if isinstance(reason, socket.gaierror) or "getaddrinfo failed" in str(reason):
+        host = urllib.parse.urlparse(url).hostname or url
+        return (
+            f"Cannot resolve '{host}'. If this is a *.devds.net host, "
+            f"connect the corporate VPN and retry."
+        )
+    return f"Connection failed for {url}: {reason}"
 
 
 def tracking_uri() -> str:
@@ -54,7 +137,7 @@ def http_get_json(url: str) -> dict[str, Any]:
         body = e.read().decode("utf-8", errors="replace")[:500]
         raise SystemExit(f"HTTP {e.code} on {url}\n{body}")
     except urllib.error.URLError as e:
-        raise SystemExit(f"Connection failed for {url}: {e.reason}")
+        raise SystemExit(connection_error_message(url, e.reason))
 
 
 def search_session_traces(experiment_id: str, session_uuid: str) -> list[dict[str, Any]]:
@@ -480,6 +563,14 @@ def dump_trace(trace_id: str, out: Path, no_cache: bool, written: list[Path]) ->
 
 
 def cmd_session(args: argparse.Namespace) -> int:
+    if looks_like_trace_id(args.session_uuid):
+        raise SystemExit(
+            f"'{args.session_uuid}' looks like a trace id; "
+            f"use: mlflow_dump.py trace {args.session_uuid}"
+        )
+    os.environ["MLFLOW_TRACKING_URI"] = effective_uri(args)
+    experiment = effective_experiment(args)
+
     out = Path(args.out).expanduser() if args.out else DEFAULT_CACHE_ROOT / args.session_uuid
     out.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
@@ -491,7 +582,7 @@ def cmd_session(args: argparse.Namespace) -> int:
         rows = json.loads(summary_path.read_text(encoding="utf-8"))
         written.extend([index_path, summary_path])
     else:
-        traces = search_session_traces(args.experiment, args.session_uuid)
+        traces = search_session_traces(experiment, args.session_uuid)
         if not traces:
             print(f"no traces matched session {args.session_uuid}", file=sys.stderr)
             return 2
@@ -519,6 +610,7 @@ def cmd_session(args: argparse.Namespace) -> int:
 
 
 def cmd_trace(args: argparse.Namespace) -> int:
+    os.environ["MLFLOW_TRACKING_URI"] = effective_uri(args)
     out = Path(args.out).expanduser() if args.out else DEFAULT_CACHE_ROOT / args.trace_id
     written: list[Path] = []
     dump_trace(args.trace_id, out, args.no_cache, written)
@@ -528,11 +620,11 @@ def cmd_trace(args: argparse.Namespace) -> int:
 
 
 def cmd_span(args: argparse.Namespace) -> int:
+    os.environ["MLFLOW_TRACKING_URI"] = effective_uri(args)
     out = Path(args.out).expanduser() if args.out else DEFAULT_CACHE_ROOT / args.trace_id
-    span_dir = out / args.trace_id
-    span_dir.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
     safe_id = re.sub(r"[^A-Za-z0-9_.-]", "_", args.span_id)
-    span_path = span_dir / f"{safe_id}.json"
+    span_path = out / f"{safe_id}.json"
 
     if not args.no_cache and span_path.exists():
         print(span_path.resolve())
@@ -558,15 +650,19 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
 
+    env_help = "env alias/name (dev|stg|prd or devweu|prdweu|...); sets tracking URI"
+
     sp = sub.add_parser("session", help="dump every trace of a chat session")
     sp.add_argument("session_uuid")
-    sp.add_argument("--experiment", default=DEFAULT_EXPERIMENT_ID)
+    sp.add_argument("--env", help=env_help + " + experiment id")
+    sp.add_argument("--experiment", default=None)
     sp.add_argument("--out")
     sp.add_argument("--no-cache", action="store_true")
     sp.set_defaults(func=cmd_session)
 
     tp = sub.add_parser("trace", help="dump one trace (tree + meta + span index)")
     tp.add_argument("trace_id")
+    tp.add_argument("--env", help=env_help)
     tp.add_argument("--out")
     tp.add_argument("--no-cache", action="store_true")
     tp.set_defaults(func=cmd_trace)
@@ -574,6 +670,7 @@ def build_parser() -> argparse.ArgumentParser:
     spn = sub.add_parser("span", help="dump one span's full payload")
     spn.add_argument("trace_id")
     spn.add_argument("span_id")
+    spn.add_argument("--env", help=env_help)
     spn.add_argument("--out")
     spn.add_argument("--no-cache", action="store_true")
     spn.set_defaults(func=cmd_span)

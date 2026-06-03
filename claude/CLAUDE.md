@@ -106,15 +106,34 @@ Default: `/c/work/claude-data/repo-map.md`
 
 Regenerate: `bash ~/dotfiles/claude/scripts/update-repo-map.sh`
 
-# MLflow telemetry (dev env)
+# MLflow telemetry
 
-- Server: `https://mlflow-devweu.devds.net`, experiment id `9` (DataSnipper agents-and-tools dev).
+- **VPN required.** All `*.devds.net` hosts only resolve over the corporate VPN;
+  off-VPN you get `getaddrinfo failed` (DNS), not an HTTP error. `mlflow_dump.py`
+  turns that into a "connect the corporate VPN" message. Transient DNS blips can
+  also happen on-VPN — one retry is reasonable.
+- **Environment matrix** (DataSnipper agents-and-tools). Source: infra
+  `agentserver-<env>.tfvars` key `mlflow_tracking_uri`.
+
+  | env alias | tracking URI | experiment id |
+  |---|---|---|
+  | `dev` / `devweu` | `https://mlflow-devweu.devds.net` | `9` |
+  | `prd` / `prod` / `prdweu` | `https://mlflow-prdweu.devds.net` | `1` (`agent-server`) |
+  | `stg` / `stgweu`, `*eus` | `https://mlflow-<env>.devds.net` | unverified — pass `--experiment` |
+
+  `prdeus` resolves to the same IP as `prdweu` but its TLS is dead — plain `prod`
+  means `prdweu`. To find an unknown experiment id:
+  `POST {uri}/api/2.0/mlflow/experiments/search {"max_results":1000}` → the one
+  named `agent-server`.
 - Chat-session UUID lives in trace `request_metadata` under `mlflow.trace.session`.
   Search filter: `metadata.\`mlflow.trace.session\` = '<uuid>'` (NOT `tags.`).
 - For full per-trace span data, use `GET /api/3.0/mlflow/traces/get?trace_id=…`.
   `GET /ajax-api/2.0/mlflow/get-trace-artifact` is the pre-3.3.0 artifact path
   and returns only a UI subset of spans — do not use it on this server.
-- Responses regularly exceed 10 MB. **Do not pull traces through `WebFetch`.**
-  Use `~/.claude/scripts/mlflow_dump.py` instead — it writes compact projections
-  to `~/.cache/mlflow-dump/` and only emits full span payloads on demand.
-  The `/ds:analyze-mlflow` slash command wraps this for chat-session analysis.
+- Responses regularly exceed 10 MB (a single span can be ~14 MB). **Do not pull
+  traces through `WebFetch`.** Use `~/.claude/scripts/mlflow_dump.py` instead — it
+  writes compact projections to `~/.cache/mlflow-dump/` and only emits full span
+  payloads on demand. Pick the env with `--env`:
+  `mlflow_dump.py session <uuid> --env prd` / `trace <tr-id> --env prd` /
+  `span <tr-id> <span-id> --env prd` (`--env` overrides `MLFLOW_TRACKING_URI`).
+  The `/ds:analyze-mlflow <id> <env> <prompt>` slash command wraps this end-to-end.
