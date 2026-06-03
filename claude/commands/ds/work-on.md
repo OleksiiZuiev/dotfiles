@@ -11,8 +11,8 @@ You are helping the user work on a Linear ticket. This command auto-detects whet
 {{#if $ARGUMENTS}}
 {{!-- Check if +auto-plan flag is present in arguments. Uses + prefix instead of -- to avoid Claude CLI consuming it as a CLI flag --}}
 If the text "{{$ARGUMENTS}}" contains `+auto-plan`, then **auto-plan mode is active**. In this mode:
-- You still enter plan mode and write a full plan
-- But you call `ExitPlanMode` and **immediately proceed to implementation** without waiting for user approval
+- Do **NOT** call `EnterPlanMode` or `ExitPlanMode`. The `ExitPlanMode` tool always renders an approval prompt the user must clear, so calling it would defeat the flag — no prompt text can suppress that gate.
+- Instead, write the full plan as a `## Plan` markdown section directly in your response (for transparency), then proceed straight to implementation (Step 3).
 - Strip `+auto-plan` from the arguments before processing the rest as extra context
 {{/if}}
 
@@ -64,9 +64,8 @@ Context path: `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}`
 Context file: `{context-path}/{TICKET_ID}.md`
 
 ### Critical Rules
-- **MANDATORY**: You MUST call `EnterPlanMode` before any implementation work. NEVER write or modify code without an approved plan.
-- **If auto-plan mode is active**: After writing the plan, call `ExitPlanMode` and immediately proceed to Step 3 (implementation) without waiting for user approval. The plan is still displayed for transparency.
-- **If auto-plan mode is NOT active**: After writing the plan, call `ExitPlanMode`. The user will get a permission prompt to review and approve. NEVER auto-proceed to implementation.
+- **If auto-plan mode is active**: Do NOT call `EnterPlanMode` or `ExitPlanMode`. Write the full plan as a `## Plan` markdown section in your response, then proceed directly to Step 3 (implementation). There is no approval gate — skipping it is the entire point of the flag.
+- **If auto-plan mode is NOT active**: You MUST call `EnterPlanMode` before any implementation work, then write the plan and call `ExitPlanMode`. The user gets a permission prompt to review and approve. NEVER write or modify code without an approved plan, and NEVER auto-proceed to implementation.
 
 ### Step 1: Detect Phase
 
@@ -113,11 +112,9 @@ Look for Notion page links in the description or comments and fetch those automa
 If requirements are unclear or multiple approaches are viable, use AskUserQuestion.
 Don't assume implementation details not specified in the ticket.
 
-#### 2A.5. Enter Plan Mode
+#### 2A.5. Plan the Implementation
 
-Use EnterPlanMode to create a detailed implementation plan.
-
-Include:
+Create a detailed implementation plan covering:
 - Overview of the change
 - Files to be created/modified
 - Implementation steps with rationale
@@ -126,7 +123,8 @@ Include:
 
 Do NOT include post-implementation steps in the plan — those are already pre-seeded in the todo list from Step 0.5 and will run automatically after implementation.
 
-After writing the plan, call ExitPlanMode. If **auto-plan mode is active**, proceed directly to Step 3 without waiting for approval. Otherwise, wait for user approval before continuing.
+- **If auto-plan mode is active**: write the plan as a `## Plan` markdown section in your response, skip `EnterPlanMode`/`ExitPlanMode` entirely, and proceed directly to Step 3.
+- **Otherwise**: call `EnterPlanMode`, write the plan, then call `ExitPlanMode` and wait for user approval before continuing.
 
 Then proceed to **Step 3** (shared flow).
 
@@ -159,11 +157,9 @@ Follow-up change: "{{$ARGUMENTS}}"
 No follow-up prompt provided. Use AskUserQuestion to ask: "What would you like to work on next for this ticket?"
 {{/if}}
 
-#### 2B.4. Enter Plan Mode
+#### 2B.4. Plan the Follow-Up Change
 
-Use EnterPlanMode to plan the follow-up change.
-
-The plan should:
+Plan the follow-up change. The plan should:
 - Build on what was done in previous sessions (don't redo completed work)
 - Reference specific decisions from ticket context
 - Include the specific follow-up change
@@ -172,7 +168,8 @@ The plan should:
 
 Do NOT include post-implementation steps in the plan — those are already pre-seeded in the todo list from Step 0.5 and will run automatically after implementation.
 
-After writing the plan, call ExitPlanMode. If **auto-plan mode is active**, proceed directly to Step 3 without waiting for approval. Otherwise, wait for user approval before continuing.
+- **If auto-plan mode is active**: write the plan as a `## Plan` markdown section in your response, skip `EnterPlanMode`/`ExitPlanMode` entirely, and proceed directly to Step 3.
+- **Otherwise**: call `EnterPlanMode`, write the plan, then call `ExitPlanMode` and wait for user approval before continuing.
 
 Then proceed to **Step 3** (shared flow).
 
