@@ -24,25 +24,14 @@ EOF
     fi
 
     local HISTORY_FILE="$HOME/.claude_repos"
-    local MAX_HISTORY=30
     local real_claude="$HOME/.local/bin/claude.exe"
 
     # Refresh repo map in background
     bash "$HOME/dotfiles/claude/scripts/update-repo-map.sh" &>/dev/null &
 
-    # Helper: Add current directory to history (if git repo or worktree)
+    # Helper: record a repo/worktree dir in the shared ~/.claude_repos history
     _lclaude_add_to_history() {
-        local dir="$1"
-        git -C "$dir" rev-parse --git-dir > /dev/null 2>&1 || return
-
-        # Create history file if missing
-        touch "$HISTORY_FILE"
-
-        # Remove existing entry, add to top, keep only MAX_HISTORY entries
-        local temp_file=$(mktemp)
-        echo "$dir" > "$temp_file"
-        grep -v "^${dir}$" "$HISTORY_FILE" 2>/dev/null | head -n $((MAX_HISTORY - 1)) >> "$temp_file"
-        mv "$temp_file" "$HISTORY_FILE"
+        bash "$HOME/.claude/scripts/record-repo.sh" "$1"
     }
 
     # Check if we're in a git repo

@@ -102,6 +102,12 @@ git worktree add -b {branch-name} {worktree-path}
 
 If this fails, inform the user and exit.
 
+Then record the worktree in `~/.claude_repos` so it shows up in the `cd-repo` / `lclaude` picker later. Run as a **single Bash command** — the helper normalizes the path to the picker's `/c/...` form, so passing the worktree path in either form is fine:
+
+```bash
+bash ~/.claude/scripts/record-repo.sh "{worktree-path}"
+```
+
 ### Step 6: Launch Implementation Tab
 
 Open a new Windows Terminal tab pointing to the worktree, running `/ds:work-on +auto-plan`.
@@ -121,6 +127,7 @@ Quick setup complete:
   Ticket:   {TICKET_ID} — {title}
   Branch:   {branch-name}
   Worktree: {worktree-path}
+  History:  added to cd-repo/lclaude picker
   Tab:      launched with /ds:work-on +auto-plan
 
 Switch to the new tab (Ctrl+Tab) to monitor implementation.

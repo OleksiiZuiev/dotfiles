@@ -126,21 +126,11 @@ EOF
     echo "Changing to: $worktree_dir"
     cd "$worktree_dir" || return 1
 
-    # Record the worktree under the shell's pwd form (e.g. /c/... on Git Bash).
-    # git rev-parse yields a drive-letter path (C:/...) that lclaude and cd-repo,
-    # which compare against pwd, would treat as a distinct entry — surfacing the
-    # same worktree twice in their pickers.
-    worktree_dir="$(pwd)"
-
-    # Record worktree in ~/.claude_repos so cd-repo can find it later.
-    # Runs for all branch states; for new branches lclaude (below) de-dups.
-    local history_file="$HOME/.claude_repos"
-    local max_history=30
-    touch "$history_file"
-    local temp_file=$(mktemp)
-    echo "$worktree_dir" > "$temp_file"
-    grep -v "^${worktree_dir}$" "$history_file" 2>/dev/null | head -n $((max_history - 1)) >> "$temp_file"
-    mv "$temp_file" "$history_file"
+    # Record worktree in ~/.claude_repos so cd-repo and lclaude can find it
+    # later (all branch states; for new branches lclaude below de-dups). The
+    # helper normalizes the drive-letter path (C:/...) to pwd form (/c/...) so
+    # the worktree is not listed twice in the pickers.
+    bash "$HOME/.claude/scripts/record-repo.sh" "$worktree_dir"
 
     # Launch lclaude only for new branches
     if [[ "$local_exists" == false && "$remote_exists" == false ]]; then
