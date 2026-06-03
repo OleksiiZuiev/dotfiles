@@ -1,10 +1,28 @@
-# Smart Claude launcher with repository history
-# Usage: lclaude [args...]
-# - Always shows fzf menu of recent projects
-# - In a git repo: current directory is first option (pre-selected)
-# - Not in a git repo: shows history with "[Stay in current directory]" option
+# Smart Claude launcher with repository history. See `lclaude --help`.
 
 lclaude() {
+    if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+        cat <<'EOF'
+Usage: lclaude [claude-args...]
+
+Smart Claude launcher: pick a recent project from an fzf menu (numbered menu
+without fzf), then launch Claude there. Any arguments are forwarded to claude.
+History is kept in ~/.claude_repos (up to 30 repos).
+
+  - In a git repo: the current dir is listed first and pre-selected (Enter
+    launches immediately).
+  - Outside a git repo: history is shown with a "[Stay in current directory]"
+    option.
+
+Note: this flag shows lclaude's own help. For Claude's own help, run
+`claude --help`.
+
+Options:
+  -h, --help    Show this help and exit
+EOF
+        return 0
+    fi
+
     local HISTORY_FILE="$HOME/.claude_repos"
     local MAX_HISTORY=30
     local real_claude="$HOME/.local/bin/claude.exe"

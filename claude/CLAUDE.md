@@ -20,6 +20,24 @@
 - For non-git commands in a different directory, use absolute paths
 - This allows granular permission control per command
 
+#Commandments for writing bash functions
+- These apply to shell functions in this dotfiles repo's `bash.d/`.
+- Every function must support `-h`/`--help`: print idiomatic CLI usage and `return 0` without side effects, intercepted as the function's first statement:
+  ```bash
+  if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+      cat <<'EOF'
+  Usage: <fn> <args>
+  ...
+  Options:
+    -h, --help    Show this help and exit
+  EOF
+      return 0
+  fi
+  ```
+- The `--help` text is the single source of truth for usage; keep the top-of-file comment to a brief one-line purpose.
+- When you create or change a `bash.d/` function (its arguments or behavior), create or update its `--help` in the same change.
+- Reference pattern: `bash.d/claude-merge-rebase.sh` (uses a shared usage helper when multiple functions share help).
+
 # Local GitHub Repos
 
 > **IMPORTANT**: When the user mentions ANY repo, package, SDK, library, or dependency by name — even casually — ALWAYS check the local filesystem FIRST before searching the web or claiming you can't access it. This includes references like `unified-to/unified-csharp-sdk`, "the unified SDK", "check the platform repo", etc.

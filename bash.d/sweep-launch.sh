@@ -1,14 +1,21 @@
-# Launch parallel /ds:refine Claude sessions — one Windows Terminal tab per ticket.
-#
-# Usage: sweep_launch TICKET-1 TICKET-2 ...
-#
-# For each ticket ID:
-#   - Opens a new Windows Terminal tab (Git Bash profile)
-#   - Sets tab title to the ticket ID
-#   - Launches claude with /ds:refine <ticket-id>
-#   - Working directory = caller's $PWD
+# Launch parallel /ds:refine Claude sessions — one Windows Terminal tab per
+# ticket. See `sweep_launch --help`.
 
 sweep_launch() {
+    if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+        cat <<'EOF'
+Usage: sweep_launch <ticket-id> [ticket-id ...]
+
+Launch one Windows Terminal tab per ticket, each running
+`claude "/ds:refine <ticket-id>"` (Git Bash profile) in the caller's current
+directory. Tab titles are set to the ticket IDs.
+
+Options:
+  -h, --help    Show this help and exit
+EOF
+        return 0
+    fi
+
     if [ $# -eq 0 ]; then
         echo "Usage: sweep_launch <ticket-id> [ticket-id ...]"
         return 1

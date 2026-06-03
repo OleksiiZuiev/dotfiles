@@ -1,19 +1,30 @@
-# Clean up git worktrees whose branches have been merged via GitHub PR
-# Usage: clean-worktrees
-#
-# Prerequisites:
-#   - Must be in a git repo
-#   - Must NOT be inside a worktree (must be in main repo)
-#   - GitHub CLI (gh) must be installed and authenticated
-#
-# Actions:
-#   - Lists all worktrees (skips the main one)
-#   - Checks GitHub for merged PRs on each worktree's branch
-#   - Shows summary of merged vs active worktrees
-#   - Prompts for confirmation before cleanup
-#   - Removes merged worktrees and optionally deletes remote branches
+# Remove git worktrees whose branches have been merged via GitHub PR.
+# See `clean-worktrees --help`.
 
 clean-worktrees() {
+    if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+        cat <<'EOF'
+Usage: clean-worktrees
+
+Remove git worktrees whose branches have been merged via a GitHub PR.
+
+Prerequisites:
+  - Run from the main repo (not from inside a worktree)
+  - GitHub CLI (gh) installed and authenticated
+
+Flow:
+  1. List worktrees (skipping the main one)
+  2. Check GitHub for a merged PR on each worktree's branch
+  3. Show merged vs active worktrees
+  4. Prompt for confirmation, then remove the merged worktrees
+  5. Offer to delete each merged remote branch, then prune stale references
+
+Options:
+  -h, --help    Show this help and exit
+EOF
+        return 0
+    fi
+
     # Validation: must be in a git repo
     if ! git rev-parse --git-dir > /dev/null 2>&1; then
         echo "Error: Not in a git repository"

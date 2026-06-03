@@ -1,9 +1,25 @@
-# Quick directory switcher for recent git repos
-# Usage: cd-repo [path]
-# - Shows fzf menu of recent projects from ~/.claude_repos
-# - Selects a repo and CDs there
+# Quick directory switcher for recent git repos. See `cd-repo --help`.
 
 cd-repo() {
+    if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+        cat <<'EOF'
+Usage: cd-repo [path]
+
+Quick directory switcher for recent git repos, sharing the ~/.claude_repos
+history with lclaude (no Claude launch, no console clear).
+
+  cd-repo          Show an fzf menu of recent repos (numbered menu without fzf)
+                   and cd to the selection. In a git repo, the current dir is
+                   listed first.
+  cd-repo <path>   Validate <path> is a git repo, cd there, and record it in
+                   history.
+
+Options:
+  -h, --help    Show this help and exit
+EOF
+        return 0
+    fi
+
     local HISTORY_FILE="$HOME/.claude_repos"
     local MAX_HISTORY=30
 

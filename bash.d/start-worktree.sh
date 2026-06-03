@@ -1,29 +1,36 @@
-# Create git worktree with proper validations
-# Usage: start-worktree <branch-name>
-#
-# Supports new and existing branches:
-#   - New branch: creates branch + worktree, launches lclaude
-#   - Existing local branch: creates worktree for it
-#   - Remote-only branch: fetches and creates worktree for it
-#
-# Prerequisites (all must pass):
-#   - Must be in a git repo (main repo or any worktree)
-#   - Must have no uncommitted changes
-#
-# Base branch behavior:
-#   - On main: pulls latest with rebase, then creates worktree
-#   - On non-main (including from a worktree): warns user and asks for
-#     confirmation (y/N), skips pull. New branch is created from the
-#     current branch — useful for stacking PRs.
-#
-# Actions:
-#   - Strips branch prefix (feat/int-31-foo -> int-31-foo)
-#   - Creates worktree under the main repo's <repo>-worktrees directory,
-#     even when invoked from another worktree
-#   - CDs into the new worktree
-#   - Launches lclaude (new branches only)
+# Create a git worktree (new, existing-local, or remote-only branch) with
+# validation, then cd in. See `start-worktree --help`.
 
 start-worktree() {
+    if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+        cat <<'EOF'
+Usage: start-worktree <branch-name>
+
+Create a git worktree for <branch-name> under the main repo's
+<repo>-worktrees/ directory and cd into it. Works from the main repo or any
+worktree (the worktree always lands under the main repo's shared folder).
+
+Branch handling:
+  - New branch:            creates the branch + worktree, then launches lclaude
+  - Existing local branch: creates a worktree for it
+  - Remote-only branch:    fetches origin/<branch> and creates a worktree
+
+Prerequisites:
+  - In a git repo
+  - No uncommitted changes
+
+Base branch:
+  - On main:     pulls latest with rebase before creating the worktree
+  - On non-main: warns and asks for confirmation (y/N), skips pull
+                 (the new branch is created from the current branch —
+                 useful for stacking PRs)
+
+Options:
+  -h, --help    Show this help and exit
+EOF
+        return 0
+    fi
+
     local branch="$1"
 
     # Require branch name argument

@@ -1,7 +1,20 @@
 # Git helper functions
 
-# Git switch recent branches - shows numbered list of recently checked-out branches
+# Git switch to a recent branch. See `gsw --help`.
 gsw() {
+    if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+        cat <<'EOF'
+Usage: gsw
+
+Git switch to a recent branch. Shows a numbered list of the last 10 branches
+you checked out (most recent first) and switches to the one you pick.
+
+Options:
+  -h, --help    Show this help and exit
+EOF
+        return 0
+    fi
+
     local branches
     branches=$(git reflog show --pretty=format:'%gs' 2>/dev/null |
                grep -o 'checkout: moving from .* to .*' |

@@ -1,8 +1,24 @@
-# Browse and resume named Claude Code sessions across all repos
-# Usage: resumex [search-query]
-# Requires: named-sessions.json populated by /namex slash command
+# Browse and resume named Claude Code sessions across all repos.
+# See `resumex --help`. Requires named-sessions.json populated by /namex.
 
 resumex() {
+    if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+        cat <<'EOF'
+Usage: resumex [search-query]
+
+Browse named Claude Code sessions across all repos via fzf (numbered menu
+without fzf), then resume the selected one: cd to its project directory and run
+`claude --resume <session-id>`. An optional search-query pre-filters the list.
+
+Requires sessions bookmarked with the /namex slash command. Index file:
+${CLAUDE_NAMED_SESSIONS:-/c/work/claude-data/named-sessions.json}
+
+Options:
+  -h, --help    Show this help and exit
+EOF
+        return 0
+    fi
+
     local INDEX_FILE="${CLAUDE_NAMED_SESSIONS:-/c/work/claude-data/named-sessions.json}"
     local real_claude="$HOME/.local/bin/claude.exe"
     local query="${1:-}"
