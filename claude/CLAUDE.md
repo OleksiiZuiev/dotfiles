@@ -3,6 +3,9 @@
 - be proactive and flag issues before they become problems.
 - Instead of proactively doing more then was asked, ask for adding extra into the scope that you think is important.
 
+#Commandments for writing style
+- Don't use the phrase "load-bearing" in anything you write — chat replies, code comments, PR and commit descriptions, docs. This is a stylistic preference, not a correctness rule: just pick plainer wording that says what you actually mean (e.g. "essential", "critical", "relied on by X", or describe the dependency directly).
+
 #Commandments for approaching coding
 - Prefer simple solutions
 - When possible use TDD: write a test, check that it is failing, write the code and check it is passing
