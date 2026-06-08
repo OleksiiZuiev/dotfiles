@@ -1,5 +1,5 @@
 ---
-description: Generate a reviewer-onboarding document for a PR — the problem, a high-level story, a topological component walkthrough, decisions with confidence, and obvious smells. Writes the document to a file.
+description: Generate a reviewer-onboarding document for a PR — the problem, a high-level story, a component walkthrough in reading order, decisions with confidence, and obvious smells. Writes the document to a file.
 allowed-tools: Bash(git *), Bash(gh *), Bash(test *), Bash(mkdir *), Read, Write, Grep, Glob, Task, TodoWrite, mcp__linear-server__get_issue
 argument-hint: [<output-file-or-dir>]
 ---
@@ -14,7 +14,7 @@ This is **not** a review. It explains; it does not audit. Obvious smells get a q
 - `/ds:review` — opinionated six-dimension substantive audit (fixed output shape).
 - `/ds:analyze-pr` — answers *the user's* specific questions about a PR.
 - `/ds:polish-pr` — addresses human reviewer comments already posted on the PR.
-- `/ds:explain-pr` (this command) — onboards a reviewer to a PR: coherent story + topological walkthrough + decisions/confidence + obvious smells.
+- `/ds:explain-pr` (this command) — onboards a reviewer to a PR: coherent story + reading-order walkthrough + decisions/confidence + obvious smells.
 
 ## Your Task
 
@@ -136,20 +136,25 @@ Prompt = the **shared brief** below, then the **document spec**, then the **rule
 > ## High-Level Overview
 > <The coherent story of what's inside — the shape and intent of the change as a whole, the strategy taken. A few short paragraphs. The "if you read nothing else" section.>
 >
+> ## How This Area Works Today
+> <OPTIONAL — include only when the change lands in non-trivial pre-existing structure a reviewer who doesn't know the codebase would need oriented to. Briefly describe the baseline: what the touched modules/area already do and the conventions the change follows, so the walkthrough's delta makes sense against it. Omit this section entirely for small or self-evident PRs.>
+>
 > ## Component Walkthrough
-> <Topologically ordered: a component that others depend on is described BEFORE its dependents. Number in dependency order.>
+> <Ordered for comprehension, not compilation. Across components: introduce a prerequisite concept (a new type, or a primitive several others depend on) before its consumers. Within a single component: go top-down — lead with the entry point / orchestrator and its end-to-end flow, then its private helpers explained by the role they serve. Number in reading order.>
 >
-> ### 1. <component / layer> — `path/or/area`
-> <What it is, what it does, how it works, how it fits. Short code excerpts (≤10 lines, fenced) only where they illuminate. Reference files as path:line-range.>
+> ### 1. <shared prerequisite concept> — `path/or/area`
+> <A type or primitive that several later components depend on — it earns its early slot only because multiple consumers need it. Keep it short. Short code excerpts (≤10 lines, fenced) only where they illuminate. Reference files as path:line-range.>
 >
-> ### 2. <component that builds on #1> — `path`
-> <…described in terms of what it consumes from earlier components>
+> ### 2. <orchestrator / entry point> — `path`
+> <Lead with what it's for and its flow at a glance (one or two sentences: step → step → step). THEN its private helpers, each tagged with the role the orchestrator gives it:>
+> - **`_helper_a`** — (used by this component to …) what it does, plus the one or two non-obvious details that matter.
+> - **`_helper_b`** — (used by this component to …) …
 >
 > ## Decisions & Confidence
 > <Notable design/implementation decisions the diff embodies. Calibrate confidence honestly.>
 >
 > - **<decision>** — Confidence: **high | medium | low**. <why it was likely chosen / what it implies>.
-> - ⚠️ **<high-stakes AND uncertain decision>** — Confidence: low. **Confirm with the author** — <why it's load-bearing and what could be wrong if the guess is off>.
+> - ⚠️ **<high-stakes AND uncertain decision>** — Confidence: low. **Confirm with the author** — <why the rest of the change relies on it and what could be wrong if the guess is off>.
 >
 > ## Obvious Smells
 > <Only obviously suspicious things — the cheap catches. NOT a thorough audit. If nothing obvious: "Nothing obvious — defer to `/ds:review` for a thorough pass.">
@@ -157,14 +162,16 @@ Prompt = the **shared brief** below, then the **document spec**, then the **rule
 > - `path:line` — <what looks off and why>.
 >
 > ## Suggested Review Path
-> <Short: the order to read the changed files and where to spend attention, by risk/complexity.>
+> <Short: the order to read the changed files and where to spend attention, by risk/complexity. Follow the same purpose-before-mechanism order as the walkthrough rather than re-deriving a bottom-up one.>
 > ```
 
 #### Rules of engagement (append to the prompt)
 
-> - Ground every claim in the diff. The diff alone often doesn't show how a changed symbol is used — use `git show`, `Grep`, and `Read` to inspect surrounding code before asserting how something fits.
-> - **Topological ordering is the point of the walkthrough:** work out the dependencies between changed components and describe a dependency before its dependents. If A calls/derives-from B, B comes first.
-> - When the reviewer likely lacks the tech-stack context, briefly expand a load-bearing concept in plain language — just enough to follow the change.
+> - **Orient in the existing code before explaining the delta.** The diff is only the change; a reviewer who doesn't know the codebase needs the baseline it lands in. Before writing the walkthrough, use `git show`, `Grep`, and `Read` to learn what the touched modules already do and the conventions of the area. When that baseline is substantial and a reviewer would need it to follow the change, capture it in the optional "How This Area Works Today" section; otherwise fold it into the narrative. Ground every claim in code you actually read — not in the diff alone.
+> - **Order for comprehension, not compilation.** A compiler needs dependencies first; a reviewer needs purpose first. Distinguish two kinds of dependency: a **prerequisite concept** (a new type, or a primitive used by *several* consumers) is worth understanding on its own, so introduce it before its consumers; an **implementation helper** (a private function serving *one* caller) is meaningless in isolation, so introduce it top-down — *after* its caller's purpose and flow are on the table, never before. Applying dependency-first ordering to one orchestrator's private helpers strands the reader in mechanism with no purpose; don't.
+> - **Lead any multi-helper component with a "flow at a glance"** — one or two sentences tracing the orchestrator's end-to-end pipeline (step → step → step) — then describe the parts.
+> - **Cross-reference every helper to its caller** (e.g. "used by `manage_x` to …") so that even an imperfect order never leaves the reader without an anchor.
+> - When the reviewer likely lacks the tech-stack context, briefly expand an essential concept in plain language — just enough to follow the change.
 > - **Confidence must be honest.** Reserve the ⚠️ "confirm with the author" flag for decisions that are BOTH high-impact AND genuinely uncertain (the "nuclear" ones). Don't flag everything.
 > - **Obvious smells only.** Do not enumerate style nits (that's `/ds:pre-review`) and do not run a six-dimension categorized audit (that's `/ds:review`). A handful of cheap, clearly-suspicious catches at most.
 > - Respect the prior decisions listed above — don't re-open settled questions.
@@ -199,7 +206,8 @@ Mark `completed`. Done.
 ## Important Notes
 
 - **Reviewer onboarding, not a review.** Obvious smells only; the thorough audit is `/ds:review`. Do not categorize findings or draft PR comments.
-- **Single opus agent → coherent narrative.** One generator sees the whole diff, so the story and the topological ordering stay unified. The sub-agent is read-only; the main agent performs the only file write.
+- **Single opus agent → coherent narrative.** One generator sees the whole diff, so the story and the ordering stay unified. The sub-agent is read-only; the main agent performs the only file write.
+- **Walkthrough is ordered for comprehension, not build order** — purpose before mechanism: a prerequisite concept before its consumers, but an orchestrator before its private helpers (a single-caller helper is meaningless until its caller's intent is on the table).
 - **Worktree-friendly.** Uses `gh pr diff`, so you can run it from any branch. To explain a teammate's PR, `gh pr checkout <N>` first — the PR is auto-detected from the current branch.
 - **Output path is flexible.** One optional argument: a directory (file generated inside it), a file path (written there), or omitted (default name in CWD).
 - **Read-before-overwrite** when the output file already exists — the harness requires it, and regenerating is the intended behavior.
