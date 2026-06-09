@@ -405,6 +405,11 @@ concurrent commit). Integrate the remote before pushing:
 3. Push: `git push -u origin "{F}"`.
    - If still **rejected (non-fast-forward)** — a session pushed inside the race window —
      repeat fetch → rebase → push (up to ~3 attempts). **Never** use `--force`.
+   - On success, capture the pushed commit for the summary: `PUSHED_SHA = git rev-parse HEAD`
+     (in the current dir, like the `git fetch`/`git push` above) and
+     `COMMIT_URL = "$(gh repo view --json url -q .url)/commit/{PUSHED_SHA}"`. The cherry-pick
+     in Step 8 (and any rebase above) rewrites the SHA, so `PUSHED_SHA` — not the worktree
+     `SHA` from Step 7 — is the commit that actually landed on the remote.
 4. Your Step 3 verification predates any commits the rebase pulled in (usually unrelated
    areas). CI on the PR is the backstop for the integrated tip; optionally re-run the
    targeted tests if the rebase touched the same area you changed.
@@ -428,7 +433,7 @@ concurrent commit). Integrate the remote before pushing:
 
 7. **If PR already exists**: just note the PR URL and number from the `gh pr view` output.
 
-Store the result (PR URL and number) for the final summary.
+Store the results (PR URL and number, plus `PUSHED_SHA` and `COMMIT_URL`) for the final summary.
 
 Mark the todo `completed`.
 
@@ -446,7 +451,7 @@ Worktree: {WT} → removed / kept (fold-back blocked)
 Fold-back: clean / conflict resolved / blocked
 Simplify: [N fixes applied] or [clean] or [skipped (+no-simplify)]
 Pre-review: [N fixes applied (confident), M low-confidence findings not applied] or [clean]
-Committed: {SHA}
+Committed: {PUSHED_SHA} — {COMMIT_URL}  /  {SHA} (worktree, not pushed — fold-back blocked)
 Ticket context updated: yes/no
 PR: created #N <url> (draft) / pushed to existing #N <url> / not pushed (fold-back blocked)
 ```
