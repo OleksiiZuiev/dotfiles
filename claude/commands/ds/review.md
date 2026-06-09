@@ -93,7 +93,22 @@ Before doing anything else, use TodoWrite to create the per-mode checklist. The 
 
 Read the following into your context. These become the **shared brief** that every analysis sub-agent receives, so they all start with the same picture.
 
-1. **Repo `CLAUDE.md`** at the repo root (conventions).
+1. **Conventions files** — the documented rules the diff must comply with. Discover *every* `CLAUDE.md` and `AGENTS.md` that governs a changed file, not just the repo root: a monorepo keeps subsystem rules in nested files, and `CLAUDE.md` is sometimes just a thin pointer to a sibling `AGENTS.md`.
+   - Get the changed-file list — `MODE=own`: `git diff origin/<BASE>...HEAD --name-only`; `MODE=draft-comments`: `gh pr diff <pr-number> --name-only`.
+   - For each changed file, collect every `CLAUDE.md` and `AGENTS.md` in its directory and all ancestor directories up to the repo root. Take the union and dedupe. Discovery one-liner (own mode — in draft-comments mode swap the first command for the `gh pr diff` form above):
+     ```bash
+     git diff origin/<BASE>...HEAD --name-only | while read -r f; do
+       d=$(dirname "$f")
+       while :; do
+         for n in CLAUDE.md AGENTS.md; do [ -f "$d/$n" ] && printf '%s\n' "$d/$n"; done
+         [ "$d" = "." ] && break
+         d=$(dirname "$d")
+       done
+     done | sort -u
+     ```
+   - Read each one and keep them ordered **most-specific (deepest path) → least-specific (repo root)** — a nested file refines or overrides the root's rules for files beneath it.
+   - If none are found, note "no conventions files" and continue; the Consistency reviewer falls back to inferring conventions from neighbouring code (today's behaviour).
+   - In `MODE=draft-comments` the files are read from your current checkout — a fine proxy, since conventions rarely differ from the PR head. If the PR itself adds or edits a conventions file, account for that from the diff.
 2. **Linear ticket** (only if `TICKET_ID` is set):
    ```
    mcp__linear-server__get_issue with id=TICKET_ID, includeRelations=true
@@ -111,6 +126,7 @@ Ticket: <TICKET_ID> — <ticket title>  (or "no ticket detected")
 Base: origin/<base>
 Diff: <files-changed> files, +<additions>/-<deletions>
 Context file: loaded / not found / no ticket
+Conventions: <N> files — <paths, most→least specific>  (or "none found")
 ```
 
 ### Step 2: Launch Multi-Agent Analysis (parallel)
@@ -136,7 +152,8 @@ Launch the six reviewers below **in a single message with six parallel `Task` to
 > **Prior decisions from ticket-context file** (do NOT re-litigate these — respect them):
 > <bulleted summary of decisions from previous sessions, or "no prior context">
 >
-> **Repo conventions:** see `CLAUDE.md` at the repo root.
+> **Repo conventions files** (most-specific → least-specific — read any that bear on your dimension):
+> <bulleted list of the discovered `CLAUDE.md` / `AGENTS.md` paths, or "none found">
 >
 > **Diff to review:**
 > ```diff
@@ -217,7 +234,7 @@ After the shared brief, append the dimension-specific instruction:
 |---|---|---|
 | **Simplicity** | opus (inherit — omit `model` field) | "Your dimension is **simplicity**. Could the same requirement be met with materially less code, fewer abstractions, or fewer moving parts? Flag: premature abstraction, over-parameterization, speculative generality, layers added for hypothetical futures, indirection that doesn't pay for itself. You may NOT propose changes that violate the ticket A/C." |
 | **Performance** | opus (inherit) | "Your dimension is **performance and data-flow correctness**. Look for: wrong data structures (lists where dicts/sets fit, repeated linear scans), N+1 query patterns / inefficient DB access, missing `Include`/eager loading where it matters, unnecessary allocations on hot paths, repeated work that could be hoisted. Skip micro-optimizations a reviewer wouldn't raise." |
-| **Consistency** | sonnet | "Your dimension is **codebase consistency**. Compare patterns introduced by the diff against existing patterns for similar problems (use Grep/Glob to find neighbours). Flag: new patterns where an established one exists, inconsistent naming/structure compared with siblings, deviations from repo CLAUDE.md not caught by /ds:pre-review." |
+| **Consistency** | sonnet | "Your dimension is **codebase consistency and conventions compliance** — two parts. **(1) Consistency:** compare patterns introduced by the diff against existing patterns for similar problems (use Grep/Glob to find neighbours). Flag: new patterns where an established one exists, inconsistent naming/structure compared with siblings. **(2) Conventions compliance:** read *in full* every conventions file listed in the shared brief (`CLAUDE.md` / `AGENTS.md`, root and nested). Extract each concrete, checkable rule, then verify the diff complies. A nested file's rule governs files beneath it and refines/overrides the root for those paths. Flag each violation with the **exact rule quoted and its source file cited** (e.g. `src/api/AGENTS.md`). Most rule violations are `confident` — a documented rule is an objective standard, so the counter-argument is usually 'none'; a violation with a legitimate, diff-specific justification becomes a `smell`. Skip purely mechanical formatting/whitespace rules that `/ds:pre-review` already enforces (avoid overlap) unless the diff plainly breaks them. If no conventions files were found, fall back to inferring conventions from neighbouring code." |
 | **Readability** | sonnet | "Your dimension is **readability**. Is the intent of each non-trivial change obvious from the code alone? Flag: unclear names, missing-but-needed early returns, deeply nested conditionals, long functions doing multiple things, magic literals lacking a named constant. Do NOT suggest adding comments — prefer expressive code per repo conventions." |
 | **Extraction/Duplication** | sonnet | "Your dimension is **extraction and duplication**. Use Grep to verify duplication is real (not just superficially similar). Flag: duplicated logic within the diff or between the diff and existing code, copy-paste blocks differing only in literals, extract-method candidates. Each finding must reference both/all duplicated sites." |
 | **Test Coverage** | sonnet | "Your dimension is **test coverage**. For every non-trivial behavior change in the diff — new functions/methods with logic, new conditional branches, new error paths, new public APIs, modified business rules — check whether a test exercises it. Use Grep/Glob to (a) locate test files for the changed code (test-file naming conventions vary by repo: deduce from neighbours and `CLAUDE.md`), and (b) find tests for analogous existing code so you know what 'covered' looks like in *this* repo. Flag: new logic with no test, new conditional branch covered only on the happy path, modified behavior whose existing test was not updated, new public/exported surface without an integration test where the repo's convention requires one. Skip: trivial getters/setters, pure renames, comment/doc-only changes, formatting, generated code, infra/YAML/config, and anything in directories the repo's existing tests do not cover (deduce). Respect the repo's testing posture — if `CLAUDE.md` or neighbour evidence says 'no tests for X', do not invent a requirement. Reference both the diff location and the expected test location (or analogue) in every finding." |
@@ -338,7 +355,7 @@ Otherwise, launch a `general-purpose` sub-agent (`model: "haiku"`) to append a n
 - **Branch name** (from `git branch --show-current`)
 - **Repository name** (from `git remote get-url origin` or `gh repo view --json name`)
 - **Accomplished:** one line — `<T> findings surfaced — <C> confident, <S> smells across 6 dimensions.` On the zero-findings path: `Review passed — no substantive findings across 6 dimensions.`
-- **Key decisions:** notable smells worth offline follow-up — pull the 1–3 highest-severity / most load-bearing smells from the report as bullets, each `<file:line> — <one-line summary>`. Omit the section entirely if there are no smells or none feels load-bearing.
+- **Key decisions:** notable smells worth offline follow-up — pull the 1–3 highest-severity / most significant smells from the report as bullets, each `<file:line> — <one-line summary>`. Omit the section entirely if there are no smells or none feels significant.
 - **Files changed:** omit. This command does not modify the working tree.
 
 The sub-agent should append a new section under `## Sessions` following the existing document template (see `~/dotfiles/claude/CLAUDE.md` "Ticket Context Documents" → Document Template). If the file does not exist, create it.
@@ -392,6 +409,7 @@ Mark `✅ Final summary` as `completed`.
 - **Fewer high-signal findings**: every sub-agent prompt instructs to skip borderline issues. The mandatory `Counter-argument` field is part of the bar — if writing it talks the reviewer out of the finding, the finding self-prunes.
 - **Categorization is at capture**: each finding is `confident` or `smell` based on whether the proposed fix is concrete and whether the counter-argument is trivial. Smells are first-class; they need no proposed change (`(needs unpacking)` is acceptable).
 - **Respect prior decisions**: the ticket-context summary in the shared brief is authoritative — sub-agents must not re-litigate.
+- **Conventions compliance**: Step 1 discovers every `CLAUDE.md`/`AGENTS.md` applicable to the changed files (root + nested, ordered most-specific first); the Consistency reviewer checks the diff against their documented rules and cites the exact rule and its source file per violation. Purely mechanical formatting rules owned by `/ds:pre-review` are skipped to avoid overlap.
 - **Always update ticket context** (when a ticket is detected in `MODE=own`) — including on the zero-findings path. The audit trail matters.
 - **`/ds:review` is not `/ultrareview`**: this command is local-only, free, and agent-driven. Do not invoke or reference the cloud `/ultrareview`.
 - **Parallel sub-agents**: launch all six reviewers in a single tool-use turn so they run concurrently. Do not chain them.
