@@ -1,7 +1,7 @@
 ---
-description: Work on a Linear ticket in an isolated worktree, then fold the commit back onto the feature branch — lets multiple sessions share one branch without colliding. Flags: +auto-plan, +no-simplify
+description: Work on a Linear ticket in an isolated worktree, then fold the commit back onto the feature branch — lets multiple sessions share one branch without colliding. Flags: +auto-plan
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskUpdate, TaskList, AskUserQuestion, EnterPlanMode, TodoWrite
-argument-hint: [+auto-plan] [+no-simplify] [extra context]
+argument-hint: [+auto-plan] [extra context]
 ---
 
 You are helping the user work on a Linear ticket. This is the **v2** of `/ds:work-on`:
@@ -21,13 +21,6 @@ If the text "{{$ARGUMENTS}}" contains `+auto-plan`, then **auto-plan mode is act
 - Do **NOT** call `EnterPlanMode` or `ExitPlanMode`. The `ExitPlanMode` tool always renders an approval prompt the user must clear, so calling it would defeat the flag — no prompt text can suppress that gate.
 - Instead, write the full plan as a `## Plan` markdown section directly in your response (for transparency), then proceed straight to worktree creation (Step 2.9).
 - Strip `+auto-plan` from the arguments before processing the rest as extra context
-{{/if}}
-
-{{#if $ARGUMENTS}}
-{{!-- Simplify runs by default. The +no-simplify flag opts out. --}}
-If the text "{{$ARGUMENTS}}" contains `+no-simplify`, then **simplify mode is disabled**. Otherwise simplify mode is active by default. When disabled:
-- Step 4 (Simplify sub-agent) is skipped
-- Strip `+no-simplify` from the arguments before processing the rest as extra context
 {{/if}}
 
 ## Your Task
@@ -65,15 +58,12 @@ steps are mandatory and run in order; the tool is only for visibility.
 Create these items (all with status `pending`):
 1. `🌳 Create isolated worktree` — see Step 2.9
 2. `🔧 Implementation` — placeholder, will be replaced with plan tasks in Step 3
-3. `🧹 Simplify: launch sub-agent` — see Step 4
-4. `🔍 Pre-review: launch sub-agent` — see Step 5
-5. `📋 Surface low-confidence pre-review findings` — see Step 6
-6. `💾 Commit (one commit in the worktree)` — see Step 7
-7. `🔀 Fold-back onto feature branch` — see Step 8
-8. `🧹 Remove throwaway worktree` — see Step 9
-9. `📝 Update ticket context: launch sub-agent` — see Step 10
-10. `🚀 Push & PR` — see Step 11
-11. `✅ Final summary` — see Step 12
+3. `💾 Commit (one commit in the worktree)` — see Step 4
+4. `🔀 Fold-back onto feature branch` — see Step 5
+5. `🧹 Remove throwaway worktree` — see Step 6
+6. `📝 Update ticket context: launch sub-agent` — see Step 7
+7. `🚀 Push & PR` — see Step 8
+8. `✅ Final summary` — see Step 9
 
 ### Ticket Context Configuration
 
@@ -86,7 +76,7 @@ Context file: `{context-path}/{TICKET_ID}.md`
   (`Edit`/`Write`) use absolute paths **under the worktree `WT`**, and ALL git runs as
   `git -C "$WT" …`. **Never modify files under the current working directory** — that is the
   feature branch's own worktree and a concurrent session may be relying on it. The only
-  things done in the current directory are the fold-back (Step 8) and cleanup (Step 9).
+  things done in the current directory are the fold-back (Step 5) and cleanup (Step 6).
 - **If auto-plan mode is active**: Do NOT call `EnterPlanMode` or `ExitPlanMode`. Write the full plan as a `## Plan` markdown section in your response, then proceed directly to Step 2.9. There is no approval gate — skipping it is the entire point of the flag.
 - **If auto-plan mode is NOT active**: You MUST call `EnterPlanMode` before any implementation work, then write the plan and call `ExitPlanMode`. The user gets a permission prompt to review and approve. NEVER write or modify code without an approved plan.
 
@@ -202,7 +192,7 @@ Mark `🌳 Create isolated worktree` as `in_progress` via your tracking tool. Do
 
 **Pre-flight (in the current directory — the feature branch's worktree):**
 - Confirm you are on the feature branch `F` (it must match `{type}/{ticket}-{slug}`).
-- Confirm the working tree is clean: run `git status --porcelain`. If there is any output, **stop** and tell the user to commit or stash first — the fold-back in Step 8 cherry-picks onto this worktree and requires it clean.
+- Confirm the working tree is clean: run `git status --porcelain`. If there is any output, **stop** and tell the user to commit or stash first — the fold-back in Step 5 cherry-picks onto this worktree and requires it clean.
 
 **Create the throwaway worktree:**
 1. Generate a short random suffix: run `openssl rand -hex 3` (fall back to `echo $RANDOM` if `openssl` is unavailable). Call it `SUFFIX`.
@@ -211,7 +201,7 @@ Mark `🌳 Create isolated worktree` as `in_progress` via your tracking tool. Do
    - Run `git rev-parse --path-format=absolute --git-common-dir`. Its parent directory is the **main repo root** (this works whether you are in the main repo or a worktree).
    - `WT = "{parent-of-main-repo-root}/{main-repo-name}-worktrees/{T-without-its-type-prefix}"`, i.e. strip everything up to and including the first `/` of `T` for the directory name. This matches the `start-worktree` convention.
 4. Create it off the current feature tip: `git worktree add -b "{T}" "{WT}" HEAD`.
-   - Do **not** record this worktree in the cd-repo / lclaude picker — it is transparent plumbing that will be removed in Step 9.
+   - Do **not** record this worktree in the cd-repo / lclaude picker — it is transparent plumbing that will be removed in Step 6.
 5. If creation fails, inform the user and exit.
 
 Remember `F`, `T`, and `WT` for the rest of the session. Mark the todo `completed`.
@@ -246,69 +236,9 @@ Implement the plan directly (no sub-agent — you have full context from plannin
 
 ## Post-Implementation Steps
 
-Work through these in order — using your tracking tool, mark each `in_progress` when starting and `completed` when done. All review/commit operations target the worktree `WT`.
+Work through these in order — using your tracking tool, mark each `in_progress` when starting and `completed` when done. All commit and git operations target the worktree `WT`.
 
-### Step 4: Simplify Sub-Agent
-
-Mark `🧹 Simplify: launch sub-agent` as `in_progress` via your tracking tool.
-
-If **simplify mode is disabled** (`+no-simplify` present): mark it `completed` immediately with note "Skipped (+no-simplify)". Skip the rest of this step.
-
-Otherwise, launch a Task sub-agent to review the worktree's uncommitted changes for code reuse, quality, and efficiency issues — then fix any found.
-
-**Sub-agent prompt:**
-> Review the uncommitted changes in the git worktree at `{WT}` for code reuse, quality, and efficiency issues. Fix the issues you find.
->
-> IMPORTANT: Operate ONLY inside `{WT}`. All git commands use `git -C "{WT}"`; all file edits use absolute paths under `{WT}`. Ignore any gitStatus snapshot from the conversation context — run fresh git commands.
->
-> 1. Get the diff: run `git -C "{WT}" diff` (unstaged) and `git -C "{WT}" diff --cached` (staged). Review both.
-> 2. Find the conventions file nearest the changed files: run `git -C "{WT}" diff --name-only`, then look for `AGENTS.md` / `CLAUDE.md` in those files' directories and parents (in a monorepo it's usually a subproject dir, e.g. `{WT}/<subdir>/AGENTS.md`; `CLAUDE.md` may just point to `AGENTS.md`). Read it and honor its conventions (comments describe present state, not change history; plus the user's global style rules — e.g. avoid the word "load-bearing").
-> 3. Analyze the diff for: code duplication (copy-paste that could be extracted), quality issues (dead code, overly complex logic, unclear naming), and efficiency improvements (unnecessary operations, redundant work).
-> 4. Do NOT flag style issues, naming conventions, architecture, security, or test coverage — those are handled by other steps.
-> 5. For each finding, apply the fix directly using Edit (absolute path under `{WT}`). Prefer simple, targeted changes over large refactors.
-> 6. Return a structured report:
->    - **Fixes applied**: list of changes made (file, line, description). Empty if none.
->    - If nothing found, return: "Simplify passed — no issues found."
-
-**Sub-agent allowed tools:** `Bash(git *), Read, Edit, Grep, Glob`
-
-Mark the todo `completed`.
-
-### Step 5: Pre-Review Sub-Agent
-
-Mark `🔍 Pre-review: launch sub-agent` as `in_progress` via your tracking tool.
-
-Launch a Task sub-agent to review the worktree's uncommitted changes for style, naming, and convention issues, triaging each finding by confidence.
-
-**Sub-agent prompt:**
-> Review the uncommitted changes in the git worktree at `{WT}` for style, naming, and convention issues. Triage each finding by your confidence in the change.
->
-> IMPORTANT: Operate ONLY inside `{WT}`. All git commands use `git -C "{WT}"`; all file edits use absolute paths under `{WT}`. Ignore any gitStatus snapshot from the conversation context — run fresh git commands.
->
-> 1. Get the diff: run `git -C "{WT}" diff` (unstaged) and `git -C "{WT}" diff --cached` (staged). Review both.
-> 2. Find the conventions file nearest the changed files: run `git -C "{WT}" diff --name-only`, then look for `AGENTS.md` / `CLAUDE.md` in those files' directories and parents (in a monorepo it's usually a subproject dir, e.g. `{WT}/<subdir>/AGENTS.md`; `CLAUDE.md` may just point to `AGENTS.md`). Read it and honor its conventions (comments describe present state, not change history; plus the user's global style rules — e.g. avoid the word "load-bearing").
-> 3. Analyze the diff for: style issues, naming violations, obvious refactorings, convention violations. Do NOT flag architecture, logic, test coverage, performance, or security issues.
-> 4. Triage each finding by confidence:
->    - **Confident** (obvious and safe, no judgment call — e.g. trailing whitespace, a naming convention applied consistently, a missing blank line): apply the fix directly using Edit.
->    - **Not confident** (requires judgment or has a trade-off — e.g. renaming a public API, extracting a method, simplifying a conditional that might hurt readability): do NOT apply it. Report it back instead.
-> 5. Return a structured report:
->    - **Fixes applied** (confident): list of changes made (file, line, description). Empty if none.
->    - **Low-confidence findings** (not applied): list of findings for the user to consider (file, line, description, proposed change). Empty if none.
->    - If nothing found, return: "Pre-review passed — no issues found."
-
-**Sub-agent allowed tools:** `Bash(git *), Read, Edit, Grep, Glob`
-
-Mark the todo `completed`.
-
-### Step 6: Surface Low-Confidence Findings
-
-Mark `📋 Surface low-confidence pre-review findings` as `in_progress` via your tracking tool.
-
-If the pre-review sub-agent returned low-confidence findings, **do NOT prompt the user and do NOT apply them**. Carry them forward verbatim (file, line, description, proposed change) so they can be listed in the Final Summary (Step 12).
-
-Mark the todo `completed`.
-
-### Step 7: Commit (one commit in the worktree)
+### Step 4: Commit (one commit in the worktree)
 
 Mark `💾 Commit (one commit in the worktree)` as `in_progress` via your tracking tool.
 
@@ -331,7 +261,7 @@ Make **exactly one** commit in the worktree, then capture its SHA:
 
 Mark the todo `completed`.
 
-### Step 8: Fold-Back onto the Feature Branch
+### Step 5: Fold-Back onto the Feature Branch
 
 Mark `🔀 Fold-back onto feature branch` as `in_progress` via your tracking tool.
 
@@ -341,7 +271,7 @@ on top of their commit.
 
 1. Cherry-pick: `git cherry-pick "{SHA}"`.
    - **Index-lock contention** (output mentions `index.lock` / "another git process"): another session is folding back right now. Wait briefly and retry — up to ~5 attempts. Do not force-remove the lock.
-   - **Clean success**: the commit is now on `F`. Continue to Step 9.
+   - **Clean success**: the commit is now on `F`. Continue to Step 6.
    - **Conflict**: resolve it **inline**:
      - List conflicts: `git diff --name-only --diff-filter=U`.
      - For each, read the file, resolve the conflict markers honoring the intent of BOTH sides (your change and whatever the other session landed), then `git add <file>`.
@@ -354,11 +284,11 @@ on top of their commit.
      Worktree:    {WT}
      Resolve manually (e.g. `git cherry-pick {SHA}` and fix), or rebase {T} onto {F}.
      ```
-     Skip Steps 9–11; go to Step 12 and report the partial outcome.
+     Skip Steps 6–8; go to Step 9 and report the partial outcome.
 
 Mark the todo `completed` once the commit is on `F`.
 
-### Step 9: Remove the Throwaway Worktree
+### Step 6: Remove the Throwaway Worktree
 
 Mark `🧹 Remove throwaway worktree` as `in_progress` via your tracking tool. Only run this after a successful fold-back.
 
@@ -370,7 +300,7 @@ Mark `🧹 Remove throwaway worktree` as `in_progress` via your tracking tool. O
 
 Mark the todo `completed`.
 
-### Step 10: Update Ticket Context
+### Step 7: Update Ticket Context
 
 Mark `📝 Update ticket context: launch sub-agent` as `in_progress` via your tracking tool.
 
@@ -387,29 +317,29 @@ The subagent should append a new session entry following the existing document f
 
 Mark the todo `completed`.
 
-### Step 11: Push & Create/Update PR
+### Step 8: Push & Create/Update PR
 
 Mark `🚀 Push & PR` as `in_progress` via your tracking tool.
 
-The fold-back (Step 8) put your commit on the *local* feature tip, but another session
-may have **pushed** to the remote `{F}` in the meantime (Step 8 only handles a *local*
+The fold-back (Step 5) put your commit on the *local* feature tip, but another session
+may have **pushed** to the remote `{F}` in the meantime (Step 5 only handles a *local*
 concurrent commit). Integrate the remote before pushing:
 
 1. Fetch the remote tip: `git fetch origin "{F}"`.
 2. If local has diverged from `origin/{F}`, rebase your folded-back commit(s) on top:
    `git rebase "origin/{F}"`.
    - **Clean** → continue.
-   - **Conflict** → resolve inline honoring BOTH sides (same approach as Step 8), then
+   - **Conflict** → resolve inline honoring BOTH sides (same approach as Step 5), then
      `git rebase --continue`. If unresolvable, `git rebase --abort` and STOP with a
-     recovery handle (the commit `SHA`, branch `{F}`); skip to Step 12 and report.
+     recovery handle (the commit `SHA`, branch `{F}`); skip to Step 9 and report.
 3. Push: `git push -u origin "{F}"`.
    - If still **rejected (non-fast-forward)** — a session pushed inside the race window —
      repeat fetch → rebase → push (up to ~3 attempts). **Never** use `--force`.
    - On success, capture the pushed commit for the summary: `PUSHED_SHA = git rev-parse HEAD`
      (in the current dir, like the `git fetch`/`git push` above) and
      `COMMIT_URL = "$(gh repo view --json url -q .url)/commit/{PUSHED_SHA}"`. The cherry-pick
-     in Step 8 (and any rebase above) rewrites the SHA, so `PUSHED_SHA` — not the worktree
-     `SHA` from Step 7 — is the commit that actually landed on the remote.
+     in Step 5 (and any rebase above) rewrites the SHA, so `PUSHED_SHA` — not the worktree
+     `SHA` from Step 4 — is the commit that actually landed on the remote.
 4. Your Step 3 verification predates any commits the rebase pulled in (usually unrelated
    areas). CI on the PR is the backstop for the integrated tip; optionally re-run the
    targeted tests if the rebase touched the same area you changed.
@@ -437,7 +367,7 @@ Store the results (PR URL and number, plus `PUSHED_SHA` and `COMMIT_URL`) for th
 
 Mark the todo `completed`.
 
-### Step 12: Final Summary
+### Step 9: Final Summary
 
 Mark `✅ Final summary` as `in_progress` via your tracking tool.
 
@@ -449,20 +379,9 @@ Change: [brief description of what was done]
 Files modified: [count]
 Worktree: {WT} → removed / kept (fold-back blocked)
 Fold-back: clean / conflict resolved / blocked
-Simplify: [N fixes applied] or [clean] or [skipped (+no-simplify)]
-Pre-review: [N fixes applied (confident), M low-confidence findings not applied] or [clean]
 Committed: {PUSHED_SHA} — {COMMIT_URL}  /  {SHA} (worktree, not pushed — fold-back blocked)
 Ticket context updated: yes/no
 PR: created #N <url> (draft) / pushed to existing #N <url> / not pushed (fold-back blocked)
-```
-
-If the pre-review surfaced low-confidence findings (Step 6), list them after the summary so the user can act on them later. This is informational — do NOT prompt:
-
-```
-## Pre-review findings not applied (low confidence)
-
-1. `path/to/file:line` — short description
-   Proposed change: <what would be applied>
 ```
 
 Mark the todo `completed`.
