@@ -1,6 +1,6 @@
 ---
 description: Work on a Linear ticket in an isolated worktree, then fold the commit back onto the feature branch — lets multiple sessions share one branch without colliding. Flags: +auto-plan, +no-simplify
-allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, AskUserQuestion, EnterPlanMode, TodoWrite
+allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskUpdate, TaskList, AskUserQuestion, EnterPlanMode, TodoWrite
 argument-hint: [+auto-plan] [+no-simplify] [extra context]
 ---
 
@@ -50,11 +50,19 @@ Store the extracted ticket ID as `TICKET_ID` and the full branch name as `F`.
 Additional context from user: "{{$ARGUMENTS}}"
 {{/if}}
 
-### Step 0.5: Pre-Seed Todo Items
+### Step 0.5: Pre-Seed Progress Checklist
 
-**Before doing anything else**, use TodoWrite to create the following fixed items. These ensure the worktree lifecycle and post-implementation steps are NEVER skipped — they will be visible in the todo list throughout the entire session.
+**Before doing anything else**, pre-seed the following fixed checklist using whatever
+progress-tracking tool this build exposes — `TodoWrite` if available, otherwise the
+`TaskCreate`/`TaskUpdate` family (recent builds ship Task* instead of TodoWrite). If
+neither is available, track the checklist inline in your messages. Either way these
+steps are mandatory and run in order; the tool is only for visibility.
 
-Create these todo items (all with status `pending`):
+> Throughout this command, "mark X as in_progress/completed" and "use TodoWrite to …"
+> mean: update whichever tracking tool you pre-seeded here (or your inline list). Never
+> skip a step just because a specific tool name is unavailable.
+
+Create these items (all with status `pending`):
 1. `🌳 Create isolated worktree` — see Step 2.9
 2. `🔧 Implementation` — placeholder, will be replaced with plan tasks in Step 3
 3. `🧹 Simplify: launch sub-agent` — see Step 4
@@ -190,7 +198,7 @@ Then proceed to **Step 2.9** (shared flow).
 
 ### Step 2.9: Create the Isolated Worktree
 
-Mark `🌳 Create isolated worktree` as `in_progress` via TodoWrite. Do this AFTER plan approval and BEFORE any file changes.
+Mark `🌳 Create isolated worktree` as `in_progress` via your tracking tool. Do this AFTER plan approval and BEFORE any file changes.
 
 **Pre-flight (in the current directory — the feature branch's worktree):**
 - Confirm you are on the feature branch `F` (it must match `{type}/{ticket}-{slug}`).
@@ -210,25 +218,39 @@ Remember `F`, `T`, and `WT` for the rest of the session. Mark the todo `complete
 
 ### Step 3: Implement the Plan (in the worktree)
 
-Use TodoWrite to replace the `🔧 Implementation` placeholder with specific implementation tasks from the plan. Each task should be a separate todo item.
+Using your tracking tool, replace the `🔧 Implementation` placeholder with specific implementation tasks from the plan. Each task should be a separate item.
 
 Implement the plan directly (no sub-agent — you have full context from planning), but **entirely inside the worktree `WT`**:
-- File edits: absolute paths under `WT`.
+- File edits: absolute paths under `WT`. **Read each file at its `{WT}` path before
+  editing** — planning-phase reads were against a different worktree path, so the Edit
+  tool needs a fresh Read of the `{WT}` copy.
 - Git: `git -C "$WT" …`.
-- Build/test: invoke the tool with its directory flag pointed at `WT` (e.g. `dotnet test "{WT}/..."`, `pytest "{WT}/..."`, `npm --prefix "{WT}" test`, `go test -C "{WT}" ./...`). Do not `cd`.
+- **Install deps first — a fresh worktree has none.** A newly created worktree shares no
+  `.venv` / `node_modules` / build outputs with the main checkout. Before building or
+  testing, install/sync dependencies *in the worktree* (point at the subproject dir as
+  needed):
+  - Python / uv workspace: `uv sync --all-packages --directory "{WT}/<subdir>"`. A plain
+    `uv run` builds a venv that is **missing the workspace-member editables**, so
+    `pytest`/`ty` fail with `ModuleNotFoundError` and a flood of unresolved-imports.
+  - Node: `npm --prefix "{WT}" install`.   .NET: `dotnet restore`.
+  If lint/type/test report mass unresolved-import / module-not-found errors, that is the
+  missing install — **not** a code defect. Sync, then re-run.
+- Build/test: invoke the tool with its directory flag pointed at `WT`
+  (e.g. `uv run --directory "{WT}/<subdir>" pytest …`, `dotnet test "{WT}/..."`,
+  `npm --prefix "{WT}" test`, `go test -C "{WT}" ./...`). Do not `cd`.
 
 1. Execute each implementation task sequentially
 2. Run tests and verify as you go (against `WT`)
-3. Use TodoWrite to mark each implementation task as `completed` as you go
+3. Using your tracking tool, mark each implementation task as `completed` as you go
 4. **Then continue to the post-implementation steps.** Do NOT stop after implementation.
 
 ## Post-Implementation Steps
 
-Work through these in order — use TodoWrite to mark each `in_progress` when starting and `completed` when done. All review/commit operations target the worktree `WT`.
+Work through these in order — using your tracking tool, mark each `in_progress` when starting and `completed` when done. All review/commit operations target the worktree `WT`.
 
 ### Step 4: Simplify Sub-Agent
 
-Mark `🧹 Simplify: launch sub-agent` as `in_progress` via TodoWrite.
+Mark `🧹 Simplify: launch sub-agent` as `in_progress` via your tracking tool.
 
 If **simplify mode is disabled** (`+no-simplify` present): mark it `completed` immediately with note "Skipped (+no-simplify)". Skip the rest of this step.
 
@@ -240,7 +262,7 @@ Otherwise, launch a Task sub-agent to review the worktree's uncommitted changes 
 > IMPORTANT: Operate ONLY inside `{WT}`. All git commands use `git -C "{WT}"`; all file edits use absolute paths under `{WT}`. Ignore any gitStatus snapshot from the conversation context — run fresh git commands.
 >
 > 1. Get the diff: run `git -C "{WT}" diff` (unstaged) and `git -C "{WT}" diff --cached` (staged). Review both.
-> 2. Read `{WT}/CLAUDE.md` (the worktree's repo root) for conventions.
+> 2. Find the conventions file nearest the changed files: run `git -C "{WT}" diff --name-only`, then look for `AGENTS.md` / `CLAUDE.md` in those files' directories and parents (in a monorepo it's usually a subproject dir, e.g. `{WT}/<subdir>/AGENTS.md`; `CLAUDE.md` may just point to `AGENTS.md`). Read it and honor its conventions (comments describe present state, not change history; plus the user's global style rules — e.g. avoid the word "load-bearing").
 > 3. Analyze the diff for: code duplication (copy-paste that could be extracted), quality issues (dead code, overly complex logic, unclear naming), and efficiency improvements (unnecessary operations, redundant work).
 > 4. Do NOT flag style issues, naming conventions, architecture, security, or test coverage — those are handled by other steps.
 > 5. For each finding, apply the fix directly using Edit (absolute path under `{WT}`). Prefer simple, targeted changes over large refactors.
@@ -254,7 +276,7 @@ Mark the todo `completed`.
 
 ### Step 5: Pre-Review Sub-Agent
 
-Mark `🔍 Pre-review: launch sub-agent` as `in_progress` via TodoWrite.
+Mark `🔍 Pre-review: launch sub-agent` as `in_progress` via your tracking tool.
 
 Launch a Task sub-agent to review the worktree's uncommitted changes for style, naming, and convention issues, triaging each finding by confidence.
 
@@ -264,7 +286,7 @@ Launch a Task sub-agent to review the worktree's uncommitted changes for style, 
 > IMPORTANT: Operate ONLY inside `{WT}`. All git commands use `git -C "{WT}"`; all file edits use absolute paths under `{WT}`. Ignore any gitStatus snapshot from the conversation context — run fresh git commands.
 >
 > 1. Get the diff: run `git -C "{WT}" diff` (unstaged) and `git -C "{WT}" diff --cached` (staged). Review both.
-> 2. Read `{WT}/CLAUDE.md` (the worktree's repo root) for conventions.
+> 2. Find the conventions file nearest the changed files: run `git -C "{WT}" diff --name-only`, then look for `AGENTS.md` / `CLAUDE.md` in those files' directories and parents (in a monorepo it's usually a subproject dir, e.g. `{WT}/<subdir>/AGENTS.md`; `CLAUDE.md` may just point to `AGENTS.md`). Read it and honor its conventions (comments describe present state, not change history; plus the user's global style rules — e.g. avoid the word "load-bearing").
 > 3. Analyze the diff for: style issues, naming violations, obvious refactorings, convention violations. Do NOT flag architecture, logic, test coverage, performance, or security issues.
 > 4. Triage each finding by confidence:
 >    - **Confident** (obvious and safe, no judgment call — e.g. trailing whitespace, a naming convention applied consistently, a missing blank line): apply the fix directly using Edit.
@@ -280,7 +302,7 @@ Mark the todo `completed`.
 
 ### Step 6: Surface Low-Confidence Findings
 
-Mark `📋 Surface low-confidence pre-review findings` as `in_progress` via TodoWrite.
+Mark `📋 Surface low-confidence pre-review findings` as `in_progress` via your tracking tool.
 
 If the pre-review sub-agent returned low-confidence findings, **do NOT prompt the user and do NOT apply them**. Carry them forward verbatim (file, line, description, proposed change) so they can be listed in the Final Summary (Step 12).
 
@@ -288,14 +310,14 @@ Mark the todo `completed`.
 
 ### Step 7: Commit (one commit in the worktree)
 
-Mark `💾 Commit (one commit in the worktree)` as `in_progress` via TodoWrite.
+Mark `💾 Commit (one commit in the worktree)` as `in_progress` via your tracking tool.
 
 Make **exactly one** commit in the worktree, then capture its SHA:
 
 1. Run `git -C "{WT}" status` and `git -C "{WT}" diff` to see all changes.
 2. Run `git -C "{WT}" log --oneline -5` to match the recent commit message style.
 3. Stage the relevant files: `git -C "{WT}" add <specific files>` (avoid .env, credentials, etc.).
-4. Commit using a HEREDOC:
+4. Commit using a HEREDOC (use the `Co-Authored-By` trailer your environment/harness specifies; the line below is the default):
    ```bash
    git -C "{WT}" commit -m "$(cat <<'EOF'
    <conventional commit message>
@@ -311,7 +333,7 @@ Mark the todo `completed`.
 
 ### Step 8: Fold-Back onto the Feature Branch
 
-Mark `🔀 Fold-back onto feature branch` as `in_progress` via TodoWrite.
+Mark `🔀 Fold-back onto feature branch` as `in_progress` via your tracking tool.
 
 This runs in the **current directory** (the feature branch `F`). It cherry-picks `SHA` onto
 the *live* feature tip, so if another session committed since this session started, you land
@@ -338,7 +360,7 @@ Mark the todo `completed` once the commit is on `F`.
 
 ### Step 9: Remove the Throwaway Worktree
 
-Mark `🧹 Remove throwaway worktree` as `in_progress` via TodoWrite. Only run this after a successful fold-back.
+Mark `🧹 Remove throwaway worktree` as `in_progress` via your tracking tool. Only run this after a successful fold-back.
 
 1. Remove the worktree (long-path aware, with a force fallback):
    - `git -c core.longpaths=true worktree remove "{WT}"`
@@ -350,7 +372,7 @@ Mark the todo `completed`.
 
 ### Step 10: Update Ticket Context
 
-Mark `📝 Update ticket context: launch sub-agent` as `in_progress` via TodoWrite.
+Mark `📝 Update ticket context: launch sub-agent` as `in_progress` via your tracking tool.
 
 Use the Task tool with a subagent (`model: "haiku"`) to update the ticket context document. Pass the subagent all session details:
 - Ticket ID: `{TICKET_ID}`
@@ -367,13 +389,27 @@ Mark the todo `completed`.
 
 ### Step 11: Push & Create/Update PR
 
-Mark `🚀 Push & PR` as `in_progress` via TodoWrite.
+Mark `🚀 Push & PR` as `in_progress` via your tracking tool.
 
-Push the feature branch and handle PR creation:
+The fold-back (Step 8) put your commit on the *local* feature tip, but another session
+may have **pushed** to the remote `{F}` in the meantime (Step 8 only handles a *local*
+concurrent commit). Integrate the remote before pushing:
 
-1. Push: `git push -u origin "{F}"`
-2. Check if a PR already exists: `gh pr view --json url,number` (exit code 0 = exists)
-3. **If no PR exists**: launch a Task sub-agent (`model: "sonnet"`) to create a draft PR.
+1. Fetch the remote tip: `git fetch origin "{F}"`.
+2. If local has diverged from `origin/{F}`, rebase your folded-back commit(s) on top:
+   `git rebase "origin/{F}"`.
+   - **Clean** → continue.
+   - **Conflict** → resolve inline honoring BOTH sides (same approach as Step 8), then
+     `git rebase --continue`. If unresolvable, `git rebase --abort` and STOP with a
+     recovery handle (the commit `SHA`, branch `{F}`); skip to Step 12 and report.
+3. Push: `git push -u origin "{F}"`.
+   - If still **rejected (non-fast-forward)** — a session pushed inside the race window —
+     repeat fetch → rebase → push (up to ~3 attempts). **Never** use `--force`.
+4. Your Step 3 verification predates any commits the rebase pulled in (usually unrelated
+   areas). CI on the PR is the backstop for the integrated tip; optionally re-run the
+   targeted tests if the rebase touched the same area you changed.
+5. Check if a PR already exists: `gh pr view --json url,number` (exit code 0 = exists).
+6. **If no PR exists**: launch a Task sub-agent (`model: "sonnet"`) to create a draft PR.
 
 **Sub-agent prompt:**
 > Create a draft PR for the current branch.
@@ -390,7 +426,7 @@ Push the feature branch and handle PR creation:
 
 **Sub-agent allowed tools:** `Bash(git *), Bash(gh *), mcp__linear-server__get_issue, Read, Glob`
 
-4. **If PR already exists**: just note the PR URL and number from the `gh pr view` output.
+7. **If PR already exists**: just note the PR URL and number from the `gh pr view` output.
 
 Store the result (PR URL and number) for the final summary.
 
@@ -398,7 +434,7 @@ Mark the todo `completed`.
 
 ### Step 12: Final Summary
 
-Mark `✅ Final summary` as `in_progress` via TodoWrite.
+Mark `✅ Final summary` as `in_progress` via your tracking tool.
 
 Show what was implemented:
 ```
