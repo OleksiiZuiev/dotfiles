@@ -140,21 +140,31 @@ Regenerate: `bash ~/dotfiles/claude/scripts/update-repo-map.sh`
   |---|---|---|
   | `dev` / `devweu` | `https://mlflow-devweu.devds.net` | `9` |
   | `prd` / `prod` / `prdweu` | `https://mlflow-prdweu.devds.net` | `1` (`agent-server`) |
-  | `stg` / `stgweu`, `*eus` | `https://mlflow-<env>.devds.net` | unverified — pass `--experiment` |
+  | `prdeus` | `https://mlflow-prdeus.devds.net` | `1` (`agent-server`; older MLflow) |
+  | `stg` / `stgweu`, `stgeus` | `https://mlflow-<env>.devds.net` | unverified — pass `--experiment` |
+  | `deveus` | `https://mlflow-deveus.devds.net` | unreachable — TLS hostname mismatch |
 
-  `prdeus` resolves to the same IP as `prdweu` but its TLS is dead — plain `prod`
-  means `prdweu`. To find an unknown experiment id:
-  `POST {uri}/api/2.0/mlflow/experiments/search {"max_results":1000}` → the one
-  named `agent-server`.
+  Plain `prod`/`prd` means `prdweu` (weu). `prdeus` is a separate, reachable US
+  prod region on an **older MLflow** (see the per-trace note below) — verified
+  experiment `1`. `deveus` is the TLS-broken host (its cert fails hostname
+  validation) — skip it. With no `--env`, `session` auto-sweeps the known-id envs
+  (`devweu`→`prdweu`→`prdeus`) and prints which matched. To find an unverified
+  experiment id: `POST {uri}/api/2.0/mlflow/experiments/search {"max_results":1000}`
+  → the one named `agent-server`.
 - Chat-session UUID lives in trace `request_metadata` under `mlflow.trace.session`.
   Search filter: `metadata.\`mlflow.trace.session\` = '<uuid>'` (NOT `tags.`).
-- For full per-trace span data, use `GET /api/3.0/mlflow/traces/get?trace_id=…`.
-  `GET /ajax-api/2.0/mlflow/get-trace-artifact` is the pre-3.3.0 artifact path
-  and returns only a UI subset of spans — do not use it on this server.
+- For full per-trace span data, use `GET /api/3.0/mlflow/traces/get?trace_id=…` on
+  the current weu servers. On the older `prdeus` server that endpoint 404s; the
+  pre-3.3.0 path `GET /ajax-api/2.0/mlflow/get-trace-artifact?request_id=<tr-id>`
+  (note the param is `request_id`, not `trace_id`) is the working one — it returns
+  only a UI subset of spans (no TOOL/LLM spans; the full pydantic-ai history lives
+  in each span's `mlflow.spanOutputs`). `mlflow_dump.py` falls back to it
+  automatically, and its `messages <tr-id>` subcommand renders that history.
 - Responses regularly exceed 10 MB (a single span can be ~14 MB). **Do not pull
   traces through `WebFetch`.** Use `~/.claude/scripts/mlflow_dump.py` instead — it
   writes compact projections to `~/.cache/mlflow-dump/` and only emits full span
   payloads on demand. Pick the env with `--env`:
   `mlflow_dump.py session <uuid> --env prd` / `trace <tr-id> --env prd` /
-  `span <tr-id> <span-id> --env prd` (`--env` overrides `MLFLOW_TRACKING_URI`).
+  `span <tr-id> <span-id> --env prd` / `messages <tr-id> --env prd` (`--env`
+  overrides `MLFLOW_TRACKING_URI`; omit it on `session` to auto-sweep envs).
   The `/ds:analyze-mlflow <id> <env> <prompt>` slash command wraps this end-to-end.

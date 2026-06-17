@@ -5,20 +5,30 @@ The goal is to keep Claude's context window small: pull big trace payloads
 once, render a skeleton tree + meta JSON to disk, and only emit full
 per-span payloads on explicit request.
 
-Three subcommands:
-  session <uuid>           — list all traces of a chat session + tree per trace
-  trace   <trace_id>       — full tree + meta + span index for one trace
-  span    <trace_id> <id>  — single span's full payload (inputs/outputs/attrs)
+Four subcommands:
+  session  <uuid>          — list all traces of a chat session + tree per trace
+  trace    <trace_id>      — full tree + meta + span index for one trace
+  span     <trace_id> <id> — single span's full payload (inputs/outputs/attrs)
+  messages <trace_id>      — pydantic-ai conversation transcript (from spanOutputs;
+                             use when the span tree is sparse, e.g. older servers)
 
 Environment:
   --env dev|stg|prd (or devweu|deveus|stgweu|stgeus|prdweu|prdeus) resolves the
   tracking URI and, for `session`, the experiment id. --env overrides
-  MLFLOW_TRACKING_URI. Without --env the env var (or dev default) is used.
+  MLFLOW_TRACKING_URI. When --env is omitted (or a session isn't found in the
+  given env), `session` auto-sweeps the envs with known experiment ids
+  (devweu, prdweu, prdeus) and reports which one matched.
+
+Legacy servers:
+  prdeus runs an older MLflow where api/3.0 per-trace fetch 404s; the helper
+  transparently falls back to the ajax-api get-trace-artifact endpoint. Those
+  spans are a UI subset (no TOOL spans) — the full message history lives in the
+  spanOutputs attribute; the `messages` subcommand extracts it.
 
 Defaults:
   --out  ~/.cache/mlflow-dump/<session_or_trace_id>/
   MLFLOW_TRACKING_URI env var (default https://mlflow-devweu.devds.net)
-  --experiment 9   (only for `session`, when no --env/--experiment given)
+  --experiment   resolved from --env; omit both to auto-sweep (session only)
 
 Stdlib only — no mlflow, no requests. Re-runs are cached unless --no-cache.
 Every file written or hit-from-cache is printed (absolute path, one per line)
@@ -40,11 +50,14 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_TRACKING_URI = "https://mlflow-devweu.devds.net"
-DEFAULT_EXPERIMENT_ID = "9"
 DEFAULT_CACHE_ROOT = Path.home() / ".cache" / "mlflow-dump"
 TREE_FIELD_MAX = 1024
 TOOL_OUTPUT_PREVIEW = 80
 HTTP_TIMEOUT_SECONDS = 60
+# `messages` transcript caps: system prompts are huge and rarely the point; tool
+# args/returns carry the failure signals so they get a generous budget.
+SYSTEM_PROMPT_MAX = 500
+MESSAGE_CONTENT_MAX = 4000
 
 # alias -> (tracking URI, experiment id or None when not yet verified).
 # Source: agents-and-tools infrastructure agentserver-<env>.tfvars (mlflow_tracking_uri).
@@ -54,8 +67,13 @@ ENV_MATRIX: dict[str, tuple[str, str | None]] = {
     "stgweu": ("https://mlflow-stgweu.devds.net", None),
     "stgeus": ("https://mlflow-stgeus.devds.net", None),
     "prdweu": ("https://mlflow-prdweu.devds.net", "1"),
-    "prdeus": ("https://mlflow-prdeus.devds.net", None),
+    "prdeus": ("https://mlflow-prdeus.devds.net", "1"),
 }
+
+# Canonical envs to auto-sweep for `session` (those with a verified experiment id),
+# in priority order. deveus is excluded (TLS hostname mismatch — unreachable from here);
+# stgweu/stgeus are excluded (experiment id unverified — reach them with --experiment).
+SESSION_SWEEP_ENVS: tuple[str, ...] = ("devweu", "prdweu", "prdeus")
 ENV_ALIASES: dict[str, str] = {
     "dev": "devweu",
     "stg": "stgweu",
@@ -89,28 +107,26 @@ def looks_like_trace_id(identifier: str) -> bool:
     return identifier.startswith("tr-")
 
 
+def session_sweep_order(preferred: str | None = None) -> list[str]:
+    """Canonical envs to try for a session search, most-likely first.
+
+    Defaults to the verified-experiment-id envs (SESSION_SWEEP_ENVS). When an env
+    is explicitly preferred, it leads the list (deduped) — even if its experiment
+    id is unverified, because the caller may have pinned --experiment.
+    """
+    order = list(SESSION_SWEEP_ENVS)
+    if preferred:
+        canonical = ENV_ALIASES.get(preferred.strip().lower(), preferred.strip().lower())
+        order = [canonical] + [e for e in order if e != canonical]
+    return order
+
+
 def effective_uri(args: argparse.Namespace) -> str:
     """--env wins over the inherited MLFLOW_TRACKING_URI, which wins over the default."""
     env = getattr(args, "env", None)
     if env:
         return resolve_env_or_exit(env)[0]
     return tracking_uri()
-
-
-def effective_experiment(args: argparse.Namespace) -> str:
-    """Explicit --experiment wins, then the env's known id, then the dev default."""
-    if args.experiment:
-        return args.experiment
-    env = getattr(args, "env", None)
-    if env:
-        _, experiment = resolve_env_or_exit(env)
-        if experiment is None:
-            raise SystemExit(
-                f"experiment id for env '{env}' is unknown; pass --experiment <id> "
-                f"(it's the experiment named 'agent-server')"
-            )
-        return experiment
-    return DEFAULT_EXPERIMENT_ID
 
 
 def connection_error_message(url: str, reason: object) -> str:
@@ -128,16 +144,34 @@ def tracking_uri() -> str:
     return os.environ.get("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI).rstrip("/")
 
 
-def http_get_json(url: str) -> dict[str, Any]:
+class HttpError(Exception):
+    """An HTTP error response, carrying the status code so callers can branch on it."""
+
+    def __init__(self, code: int, body: str, url: str) -> None:
+        super().__init__(f"HTTP {code} on {url}")
+        self.code = code
+        self.body = body
+        self.url = url
+
+
+def _http_get(url: str) -> bytes:
+    """Raw GET. Raises HttpError on an HTTP status error; SystemExit on a DNS/VPN failure."""
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SECONDS) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+            return resp.read()
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")[:500]
-        raise SystemExit(f"HTTP {e.code} on {url}\n{body}")
+        raise HttpError(e.code, body, url)
     except urllib.error.URLError as e:
         raise SystemExit(connection_error_message(url, e.reason))
+
+
+def http_get_json(url: str) -> dict[str, Any]:
+    try:
+        return json.loads(_http_get(url).decode("utf-8"))
+    except HttpError as e:
+        raise SystemExit(f"HTTP {e.code} on {e.url}\n{e.body}")
 
 
 def search_session_traces(experiment_id: str, session_uuid: str) -> list[dict[str, Any]]:
@@ -155,11 +189,36 @@ def search_session_traces(experiment_id: str, session_uuid: str) -> list[dict[st
 def get_trace(trace_id: str) -> dict[str, Any]:
     qs = urllib.parse.urlencode({"trace_id": trace_id})
     url = f"{tracking_uri()}/api/3.0/mlflow/traces/get?{qs}"
-    data = http_get_json(url)
+    try:
+        raw = _http_get(url)
+    except HttpError as e:
+        if e.code == 404:
+            # Older MLflow (e.g. prdeus) has no api/3.0 trace endpoint — fall back.
+            return get_trace_via_artifact(trace_id)
+        raise SystemExit(f"HTTP {e.code} on {e.url}\n{e.body}")
+    data = json.loads(raw.decode("utf-8"))
     trace = data.get("trace") or data
     if not trace or "trace_info" not in trace and "info" not in trace:
         raise SystemExit(f"unexpected payload for {trace_id}: keys={list(data)[:10]}")
     return trace
+
+
+def get_trace_via_artifact(trace_id: str) -> dict[str, Any]:
+    """Pre-3.3.0 fallback: fetch spans from the ajax-api trace artifact (param is request_id).
+
+    Returns the spans only (UI subset) wrapped in a trace shape; trace_info is empty —
+    for `session` dumps the index is built from the search API, so it stays rich.
+    """
+    qs = urllib.parse.urlencode({"request_id": trace_id})
+    url = f"{tracking_uri()}/ajax-api/2.0/mlflow/get-trace-artifact?{qs}"
+    try:
+        data = json.loads(_http_get(url).decode("utf-8"))
+    except HttpError as e:
+        raise SystemExit(f"HTTP {e.code} on {e.url}\n{e.body}")
+    spans = data.get("spans") if isinstance(data, dict) else data
+    if not isinstance(spans, list):
+        spans = []
+    return {"trace_info": {}, "trace_data": {"spans": spans}}
 
 
 def metadata_dict(trace_info: dict[str, Any]) -> dict[str, str]:
@@ -245,6 +304,17 @@ def parse_attrs(span: dict[str, Any]) -> dict[str, Any]:
             parsed[k] = v
         return parsed
     return {}
+
+
+def span_id_of(span: dict[str, Any]) -> str:
+    """Span id, tolerating both the OTLP shape (top-level) and the artifact shape (context.span_id)."""
+    sid = span.get("span_id") or span.get("spanId")
+    if sid:
+        return str(sid)
+    ctx = span.get("context")
+    if isinstance(ctx, dict):
+        return str(ctx.get("span_id") or ctx.get("spanId") or "")
+    return ""
 
 
 def span_duration_ms(span: dict[str, Any]) -> int:
@@ -351,7 +421,7 @@ def build_tree(spans: list[dict[str, Any]]) -> tuple[str, list[dict[str, Any]]]:
     for raw in spans:
         attrs = parse_attrs(raw)
         node = {
-            "span_id": raw.get("span_id") or raw.get("spanId") or "",
+            "span_id": span_id_of(raw),
             "parent_id": raw.get("parent_id") or raw.get("parentSpanId") or raw.get("parent_span_id") or "",
             "name": raw.get("name", ""),
             "type": span_type(attrs, raw),
@@ -372,9 +442,13 @@ def build_tree(spans: list[dict[str, Any]]) -> tuple[str, list[dict[str, Any]]]:
             children.setdefault(pid, []).append(n)
         else:
             roots.append(n)
+    def start_key(n: dict[str, Any]) -> int:
+        raw = n["raw"]
+        return int(raw.get("start_time_unix_nano") or raw.get("start_time_ns") or raw.get("start_time") or 0)
+
     for siblings in children.values():
-        siblings.sort(key=lambda n: n["raw"].get("start_time_unix_nano") or n["raw"].get("start_time_ns") or 0)
-    roots.sort(key=lambda n: n["raw"].get("start_time_unix_nano") or n["raw"].get("start_time_ns") or 0)
+        siblings.sort(key=start_key)
+    roots.sort(key=start_key)
 
     lines: list[str] = []
     index: list[dict[str, Any]] = []
@@ -562,14 +636,172 @@ def dump_trace(trace_id: str, out: Path, no_cache: bool, written: list[Path]) ->
     return tree_path, meta_path, spans_path, index
 
 
+def coerce_message_list(value: Any) -> list[dict[str, Any]] | None:
+    """Normalize a spanOutputs value into a pydantic-ai message list, or None.
+
+    Tolerates: a JSON-encoded string; the double-wrap {"output": "<json string>"};
+    {"messages": [...]}; or a bare list. Returns the list only when it looks like a
+    message list (non-empty, items are dicts with a `parts` key).
+    """
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (json.JSONDecodeError, ValueError):
+            return None
+    if isinstance(value, dict):
+        if "output" in value:
+            return coerce_message_list(value["output"])
+        if "messages" in value:
+            return coerce_message_list(value["messages"])
+        return None
+    if isinstance(value, list) and value and all(
+        isinstance(m, dict) and "parts" in m for m in value
+    ):
+        return value
+    return None
+
+
+def extract_messages(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Pick the longest message list found across spans' spanOutputs (the root/Agent.run
+    span carries the full history); empty list if none."""
+    best: list[dict[str, Any]] = []
+    for raw in spans:
+        attrs = parse_attrs(raw)
+        msgs = coerce_message_list(attrs.get("mlflow.spanOutputs"))
+        if msgs and len(msgs) > len(best):
+            best = msgs
+    return best
+
+
+def _render_part(part: dict[str, Any]) -> str | None:
+    kind = str(part.get("part_kind") or part.get("kind") or "")
+    name = part.get("tool_name") or ""
+
+    def content_str(key: str = "content") -> str:
+        c = part.get(key)
+        if isinstance(c, (dict, list)):
+            c = json.dumps(c, default=str)
+        return str(c if c is not None else "")
+
+    if kind == "system-prompt":
+        return f"[system] {truncate(content_str(), SYSTEM_PROMPT_MAX)}"
+    if kind == "user-prompt":
+        return f"[user] {truncate(content_str(), MESSAGE_CONTENT_MAX)}"
+    if kind == "text":
+        return f"[assistant] {truncate(content_str(), MESSAGE_CONTENT_MAX)}"
+    if kind == "tool-call":
+        args = part.get("args")
+        args_str = args if isinstance(args, str) else json.dumps(args, default=str)
+        return f"[tool-call] {name}({truncate(str(args_str), MESSAGE_CONTENT_MAX)})"
+    if kind == "tool-return":
+        return f"[tool-return] {name} → {truncate(content_str(), MESSAGE_CONTENT_MAX)}"
+    if kind == "retry-prompt":
+        body = content_str()
+        prefix = f"[retry] {name}: " if name else "[retry] "
+        return prefix + truncate(body, MESSAGE_CONTENT_MAX)
+    if kind:
+        return f"[{kind}] {truncate(content_str(), MESSAGE_CONTENT_MAX)}"
+    return None
+
+
+def render_transcript(msgs: list[dict[str, Any]]) -> str:
+    lines: list[str] = []
+    for msg in msgs:
+        for part in msg.get("parts", []) if isinstance(msg, dict) else []:
+            if isinstance(part, dict):
+                rendered = _render_part(part)
+                if rendered:
+                    lines.append(rendered)
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
+def cmd_messages(args: argparse.Namespace) -> int:
+    os.environ["MLFLOW_TRACKING_URI"] = effective_uri(args)
+    out = Path(args.out).expanduser() if args.out else DEFAULT_CACHE_ROOT / args.trace_id
+    out.mkdir(parents=True, exist_ok=True)
+    msg_path = out / f"{args.trace_id}.messages.txt"
+
+    if not args.no_cache and msg_path.exists():
+        print(msg_path.resolve())
+        return 0
+
+    trace = get_trace(args.trace_id)
+    msgs = extract_messages(trace_spans_of(trace))
+    if not msgs:
+        print(f"no message history found in spanOutputs for {args.trace_id}", file=sys.stderr)
+        return 4
+    msg_path.write_text(render_transcript(msgs), encoding="utf-8")
+    print(msg_path.resolve())
+    return 0
+
+
+def session_rows(traces: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for t in traces:
+        info = t.get("trace_info") or t.get("info") or t
+        rows.append(trace_summary_row({"trace_info": info}))
+    rows.sort(key=lambda r: r.get("started_at") or "")
+    return rows
+
+
+def search_session_with_sweep(args: argparse.Namespace) -> list[dict[str, Any]] | None:
+    """Find a session's traces, auto-sweeping candidate envs. Sets MLFLOW_TRACKING_URI to
+    the env that matched. Returns rows, or None (after printing guidance) if no env had it."""
+    session_uuid = args.session_uuid
+    requested = (
+        ENV_ALIASES.get(args.env.strip().lower(), args.env.strip().lower())
+        if args.env else None
+    )
+
+    # A pinned --experiment targets one specific env: search it directly, no sweep.
+    if args.experiment:
+        os.environ["MLFLOW_TRACKING_URI"] = effective_uri(args)
+        traces = search_session_traces(args.experiment, session_uuid)
+        if traces:
+            return session_rows(traces)
+        print(f"no traces matched session {session_uuid} in {tracking_uri()}", file=sys.stderr)
+        return None
+
+    # An explicit env with no known experiment id and no --experiment: keep the actionable error.
+    if requested is not None and resolve_env(requested)[1] is None:
+        raise SystemExit(
+            f"experiment id for env '{args.env}' is unknown; pass --experiment <id> "
+            f"(it's the experiment named 'agent-server')"
+        )
+
+    tried: list[str] = []
+    for env in session_sweep_order(args.env):
+        uri, exp = resolve_env(env)
+        if exp is None:
+            continue  # can't search without an experiment id
+        os.environ["MLFLOW_TRACKING_URI"] = uri
+        tried.append(env)
+        try:
+            traces = search_session_traces(exp, session_uuid)
+        except SystemExit as e:
+            print(f"  {env}: {e}", file=sys.stderr)
+            continue
+        if traces:
+            if env != requested:
+                print(f"matched env: {env} (experiment {exp})", file=sys.stderr)
+            return session_rows(traces)
+
+    scope = "any swept env" if requested is None else f"{requested} or fallback envs"
+    print(
+        f"no traces matched session {session_uuid} in {scope} ({', '.join(tried)}). "
+        f"For staging/eus, pass --env <name> --experiment <id>; if every env failed to "
+        f"connect, check the corporate VPN.",
+        file=sys.stderr,
+    )
+    return None
+
+
 def cmd_session(args: argparse.Namespace) -> int:
     if looks_like_trace_id(args.session_uuid):
         raise SystemExit(
             f"'{args.session_uuid}' looks like a trace id; "
             f"use: mlflow_dump.py trace {args.session_uuid}"
         )
-    os.environ["MLFLOW_TRACKING_URI"] = effective_uri(args)
-    experiment = effective_experiment(args)
 
     out = Path(args.out).expanduser() if args.out else DEFAULT_CACHE_ROOT / args.session_uuid
     out.mkdir(parents=True, exist_ok=True)
@@ -580,17 +812,13 @@ def cmd_session(args: argparse.Namespace) -> int:
 
     if not args.no_cache and summary_path.exists() and index_path.exists():
         rows = json.loads(summary_path.read_text(encoding="utf-8"))
+        # Cached per-trace files won't hit the network; point at the requested env anyway.
+        os.environ["MLFLOW_TRACKING_URI"] = effective_uri(args)
         written.extend([index_path, summary_path])
     else:
-        traces = search_session_traces(experiment, args.session_uuid)
-        if not traces:
-            print(f"no traces matched session {args.session_uuid}", file=sys.stderr)
+        rows = search_session_with_sweep(args)
+        if rows is None:
             return 2
-        rows: list[dict[str, Any]] = []
-        for t in traces:
-            info = t.get("trace_info") or t.get("info") or t
-            rows.append(trace_summary_row({"trace_info": info}))
-        rows.sort(key=lambda r: r.get("started_at") or "")
         summary_path.write_text(json.dumps(rows, indent=2), encoding="utf-8")
         write_index_md(rows, out)
         written.extend([index_path, summary_path])
@@ -634,8 +862,7 @@ def cmd_span(args: argparse.Namespace) -> int:
     spans = trace_spans_of(trace)
     match = None
     for s in spans:
-        sid = s.get("span_id") or s.get("spanId")
-        if sid == args.span_id:
+        if span_id_of(s) == args.span_id:
             match = s
             break
     if match is None:
@@ -674,6 +901,13 @@ def build_parser() -> argparse.ArgumentParser:
     spn.add_argument("--out")
     spn.add_argument("--no-cache", action="store_true")
     spn.set_defaults(func=cmd_span)
+
+    mp = sub.add_parser("messages", help="extract the pydantic-ai transcript from spanOutputs")
+    mp.add_argument("trace_id")
+    mp.add_argument("--env", help=env_help)
+    mp.add_argument("--out")
+    mp.add_argument("--no-cache", action="store_true")
+    mp.set_defaults(func=cmd_messages)
 
     return p
 
