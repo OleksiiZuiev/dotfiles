@@ -1,7 +1,7 @@
 ---
 description: Work on a Linear ticket in an isolated worktree, then fold the commit back onto the feature branch — lets multiple sessions share one branch without colliding. Flags: +auto-plan
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskUpdate, TaskList, AskUserQuestion, EnterPlanMode, TodoWrite
-argument-hint: [+auto-plan] [extra context]
+argument-hint: [+auto-plan] [+fold-timeout=<Nm>] [extra context]
 ---
 
 You are helping the user work on a Linear ticket. This is the **v2** of `/ds:work-on`:
@@ -269,22 +269,88 @@ This runs in the **current directory** (the feature branch `F`). It cherry-picks
 the *live* feature tip, so if another session committed since this session started, you land
 on top of their commit.
 
+#### Step 5.1: Check Worktree Readiness
+
+Before cherry-picking, verify the primary worktree is in a state that allows it. All checks
+run in the current directory (the feature branch worktree).
+
+**The worktree is ready when ALL of these hold:**
+- No in-progress sequencer operation: `git rev-parse -q --verify CHERRY_PICK_HEAD`,
+  `git rev-parse -q --verify MERGE_HEAD`, and `git rev-parse -q --verify REVERT_HEAD` all
+  fail (refs absent), AND the paths returned by `git rev-parse --git-path rebase-merge`
+  and `git rev-parse --git-path rebase-apply` do not exist on disk.
+- Working tree clean: `git status --porcelain` is empty.
+- No lock: `$(git rev-parse --git-dir)/index.lock` does not exist.
+
+**Decision tree:**
+
+1. **Ready** → proceed directly to Step 5.2.
+
+2. **Sequencer op in progress** (or `index.lock` present) — a concurrent session is
+   mid-operation. **Wait without interfering.** Start a background bounded poll using
+   `run_in_background=true` with an `until`-loop that re-checks readiness every ~10 s and
+   exits once the worktree is ready or the timeout elapses. Tell the user what's blocking
+   (e.g., "Waiting for the feature worktree to finish its in-progress cherry-pick…").
+   Default timeout: **15 minutes**; the `+fold-timeout=<N>m` argument (stripped before
+   processing, same as `+auto-plan`) overrides it. Do NOT abort, `--continue`, or otherwise
+   touch the other session's operation. Do NOT force-remove `index.lock`.
+   - On the background-poll notification: re-check readiness immediately (the gap between
+     wait-clearing and cherry-pick is a new race window), then:
+     - If ready → proceed to Step 5.2.
+     - If timed out → go to the timeout case below.
+
+3. **Working tree dirty with no sequencer op and no lock** — this is not a transient state
+   to outlast. **Stop and report a recovery handle:**
+   ```
+   Fold-back blocked: the primary worktree has uncommitted changes and no in-progress operation.
+   Commit:      {SHA}    (verified, on temp branch)
+   Temp branch: {T}
+   Worktree:    {WT}
+   Commit or stash the uncommitted changes on {F}, then cherry-pick {SHA} onto {F} manually,
+   or re-run /ds:work-on2 once the working tree is clean.
+   ```
+   Do NOT remove the throwaway worktree. Skip Steps 6–8; go to Step 9 and report the
+   partial outcome.
+
+4. **Timeout** — stop cleanly. Do NOT remove the throwaway worktree. Skip Steps 6–8; go to
+   Step 9 and report a recovery handle:
+   ```
+   Fold-back timed out waiting for the feature worktree to free up.
+   Commit:       {SHA}            (verified, on temp branch)
+   Temp branch:  {T}
+   Worktree:     {WT}
+   The primary worktree is busy (concurrent {cherry-pick|merge|rebase} in progress).
+   Re-run /ds:work-on2 (it will resume the fold-back) once it's clear, or cherry-pick
+   {SHA} onto {F} manually.
+   ```
+
+#### Step 5.2: Cherry-Pick
+
 1. Cherry-pick: `git cherry-pick "{SHA}"`.
-   - **Index-lock contention** (output mentions `index.lock` / "another git process"): another session is folding back right now. Wait briefly and retry — up to ~5 attempts. Do not force-remove the lock.
+   - **Index-lock contention** (output mentions `index.lock` / "another git process"): a
+     session started folding back in the narrow window since the readiness check. Retry the
+     readiness check (up to ~5 attempts, ~10 s apart) before retrying the cherry-pick. Do
+     not force-remove the lock.
    - **Clean success**: the commit is now on `F`. Continue to Step 6.
    - **Conflict**: resolve it **inline**:
      - List conflicts: `git diff --name-only --diff-filter=U`.
-     - For each, read the file, resolve the conflict markers honoring the intent of BOTH sides (your change and whatever the other session landed), then `git add <file>`.
+     - For each, read the file, resolve the conflict markers honoring the intent of BOTH
+       sides (your change and whatever the other session landed), then `git add <file>`.
      - Finalize: `git cherry-pick --continue` (use a HEREDOC message if an editor would open).
-   - **Unresolvable conflict**: run `git cherry-pick --abort`, then **STOP without removing the worktree**. Report a recovery handle so the user can finish manually:
+   - **Unresolvable conflict**: run `git cherry-pick --abort`, then **STOP without removing
+     the worktree**. Report a recovery handle so the user can finish manually:
      ```
      Fold-back blocked by an unresolvable conflict.
-     Commit:   {SHA}
+     Commit:      {SHA}
      Temp branch: {T}
      Worktree:    {WT}
      Resolve manually (e.g. `git cherry-pick {SHA}` and fix), or rebase {T} onto {F}.
      ```
      Skip Steps 6–8; go to Step 9 and report the partial outcome.
+
+> **Note:** Step 8 runs a `fetch → rebase → push` in this same primary worktree and has the
+> same concurrency exposure to an in-progress sequencer operation. Consider applying the
+> readiness check from Step 5.1 there as well if needed.
 
 Mark the todo `completed` once the commit is on `F`.
 

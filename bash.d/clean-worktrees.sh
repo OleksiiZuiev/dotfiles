@@ -16,8 +16,11 @@ Flow:
   1. List worktrees (skipping the main one)
   2. Check GitHub for a merged PR on each worktree's branch
   3. Show merged vs active worktrees
-  4. Prompt for confirmation, then remove the merged worktrees
-  5. Offer to delete each merged remote branch, then prune stale references
+  4. Ask once to remove the merged worktrees, then once whether to also
+     delete their remote branches
+  5. Per worktree: remove it (long-path aware, forcing as a fallback) and
+     delete its local branch; optionally delete its remote branch
+  6. Prune stale worktree references
 
 Options:
   -h, --help    Show this help and exit
@@ -109,14 +112,24 @@ EOF
     done
     echo ""
 
-    # Prompt for confirmation
-    read -p "Remove ${#merged_paths[@]} merged worktree(s)? (y/n) " confirm
-    if [[ "$confirm" != "y" ]]; then
+    # Confirm once for the whole set, then ask once about remote branches so the
+    # removal loop runs unattended.
+    read -r -p "Remove ${#merged_paths[@]} merged worktree(s)? (y/n) " confirm
+    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
         echo "Aborted."
         return 0
     fi
 
+    local delete_remotes=false
+    read -r -p "Also delete their remote branches on origin? (y/n) " confirm_remotes
+    if [[ "$confirm_remotes" == "y" || "$confirm_remotes" == "Y" ]]; then
+        delete_remotes=true
+    fi
+
     echo ""
+
+    local removed=0
+    local failed=0
 
     # Remove worktrees
     for i in "${!merged_paths[@]}"; do
@@ -124,18 +137,30 @@ EOF
         local branch="${merged_branches[$i]}"
 
         echo "Removing worktree: $branch"
-        if ! git worktree remove "$path"; then
-            echo "  Warning: Failed to remove worktree at $path (try --force manually)"
+
+        # core.longpaths lets Windows git delete deeply nested files that would
+        # otherwise fail with "Filename too long"; --force is the fallback for a
+        # worktree git won't remove cleanly (e.g. uncommitted local changes).
+        if ! git -c core.longpaths=true worktree remove "$path" 2>/dev/null \
+            && ! git -c core.longpaths=true worktree remove --force "$path"; then
+            echo "  Warning: Failed to remove worktree at $path (remove it manually)"
+            failed=$((failed + 1))
             continue
         fi
+        removed=$((removed + 1))
 
-        # Offer to delete remote branch
-        read -p "  Delete remote branch 'origin/$branch'? (y/n) " delete_remote
-        if [[ "$delete_remote" == "y" ]]; then
+        # The worktree is gone; drop its local branch. Force-delete (-D) because
+        # squash/rebase merges leave the branch looking unmerged to git even
+        # though its PR merged.
+        if git branch -D "$branch" > /dev/null 2>&1; then
+            echo "  Deleted local branch."
+        fi
+
+        if $delete_remotes; then
             if git push origin --delete "$branch" 2>/dev/null; then
-                echo "  Deleted remote branch: $branch"
+                echo "  Deleted remote branch."
             else
-                echo "  Remote branch already deleted or not found."
+                echo "  Remote branch already gone."
             fi
         fi
     done
@@ -143,5 +168,8 @@ EOF
     # Clean up stale worktree references
     git worktree prune
     echo ""
-    echo "Done. Cleaned up ${#merged_paths[@]} worktree(s)."
+    echo "Done. Removed $removed of ${#merged_paths[@]} merged worktree(s)."
+    if [[ $failed -gt 0 ]]; then
+        echo "$failed could not be removed — see warnings above."
+    fi
 }
