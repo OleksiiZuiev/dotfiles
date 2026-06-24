@@ -9,7 +9,7 @@ You are answering question(s) about a pull request — your own or a teammate's 
 The command has two modes, auto-detected from `$ARGUMENTS`:
 
 - **Prompt mode** — `$ARGUMENTS` is a free-text question. One sub-agent answers it, response printed to chat. No file writes.
-- **File mode** — `$ARGUMENTS` is a path to a markdown file that contains bulleted questions/tasks. The command plans groupings, fans out one parallel sub-agent per group, aggregates, and **appends the analysis back into the same file** below a `---` separator. The original bullets are preserved untouched.
+- **File mode** — `$ARGUMENTS` is a path to a markdown file that contains bulleted questions/tasks. The command plans groupings, fans out one parallel sub-agent per group, aggregates, and **appends the analysis back into the same file** below a `---` separator. The original bullets are preserved untouched. Alongside the narrative answers it also emits **shared-format item blocks** for the actionable items (a hybrid output), so `/ds:polish <file>` can triage and apply them. The format is owned by `/ds:polish`.
 
 **Distinction from siblings:**
 - `/ds:pre-review` — cosmetic style/naming/convention pass on local diff. Cosmetic.
@@ -202,6 +202,22 @@ Collect each sub-agent's returned markdown section. Assemble in this exact order
 2. Cross-cutting section(s), if any.
 3. Numbered sections in **original bullet order** (sort by lowest bullet index per section).
 4. `## Summary` — 4–8-line synthesis **you write yourself** (sub-agents didn't see each other's output, so only the main agent can synthesise). When the analysis surfaced actionable items, group them under inline labels: **Blockers**, **Strong**, **Worth doing**, **Optional**. When the analysis is purely explanatory (no recommendations), make this section a short bulleted recap instead.
+5. **Action items** (the hybrid emission — this is what `/ds:polish` consumes; the narrative above stays as-is). After the Summary, emit a `## Action items — /ds:analyze-pr — <YYYY-MM-DD>` section with one shared-format item block per *actionable* item from the Summary. Emit an item only when there's something to potentially do or a question worth tracking — skip purely informational answers. Mapping:
+   - **Blockers / Strong** → `category = confident`
+   - **Worth doing / Optional** → `category = smell`
+   - A question you answered that the user may want to track or that implies a decision → `category = question` (`Status: answered` when no action is needed; `Status: open` when it implies one)
+   - **Ids:** scan the current `INPUT_FILE` for existing `### F<n> · ` headings and start `next = max(n)+1` (so blocks added by `/ds:review` or a prior analyze-pr run aren't clobbered; `F1` if none).
+   - Item block shape (format owned by `/ds:polish`):
+     ```
+     ### F<next++> · analyze-pr · <category>
+     - **Status:** open
+     - **Item:** <one-line summary of the action / question>
+     - **Location:** `path:line`            (if the analysis pinned one; else omit)
+     - **Detail:** <1–2 lines: the why, or the answer for a question>
+     - **Proposed change:** <concrete action, or (needs unpacking) for a smell>
+     - **Resolution:** —
+     ```
+   - If there are no actionable items, omit the `## Action items` section entirely.
 
 Mark `completed`.
 
@@ -242,4 +258,5 @@ Mark `completed`. Done.
 - **Render results as text:** sub-agent responses must be printed by the main agent as text — users only see your text output, not Task return values.
 - **Parallel sub-agents:** in MODE=file, all section Task calls go in a single tool-use turn so they run concurrently. Do not chain them.
 - **Sub-agents are read-only:** none of the analysis sub-agents has `Edit`/`Write`. The main agent does all file writes in B.5.
-- **Don't be `/ds:review`.** This command does not categorise findings, draft PR comments, or audit. It answers the questions the user brought.
+- **Hybrid output (file mode).** Below the `---`, the narrative answers stay the primary output; alongside them a `## Action items — /ds:analyze-pr — DATE` section emits shared-format item blocks for the *actionable* subset (`confident`/`smell`/`question`), so `/ds:polish <file>` can triage and apply them. The narrative is preserved in full — the items are an addition, not a replacement. Ids continue from the file's max `F<n>` so review + analyze-pr blocks coexist.
+- **Still not `/ds:review`.** This command answers the questions the user brought; it does not run the six-dimension audit or draft PR comments. The item blocks it emits are just its actionable conclusions rendered in the shared format.

@@ -1,7 +1,7 @@
 ---
 description: Multi-dimensional review of the current PR — surfaces confident findings and smells across simplicity, performance, consistency, readability, extraction, test coverage.
-allowed-tools: Bash(git *), Bash(gh *), Read, Grep, Glob, Task, TodoWrite, mcp__linear-server__get_issue
-argument-hint: [<pr-number>]
+allowed-tools: Bash(git *), Bash(gh *), Read, Write, Edit, Grep, Glob, Task, TodoWrite, mcp__linear-server__get_issue
+argument-hint: [<pr-number>] [--to <file>]
 ---
 
 You are performing a substantive review of a pull request. The goal is to absorb the mechanical reviewer effort on bigger PRs by surfacing the issues a thoughtful human reviewer would actually raise across six dimensions: **simplicity, performance, codebase consistency, readability, extraction/duplication, and test coverage**.
@@ -22,17 +22,18 @@ The command does not apply changes, commit, or push. It surfaces findings in cha
 
 ### Step 0: Detect PR & Gather Inputs
 
+0. **Parse arguments.** `$ARGUMENTS` may contain an optional PR number and an optional `--to <file>` flag, in any order:
+   - `OUT_FILE` = the token following `--to` (the findings file to write findings into), else empty. When set, Step 3.6 appends the findings to it as shared-format item blocks.
+   - `PR_ARG` = the first bare token that is **not** `--to` and not its value, else empty.
+
 1. **Resolve the PR number.**
-   - {{#if $1}}
-   Use PR **#{{$1}}**.
-   {{else}}
-   Auto-detect from the current branch:
+   - If `PR_ARG` is set, use PR **#`PR_ARG`**.
+   - Otherwise auto-detect from the current branch:
    ```bash
    gh pr view --json number --jq '.number'
    ```
    - **If failed** (no PR for current branch): inform the user and stop:
      > No PR found for branch `<branch-name>`. Create one first with `/ds:create-pr` (or `gh pr create`), or pass the number directly: `/ds:review <pr-number>`.
-   {{/if}}
 
 2. **Extract ticket ID from branch name** (same pattern as `/ds:work-on`):
    - Run `git branch --show-current`
@@ -88,6 +89,8 @@ Before doing anything else, use TodoWrite to create the per-mode checklist. The 
 2. `📋 Findings report`
 3. `🗒️ Print draft PR comments (confident only)`
 4. `✅ Final summary`
+
+**If `OUT_FILE` is set** (either mode): insert `📄 Write findings to <OUT_FILE>` immediately after `📋 Findings report`.
 
 ### Step 1: Load Shared Context
 
@@ -301,10 +304,47 @@ Mark `📋 Findings report` as `in_progress`.
 3. **Zero-findings short-circuit:** if total findings == 0, print:
    > **Review passed — no substantive findings.**
 
+   - If `OUT_FILE` is set, also print `> OUT_FILE: nothing written (no findings).` — no item blocks are added (Step 3.6 is skipped).
    - **If `MODE=own`:** proceed to Step 8 (ticket context gets a "Review passed" session entry), then Step 9.
    - **If `MODE=draft-comments`:** skip directly to Step 9 (final summary).
 
 Mark `📋 Findings report` as `completed`.
+
+### Step 3.6: Write Findings to File (`OUT_FILE` set only)
+
+Runs in **both** modes, before the mode branch. If `OUT_FILE` is empty, skip this step. (On the zero-findings short-circuit above you won't reach this step — nothing is written.)
+
+Mark `📄 Write findings to <OUT_FILE>` as `in_progress`.
+
+Append the findings to `OUT_FILE` as shared-format item blocks so `/ds:polish <OUT_FILE>` can act on them later. The format is owned by `/ds:polish` (see that command for the full spec); the **writer slice** is:
+
+1. **File shape:**
+   - If `OUT_FILE` does not exist, create it with a skeleton — title, an empty Inbox, then the `---` that separates Inbox from thread:
+     ```
+     # Findings — <PR_TITLE> (PR #<N>)
+     <!-- shared findings file · written by /ds:review & /ds:analyze-pr · triaged by /ds:polish -->
+
+     ## Inbox
+     <!-- your questions/notes; only this zone is read by /ds:analyze-pr -->
+
+     ---
+     ```
+   - If it exists, append below its existing content (the thread zone lives below the first `---`).
+2. **Next id:** scan the file for `### F<n> · ` headings; `next = max(n) + 1` (start at `F1` if none). Continue the same counter across findings so review + analyze-pr never collide.
+3. **One item block per finding**, under a `## /ds:review — <YYYY-MM-DD>` group heading. Map each finding's existing fields:
+   - heading → `### F<next++> · review:<dimension> · <category>` — `<dimension>` ∈ simplicity | performance | consistency | readability | extraction | test-coverage; `<category>` = the finding's `confident`/`smell`
+   - `- **Status:** open`
+   - `- **Item:**` ← the finding's one-line summary
+   - `- **Location:**` ← the finding's `file:line` (omit the line if absent)
+   - `- **Detail:**` ← the finding's `Why`
+   - `- **Counter-argument:**` ← the finding's `Counter-argument`
+   - `- **Proposed change:**` ← the finding's `Proposed change` (keep `(needs unpacking)` for smells)
+   - `- **Resolution:** —`
+   - then the finding's `Code context:` fenced block verbatim
+4. **Write:** `Read` the current file, append the new group (plus the skeleton if newly created), `Write` it back — preserving existing content verbatim (Read+Write, not Edit; robust on multi-line markdown).
+5. Print: `> Wrote <T> findings to <OUT_FILE> (ids F<a>–F<b>). Run /ds:polish <OUT_FILE> to act on them.`
+
+Mark `📄 Write findings to <OUT_FILE>` as `completed`.
 
 ### Mode branch
 
@@ -404,6 +444,7 @@ Mark `✅ Final summary` as `completed`.
 
 - **Mode-aware flow**: the command auto-detects `own` vs `draft-comments` mode from PR author at Step 0.4. Both modes print the full categorized report; `own` additionally writes a ticket-context audit entry, `draft-comments` additionally prints copy-paste-ready draft comments for confident findings only.
 - **No apply / commit / push**: this command surfaces findings only. It does not edit files, commit, or push. The user reads the report and acts on individual findings in follow-up chat as needed.
+- **Findings-file output (`--to <file>`)**: when `--to <file>` is passed, Step 3.6 *additionally* appends the findings to that file as shared-format item blocks (under a dated `## /ds:review — DATE` group), so `/ds:polish <file>` can triage and apply them later. Purely additive — the chat report, ticket-context audit, and draft-comments output are unchanged, and without `--to` the command behaves exactly as before. The format is owned by `/ds:polish`.
 - **Render findings as text**: the report is printed as a regular text message. There is no selection prompt — the report is the deliverable.
 - **Sub-agents are read-only**: analysis sub-agents have no `Edit`/`Write` in their allowed tools. The main agent never edits the working tree.
 - **Fewer high-signal findings**: every sub-agent prompt instructs to skip borderline issues. The mandatory `Counter-argument` field is part of the bar — if writing it talks the reviewer out of the finding, the finding self-prunes.
