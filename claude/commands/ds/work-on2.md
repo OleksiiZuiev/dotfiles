@@ -358,11 +358,16 @@ Mark the todo `completed` once the commit is on `F`.
 
 Mark `🧹 Remove throwaway worktree` as `in_progress` via your tracking tool. Only run this after a successful fold-back.
 
-1. Remove the worktree (long-path aware, with a force fallback):
-   - `git -c core.longpaths=true worktree remove "{WT}"`
-   - if that fails: `git -c core.longpaths=true worktree remove --force "{WT}"`
-2. Delete the temp branch: `git branch -D "{T}"`.
-3. Prune stale references: `git worktree prune`.
+1. Remove the worktree, untracked deps and all (long-path aware). Go straight to
+   `--force` — a throwaway worktree has installed `node_modules`/build output, and
+   the non-`--force` form fails "Directory not empty" yet still deregisters the
+   worktree, leaving the `--force` retry to fail "not a working tree":
+   - `git -c core.longpaths=true worktree remove --force "{WT}"`
+2. Fallback only if the directory still exists (rare: a locked file or an over-limit
+   path): delete it directly; the prune in step 4 drops the stale registration:
+   - `rm -rf "{WT}"`
+3. Delete the temp branch: `git branch -D "{T}"`.
+4. Prune stale references: `git worktree prune`.
 
 Mark the todo `completed`.
 
