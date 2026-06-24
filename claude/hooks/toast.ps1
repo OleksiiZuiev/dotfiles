@@ -20,6 +20,20 @@ try {
     $payload = $null
     if ($raw) { try { $payload = $raw | ConvertFrom-Json } catch { } }
 
+    # Only the main agent gets a toast. Sub-agent (Task tool) hook payloads carry
+    # an `agent_id`; main-agent events do not. Without this, fan-out commands that
+    # spawn many parallel sub-agents (e.g. /ds:review) flood the screen with toasts.
+    $agentId = if ($payload) { $payload.agent_id } else { $null }
+
+    # Opt-in payload trace for confirming what actually fires (off by default).
+    if ($env:CLAUDE_TOAST_DEBUG) {
+        $stamp = (Get-Date).ToString('s')
+        Add-Content -LiteralPath "$env:USERPROFILE\.claude\hooks\toast-debug.log" `
+            -Value "$stamp`tEvent=$EventName`tagent_id=$agentId`traw=$raw" -Encoding utf8
+    }
+
+    if ($agentId) { exit 0 }
+
     $project = if ($payload -and $payload.cwd) { Split-Path $payload.cwd -Leaf } else { 'Claude Code' }
 
     $body = if ($payload -and $payload.message) {
