@@ -136,21 +136,25 @@ Regenerate: `bash ~/dotfiles/claude/scripts/update-repo-map.sh`
 - **Environment matrix** (DataSnipper agents-and-tools). Source: infra
   `agentserver-<env>.tfvars` key `mlflow_tracking_uri`.
 
-  | env alias | tracking URI | experiment id |
+  | env alias | tracking URI | notes |
   |---|---|---|
-  | `dev` / `devweu` | `https://mlflow-devweu.devds.net` | `9` |
-  | `prd` / `prod` / `prdweu` | `https://mlflow-prdweu.devds.net` | `1` (`agent-server`) |
-  | `prdeus` | `https://mlflow-prdeus.devds.net` | `1` (`agent-server`; older MLflow) |
-  | `stg` / `stgweu`, `stgeus` | `https://mlflow-<env>.devds.net` | unverified — pass `--experiment` |
-  | `deveus` | `https://mlflow-deveus.devds.net` | unreachable — TLS hostname mismatch |
+  | `dev` / `devweu` | `https://mlflow-devweu.devds.net` | auto-swept |
+  | `prd` / `prod` / `prdweu` | `https://mlflow-prdweu.devds.net` | auto-swept; default for plain `prd`/`prod` |
+  | `prdeus` | `https://mlflow-prdeus.devds.net` | auto-swept; older MLflow (see per-trace note) |
+  | `stg` / `stgweu`, `stgeus` | `https://mlflow-<env>.devds.net` | reachable via explicit `--env`; not auto-swept |
+  | `deveus` | `https://mlflow-deveus.devds.net` | unreachable — TLS hostname mismatch; skip it |
 
-  Plain `prod`/`prd` means `prdweu` (weu). `prdeus` is a separate, reachable US
-  prod region on an **older MLflow** (see the per-trace note below) — verified
-  experiment `1`. `deveus` is the TLS-broken host (its cert fails hostname
-  validation) — skip it. With no `--env`, `session` auto-sweeps the known-id envs
-  (`devweu`→`prdweu`→`prdeus`) and prints which matched. To find an unverified
-  experiment id: `POST {uri}/api/2.0/mlflow/experiments/search {"max_results":1000}`
-  → the one named `agent-server`.
+  **Experiment ids are resolved at runtime, not hardcoded.** For `session`,
+  `mlflow_dump.py` lists each env's experiments and searches those named `agent-server*`
+  (e.g. `agent-server`, `agent-server-local-dev`) first, then sweeps the rest — so a
+  renamed/renumbered experiment is still found. (This replaced a stale baked-in map:
+  `devweu` was pinned to experiment `9`, but `9` is now a `disclosure-accuracy` experiment
+  and the agent-server traces had moved to `1` (`agent-server-local-dev`), so a valid UUID
+  falsely read as "no traces matched".) Pin one explicitly with `--experiment <id>` (one
+  env, no sweep). With no `--env`, `session` auto-sweeps `devweu`→`prdweu`→`prdeus` and
+  prints which matched; a "no traces matched" message now separates *reachable, 0 matches*
+  from *couldn't reach* (the latter usually the VPN). To list an env's experiments by hand:
+  `POST {uri}/api/2.0/mlflow/experiments/search {"max_results":1000}`.
 - Chat-session UUID lives in trace `request_metadata` under `mlflow.trace.session`.
   Search filter: `metadata.\`mlflow.trace.session\` = '<uuid>'` (NOT `tags.`).
 - For full per-trace span data, use `GET /api/3.0/mlflow/traces/get?trace_id=…` on

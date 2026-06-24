@@ -22,11 +22,11 @@ Classify the identifier:
 - Starts with `http` → **URL**: extract the session UUID from the `#/experiments/{exp}/chat-sessions/{uuid}` fragment, and infer the env from the hostname (`mlflow-<env>.devds.net`). An explicit env token still overrides the inferred one.
 - Otherwise → **session UUID** → use the `session` subcommand.
 
-Environment notes (you don't resolve URIs/experiment ids yourself — `mlflow_dump.py --env` does):
-- Known experiment ids: `dev`/`devweu` = `9`; `prd`/`prdweu` = `1`; `prdeus` = `1` (all named `agent-server`).
+Environment notes (you don't resolve URIs/experiments yourself — `mlflow_dump.py --env` does):
+- **Experiments are resolved at runtime, not hardcoded.** For `session`, the script lists each env's experiments and searches those named `agent-server*` (incl. `agent-server-local-dev`) first, then sweeps the rest — so a renamed/renumbered experiment is still found. Pin one with `--experiment <id>` only to override.
 - `prdeus` is a real prod region (US) on an **older MLflow** — fully supported (see Step 2). `prdweu` is the default for plain `prd`/`prod`.
 - `deveus` is **unreachable from here** (TLS hostname mismatch on its cert) — skip it.
-- `stgweu`/`stgeus` experiment ids are unverified and are **not** auto-swept; target them explicitly with `--env <name> --experiment <id>`.
+- `stgweu`/`stgeus` are **not** auto-swept (kept out for speed), but are reachable via an explicit `--env stgweu|stgeus` — experiments resolve dynamically there too, so `--experiment` is optional.
 
 ## Step 2 — Dump
 
@@ -40,8 +40,8 @@ python ~/.claude/scripts/mlflow_dump.py trace <trace_id> --env <env>
 
 The script prints one absolute path per line on stdout. **Do not** read every file eagerly.
 
-- **Which env matched:** on a successful sweep the script prints `matched env: <env> (experiment <id>)` to stderr — note it and use that same `--env` for any follow-up `trace`/`span`/`messages` calls.
-- **No match:** if it prints `no traces matched … in any swept env`, the session isn't in the auto-swept envs. For staging/eus, retry with `--env <name> --experiment <id>` (the experiment named `agent-server`). Otherwise re-check the id with the user.
+- **Which env matched:** on a successful sweep the script prints `matched env: <env>` to stderr — note it and use that same `--env` for any follow-up `trace`/`span`/`messages` calls.
+- **No match:** the `no traces matched …` message distinguishes envs that were **reachable, 0 matches** (the session UUID is likely wrong, or it lives in a non-auto-swept env — retry with `--env stgweu|stgeus`) from envs it **could not reach** (usually the VPN is off — see Connectivity). Pin a specific experiment with `--experiment <id>` only to override the dynamic resolution.
 - **Connectivity:** if the script prints `Cannot resolve '<host>'. … connect the corporate VPN`, relay that to the user and stop — the VPN is off (or a transient DNS blip; one retry is reasonable).
 - **Legacy server (prdeus) is handled for you.** prdeus runs an older MLflow: the `api/3.0` per-trace endpoint 404s, so the script transparently falls back to the `ajax-api` get-trace-artifact endpoint. You no longer hand-hit it. Those spans are a **UI subset** (no separate TOOL/LLM spans) — see Step 3.5.
 - **Transcript projection:** `python ~/.claude/scripts/mlflow_dump.py messages <trace_id> --env <env>` writes `<trace_id>.messages.txt`, the conversation reconstructed from `spanOutputs` — used in Step 3.5 when the span tree is sparse.

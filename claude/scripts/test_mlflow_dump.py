@@ -4,11 +4,13 @@
 Run: python claude/scripts/test_mlflow_dump.py
 """
 
+import argparse
 import json
 import socket
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -16,47 +18,33 @@ import mlflow_dump as m
 
 
 class ResolveEnvTests(unittest.TestCase):
-    def test_aliases_map_to_canonical_uri_and_experiment(self):
-        self.assertEqual(
-            m.resolve_env("dev"), ("https://mlflow-devweu.devds.net", "9")
-        )
-        self.assertEqual(
-            m.resolve_env("prd"), ("https://mlflow-prdweu.devds.net", "1")
-        )
-        self.assertEqual(
-            m.resolve_env("prod"), ("https://mlflow-prdweu.devds.net", "1")
-        )
+    def test_aliases_map_to_canonical_uri(self):
+        self.assertEqual(m.resolve_env("dev"), "https://mlflow-devweu.devds.net")
+        self.assertEqual(m.resolve_env("prd"), "https://mlflow-prdweu.devds.net")
+        self.assertEqual(m.resolve_env("prod"), "https://mlflow-prdweu.devds.net")
 
-    def test_staging_alias_has_unknown_experiment(self):
-        uri, exp = m.resolve_env("stg")
-        self.assertEqual(uri, "https://mlflow-stgweu.devds.net")
-        self.assertIsNone(exp)
+    def test_staging_alias_resolves_uri(self):
+        self.assertEqual(m.resolve_env("stg"), "https://mlflow-stgweu.devds.net")
         self.assertEqual(m.resolve_env("staging"), m.resolve_env("stg"))
 
     def test_canonical_names_pass_through(self):
-        self.assertEqual(
-            m.resolve_env("devweu"), ("https://mlflow-devweu.devds.net", "9")
-        )
-        self.assertEqual(
-            m.resolve_env("prdweu"), ("https://mlflow-prdweu.devds.net", "1")
-        )
+        self.assertEqual(m.resolve_env("devweu"), "https://mlflow-devweu.devds.net")
+        self.assertEqual(m.resolve_env("prdweu"), "https://mlflow-prdweu.devds.net")
 
     def test_case_insensitive_and_trimmed(self):
         self.assertEqual(m.resolve_env("  PRD  "), m.resolve_env("prd"))
 
     def test_uri_has_no_trailing_slash(self):
         for env in ("devweu", "deveus", "stgweu", "stgeus", "prdweu", "prdeus"):
-            uri, _ = m.resolve_env(env)
+            uri = m.resolve_env(env)
             self.assertFalse(uri.endswith("/"), env)
 
     def test_unknown_env_raises_value_error(self):
         with self.assertRaises(ValueError):
             m.resolve_env("qa")
 
-    def test_prdeus_experiment_is_one(self):
-        self.assertEqual(
-            m.resolve_env("prdeus"), ("https://mlflow-prdeus.devds.net", "1")
-        )
+    def test_prdeus_resolves_uri(self):
+        self.assertEqual(m.resolve_env("prdeus"), "https://mlflow-prdeus.devds.net")
 
 
 class SessionSweepOrderTests(unittest.TestCase):
@@ -72,10 +60,84 @@ class SessionSweepOrderTests(unittest.TestCase):
         self.assertEqual(m.session_sweep_order("prd"), ["prdweu", "devweu", "prdeus"])
         self.assertEqual(m.session_sweep_order("prdeus"), ["prdeus", "devweu", "prdweu"])
 
-    def test_preferred_unknown_id_env_still_tried_first(self):
-        # An explicitly-requested env with no known experiment id is searched first
-        # anyway (the caller may have pinned --experiment); the rest follow.
+    def test_preferred_env_still_tried_first(self):
+        # An explicitly-requested env leads the order even when it isn't an auto-swept
+        # region (the caller may have pinned --experiment, or want dynamic resolution there).
         self.assertEqual(m.session_sweep_order("stgweu")[0], "stgweu")
+
+
+class ExperimentSearchOrderTests(unittest.TestCase):
+    def test_agent_server_experiments_first_default_dropped(self):
+        exps = [
+            {"experiment_id": "0", "name": "Default"},
+            {"experiment_id": "9", "name": "disclosure-accuracy-newLLMEvidenceFilter"},
+            {"experiment_id": "1", "name": "agent-server-local-dev"},
+            {"experiment_id": "5", "name": "agent-server"},
+        ]
+        # agent-server* first (input order preserved), then non-Default others; Default dropped.
+        self.assertEqual(m.experiment_search_order(exps), ["1", "5", "9"])
+
+    def test_case_insensitive_prefix(self):
+        exps = [{"experiment_id": "3", "name": "Agent-Server-Staging"}]
+        self.assertEqual(m.experiment_search_order(exps), ["3"])
+
+    def test_tolerates_id_key_and_skips_blank(self):
+        exps = [
+            {"id": "7", "name": "agent-server"},             # tolerate the `id` key
+            {"name": "no-id-here"},                          # skipped: no id
+            {"experiment_id": "", "name": "agent-server"},   # skipped: blank id
+        ]
+        self.assertEqual(m.experiment_search_order(exps), ["7"])
+
+
+class SearchSessionSweepTests(unittest.TestCase):
+    """The core fix: a session is found by resolving experiments dynamically, even when the
+    old hardcoded id pointed at the wrong (now-renamed) experiment."""
+
+    def _args(self, env=None, experiment=None):
+        return argparse.Namespace(session_uuid="sess-uuid", env=env, experiment=experiment)
+
+    def test_finds_session_in_non_agent_id_experiment(self):
+        # The bug: agent-server traces live in experiment 1 (agent-server-local-dev); the old
+        # hardcoded devweu id (9) is now a disclosure-accuracy experiment with 0 matches.
+        experiments = [
+            {"experiment_id": "0", "name": "Default"},
+            {"experiment_id": "9", "name": "disclosure-accuracy"},
+            {"experiment_id": "1", "name": "agent-server-local-dev"},
+        ]
+
+        def fake_search(exp, uuid):
+            return [{"trace_info": {"trace_id": "tr-x"}}] if exp == "1" else []
+
+        with mock.patch.object(m, "list_experiments", return_value=experiments), \
+             mock.patch.object(m, "search_session_traces", side_effect=fake_search):
+            rows = m.search_session_with_sweep(self._args(env="devweu"))
+        self.assertIsNotNone(rows)
+        self.assertEqual(rows[0]["trace_id"], "tr-x")
+
+    def test_unreachable_env_does_not_abort_sweep(self):
+        experiments = [{"experiment_id": "5", "name": "agent-server"}]
+        calls = {"n": 0}
+
+        def fake_list():
+            calls["n"] += 1
+            if calls["n"] == 1:  # first env (devweu): flaky/unreachable, e.g. prdeus SSL EOF
+                raise m.ConnectionFailure("[SSL: UNEXPECTED_EOF_WHILE_READING]")
+            return experiments
+
+        with mock.patch.object(m, "list_experiments", side_effect=fake_list), \
+             mock.patch.object(m, "search_session_traces",
+                               return_value=[{"trace_info": {"trace_id": "tr-y"}}]):
+            rows = m.search_session_with_sweep(self._args())
+        self.assertIsNotNone(rows)
+        self.assertEqual(rows[0]["trace_id"], "tr-y")
+
+    def test_all_reachable_empty_returns_none(self):
+        experiments = [{"experiment_id": "5", "name": "agent-server"}]
+        with mock.patch.object(m, "list_experiments", return_value=experiments), \
+             mock.patch.object(m, "search_session_traces", return_value=[]):
+            rows = m.search_session_with_sweep(self._args())
+        self.assertIsNone(rows)
 
 
 class SpanIdOfTests(unittest.TestCase):
@@ -201,6 +263,21 @@ class ExtractMessagesTests(unittest.TestCase):
 
     def test_no_messages_returns_empty(self):
         self.assertEqual(m.extract_messages([{"attributes": {}}]), [])
+
+    def test_falls_back_to_span_inputs(self):
+        # Sub-agent traces sometimes carry the message list on spanInputs, not spanOutputs.
+        spans = [{"attributes": {"mlflow.spanInputs": json.dumps({"messages": _MSGS})}}]
+        self.assertEqual(m.extract_messages(spans), _MSGS)
+
+    def test_prefers_span_outputs_over_inputs(self):
+        # When both exist, spanOutputs (the full history) wins — inputs is only a fallback.
+        spans = [{
+            "attributes": {
+                "mlflow.spanOutputs": json.dumps(_MSGS),
+                "mlflow.spanInputs": json.dumps(_MSGS[:1]),
+            }
+        }]
+        self.assertEqual(m.extract_messages(spans), _MSGS)
 
 
 class LooksLikeTraceIdTests(unittest.TestCase):

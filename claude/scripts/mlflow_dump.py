@@ -14,10 +14,12 @@ Four subcommands:
 
 Environment:
   --env dev|stg|prd (or devweu|deveus|stgweu|stgeus|prdweu|prdeus) resolves the
-  tracking URI and, for `session`, the experiment id. --env overrides
-  MLFLOW_TRACKING_URI. When --env is omitted (or a session isn't found in the
-  given env), `session` auto-sweeps the envs with known experiment ids
-  (devweu, prdweu, prdeus) and reports which one matched.
+  tracking URI; --env overrides MLFLOW_TRACKING_URI. For `session`, the experiment
+  holding the traces is resolved at runtime (experiments are listed and those named
+  agent-server* are searched first, then the rest), so a renamed/renumbered experiment
+  is still found — no experiment id is hardcoded. When --env is omitted (or a session
+  isn't found in the given env), `session` auto-sweeps devweu, prdweu, and prdeus and
+  reports which one matched.
 
 Legacy servers:
   prdeus runs an older MLflow where api/3.0 per-trace fetch 404s; the helper
@@ -28,7 +30,8 @@ Legacy servers:
 Defaults:
   --out  ~/.cache/mlflow-dump/<session_or_trace_id>/
   MLFLOW_TRACKING_URI env var (default https://mlflow-devweu.devds.net)
-  --experiment   resolved from --env; omit both to auto-sweep (session only)
+  --experiment   optional manual override pinning one experiment id (one env, no
+                 sweep); omit it to resolve experiments dynamically
 
 Stdlib only — no mlflow, no requests. Re-runs are cached unless --no-cache.
 Every file written or hit-from-cache is printed (absolute path, one per line)
@@ -59,20 +62,27 @@ HTTP_TIMEOUT_SECONDS = 60
 SYSTEM_PROMPT_MAX = 500
 MESSAGE_CONTENT_MAX = 4000
 
-# alias -> (tracking URI, experiment id or None when not yet verified).
-# Source: agents-and-tools infrastructure agentserver-<env>.tfvars (mlflow_tracking_uri).
-ENV_MATRIX: dict[str, tuple[str, str | None]] = {
-    "devweu": ("https://mlflow-devweu.devds.net", "9"),
-    "deveus": ("https://mlflow-deveus.devds.net", None),
-    "stgweu": ("https://mlflow-stgweu.devds.net", None),
-    "stgeus": ("https://mlflow-stgeus.devds.net", None),
-    "prdweu": ("https://mlflow-prdweu.devds.net", "1"),
-    "prdeus": ("https://mlflow-prdeus.devds.net", "1"),
+# alias -> tracking URI. Source: agents-and-tools infrastructure agentserver-<env>.tfvars
+# (mlflow_tracking_uri). Experiment ids are NOT hardcoded — they drift as experiments are
+# renamed/renumbered (which silently broke session lookup once). The `session` sweep resolves
+# them at runtime by name; see experiment_search_order / search_session_in_env.
+ENV_MATRIX: dict[str, str] = {
+    "devweu": "https://mlflow-devweu.devds.net",
+    "deveus": "https://mlflow-deveus.devds.net",
+    "stgweu": "https://mlflow-stgweu.devds.net",
+    "stgeus": "https://mlflow-stgeus.devds.net",
+    "prdweu": "https://mlflow-prdweu.devds.net",
+    "prdeus": "https://mlflow-prdeus.devds.net",
 }
 
-# Canonical envs to auto-sweep for `session` (those with a verified experiment id),
-# in priority order. deveus is excluded (TLS hostname mismatch — unreachable from here);
-# stgweu/stgeus are excluded (experiment id unverified — reach them with --experiment).
+# Experiments whose name starts with this (case-insensitive) hold the agent-server chat
+# traces (e.g. `agent-server`, `agent-server-local-dev`) — searched first, before the sweep.
+AGENT_EXPERIMENT_PREFIX = "agent-server"
+
+# Canonical envs to auto-sweep for `session`, in priority order — the dev/prod regions where
+# chat sessions normally live. deveus is excluded (TLS hostname mismatch — unreachable from
+# here); stg is reachable via an explicit --env (experiments resolve dynamically) but stays
+# out of the default sweep to keep it fast and focused.
 SESSION_SWEEP_ENVS: tuple[str, ...] = ("devweu", "prdweu", "prdeus")
 ENV_ALIASES: dict[str, str] = {
     "dev": "devweu",
@@ -84,19 +94,18 @@ ENV_ALIASES: dict[str, str] = {
 }
 
 
-def resolve_env(env: str) -> tuple[str, str | None]:
-    """Map an env alias or canonical name to its tracking URI + experiment id."""
+def resolve_env(env: str) -> str:
+    """Map an env alias or canonical name to its tracking URI."""
     key = env.strip().lower()
     canonical = ENV_ALIASES.get(key, key)
     if canonical not in ENV_MATRIX:
         known = ", ".join(sorted(ENV_MATRIX))
         aliases = ", ".join(sorted(ENV_ALIASES))
         raise ValueError(f"unknown env '{env}'. Known: {known} (aliases: {aliases})")
-    uri, experiment = ENV_MATRIX[canonical]
-    return uri.rstrip("/"), experiment
+    return ENV_MATRIX[canonical].rstrip("/")
 
 
-def resolve_env_or_exit(env: str) -> tuple[str, str | None]:
+def resolve_env_or_exit(env: str) -> str:
     try:
         return resolve_env(env)
     except ValueError as e:
@@ -110,9 +119,9 @@ def looks_like_trace_id(identifier: str) -> bool:
 def session_sweep_order(preferred: str | None = None) -> list[str]:
     """Canonical envs to try for a session search, most-likely first.
 
-    Defaults to the verified-experiment-id envs (SESSION_SWEEP_ENVS). When an env
-    is explicitly preferred, it leads the list (deduped) — even if its experiment
-    id is unverified, because the caller may have pinned --experiment.
+    Defaults to the dev/prod regions (SESSION_SWEEP_ENVS). When an env is explicitly
+    preferred it leads the list (deduped), so an explicit --env is searched first and
+    the regions follow as fallbacks.
     """
     order = list(SESSION_SWEEP_ENVS)
     if preferred:
@@ -125,7 +134,7 @@ def effective_uri(args: argparse.Namespace) -> str:
     """--env wins over the inherited MLFLOW_TRACKING_URI, which wins over the default."""
     env = getattr(args, "env", None)
     if env:
-        return resolve_env_or_exit(env)[0]
+        return resolve_env_or_exit(env)
     return tracking_uri()
 
 
@@ -154,8 +163,16 @@ class HttpError(Exception):
         self.url = url
 
 
+class ConnectionFailure(Exception):
+    """A transport-level failure (DNS / TLS / timeout) reaching a tracking server.
+
+    Distinct from HttpError so the session sweep can quietly skip an unreachable env
+    (e.g. prdeus's flaky '[SSL: UNEXPECTED_EOF_WHILE_READING]') instead of treating it as a
+    hard failure. main() turns it into a friendly message for the single-env commands."""
+
+
 def _http_get(url: str) -> bytes:
-    """Raw GET. Raises HttpError on an HTTP status error; SystemExit on a DNS/VPN failure."""
+    """Raw GET. Raises HttpError on an HTTP status error; ConnectionFailure on a transport failure."""
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SECONDS) as resp:
@@ -164,7 +181,24 @@ def _http_get(url: str) -> bytes:
         body = e.read().decode("utf-8", errors="replace")[:500]
         raise HttpError(e.code, body, url)
     except urllib.error.URLError as e:
-        raise SystemExit(connection_error_message(url, e.reason))
+        raise ConnectionFailure(connection_error_message(url, e.reason))
+
+
+def _http_post(url: str, payload: dict[str, Any]) -> bytes:
+    """Raw JSON POST. Raises HttpError on an HTTP status error; ConnectionFailure on a transport failure."""
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=data, method="POST",
+        headers={"Accept": "application/json", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SECONDS) as resp:
+            return resp.read()
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")[:500]
+        raise HttpError(e.code, body, url)
+    except urllib.error.URLError as e:
+        raise ConnectionFailure(connection_error_message(url, e.reason))
 
 
 def http_get_json(url: str) -> dict[str, Any]:
@@ -172,6 +206,50 @@ def http_get_json(url: str) -> dict[str, Any]:
         return json.loads(_http_get(url).decode("utf-8"))
     except HttpError as e:
         raise SystemExit(f"HTTP {e.code} on {e.url}\n{e.body}")
+
+
+def list_experiments() -> list[dict[str, Any]]:
+    """All experiments on the current tracking server: [{experiment_id, name}, ...].
+
+    Uses the modern search endpoint, falling back to the pre-2.0 `list` endpoint on the older
+    prdeus server (which lacks /experiments/search)."""
+    url = f"{tracking_uri()}/api/2.0/mlflow/experiments/search"
+    try:
+        raw = _http_post(url, {"max_results": 1000, "view_type": "ALL"})
+    except HttpError as e:
+        if e.code in (400, 404, 405):
+            return _list_experiments_legacy()
+        raise SystemExit(f"HTTP {e.code} on {e.url}\n{e.body}")
+    return json.loads(raw.decode("utf-8")).get("experiments", []) or []
+
+
+def _list_experiments_legacy() -> list[dict[str, Any]]:
+    url = f"{tracking_uri()}/api/2.0/mlflow/experiments/list?view_type=ALL"
+    try:
+        data = json.loads(_http_get(url).decode("utf-8"))
+    except HttpError as e:
+        raise SystemExit(f"HTTP {e.code} on {e.url}\n{e.body}")
+    return data.get("experiments", []) or []
+
+
+def experiment_search_order(experiments: list[dict[str, Any]]) -> list[str]:
+    """Experiment ids to search for a session, most-likely first.
+
+    Experiments named agent-server* (e.g. agent-server, agent-server-local-dev) lead; the rest
+    follow (the 'Default' experiment is dropped as noise). So a renamed/renumbered agent-server
+    experiment is found by name, and an unexpected one is still caught by the full-sweep tail."""
+    agent: list[str] = []
+    other: list[str] = []
+    for e in experiments:
+        eid = str(e.get("experiment_id") or e.get("id") or "")
+        name = str(e.get("name") or "")
+        if not eid:
+            continue
+        if name.lower().startswith(AGENT_EXPERIMENT_PREFIX):
+            agent.append(eid)
+        elif name != "Default":
+            other.append(eid)
+    return agent + other
 
 
 def search_session_traces(experiment_id: str, session_uuid: str) -> list[dict[str, Any]]:
@@ -662,15 +740,21 @@ def coerce_message_list(value: Any) -> list[dict[str, Any]] | None:
 
 
 def extract_messages(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Pick the longest message list found across spans' spanOutputs (the root/Agent.run
-    span carries the full history); empty list if none."""
-    best: list[dict[str, Any]] = []
-    for raw in spans:
-        attrs = parse_attrs(raw)
-        msgs = coerce_message_list(attrs.get("mlflow.spanOutputs"))
-        if msgs and len(msgs) > len(best):
-            best = msgs
-    return best
+    """Pick the longest pydantic-ai message list across spans, preferring spanOutputs (the
+    root/Agent.run span carries the full history). Falls back to spanInputs — where a
+    sub-agent's invocation history tends to live when its spanOutputs has none — only when no
+    spanOutputs yielded a list, so a normal trace's full history is never displaced. Empty list
+    if neither has one."""
+    for attr in ("mlflow.spanOutputs", "mlflow.spanInputs"):
+        best: list[dict[str, Any]] = []
+        for raw in spans:
+            attrs = parse_attrs(raw)
+            msgs = coerce_message_list(attrs.get(attr))
+            if msgs and len(msgs) > len(best):
+                best = msgs
+        if best:
+            return best
+    return []
 
 
 def _render_part(part: dict[str, Any]) -> str | None:
@@ -728,7 +812,13 @@ def cmd_messages(args: argparse.Namespace) -> int:
     trace = get_trace(args.trace_id)
     msgs = extract_messages(trace_spans_of(trace))
     if not msgs:
-        print(f"no message history found in spanOutputs for {args.trace_id}", file=sys.stderr)
+        print(
+            f"no pydantic-ai transcript found in spanOutputs/spanInputs for {args.trace_id}. "
+            f"This trace may store its history elsewhere (e.g. a sub-agent that records I/O "
+            f"differently) - dump the tree (`trace {args.trace_id}`) and drill the root span "
+            f"(`span {args.trace_id} <span_id>`).",
+            file=sys.stderr,
+        )
         return 4
     msg_path.write_text(render_transcript(msgs), encoding="utf-8")
     print(msg_path.resolve())
@@ -744,55 +834,75 @@ def session_rows(traces: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
+def search_session_in_env(session_uuid: str) -> tuple[list[dict[str, Any]] | None, int]:
+    """Search every candidate experiment on the *current* tracking server for the session.
+
+    Returns (rows, n_experiments_searched); rows is None when the env was reachable but no
+    experiment matched. Raises ConnectionFailure (transport) or SystemExit (HTTP) on failure,
+    which the sweep catches per-env. One experiment per GET — the multi-experiment POST search
+    400s on these servers."""
+    order = experiment_search_order(list_experiments())
+    for exp in order:
+        traces = search_session_traces(exp, session_uuid)
+        if traces:
+            return session_rows(traces), len(order)
+    return None, len(order)
+
+
 def search_session_with_sweep(args: argparse.Namespace) -> list[dict[str, Any]] | None:
-    """Find a session's traces, auto-sweeping candidate envs. Sets MLFLOW_TRACKING_URI to
-    the env that matched. Returns rows, or None (after printing guidance) if no env had it."""
+    """Find a session's traces, auto-sweeping candidate envs and resolving each env's
+    experiments at runtime. Sets MLFLOW_TRACKING_URI to the env that matched. Returns rows,
+    or None (after printing guidance) if no reachable env had it."""
     session_uuid = args.session_uuid
     requested = (
         ENV_ALIASES.get(args.env.strip().lower(), args.env.strip().lower())
         if args.env else None
     )
 
-    # A pinned --experiment targets one specific env: search it directly, no sweep.
+    # A pinned --experiment targets one specific experiment in one env: no sweep.
     if args.experiment:
         os.environ["MLFLOW_TRACKING_URI"] = effective_uri(args)
         traces = search_session_traces(args.experiment, session_uuid)
         if traces:
             return session_rows(traces)
-        print(f"no traces matched session {session_uuid} in {tracking_uri()}", file=sys.stderr)
+        print(
+            f"no traces matched session {session_uuid} in experiment "
+            f"{args.experiment} at {tracking_uri()}",
+            file=sys.stderr,
+        )
         return None
 
-    # An explicit env with no known experiment id and no --experiment: keep the actionable error.
-    if requested is not None and resolve_env(requested)[1] is None:
-        raise SystemExit(
-            f"experiment id for env '{args.env}' is unknown; pass --experiment <id> "
-            f"(it's the experiment named 'agent-server')"
-        )
-
-    tried: list[str] = []
+    reachable_empty: list[str] = []  # envs that answered but had no matching trace
+    unreachable: list[str] = []      # envs that couldn't be reached (DNS / TLS / HTTP)
     for env in session_sweep_order(args.env):
-        uri, exp = resolve_env(env)
-        if exp is None:
-            continue  # can't search without an experiment id
-        os.environ["MLFLOW_TRACKING_URI"] = uri
-        tried.append(env)
+        os.environ["MLFLOW_TRACKING_URI"] = resolve_env(env)
         try:
-            traces = search_session_traces(exp, session_uuid)
-        except SystemExit as e:
-            print(f"  {env}: {e}", file=sys.stderr)
+            rows, n_exp = search_session_in_env(session_uuid)
+        except ConnectionFailure as e:
+            unreachable.append(f"{env} ({e})")
             continue
-        if traces:
+        except SystemExit as e:  # an HTTP error from the server itself
+            unreachable.append(f"{env} (HTTP error: {e})")
+            continue
+        if rows is not None:
             if env != requested:
-                print(f"matched env: {env} (experiment {exp})", file=sys.stderr)
-            return session_rows(traces)
+                print(f"matched env: {env}", file=sys.stderr)
+            return rows
+        reachable_empty.append(f"{env} ({n_exp} experiments)")
 
-    scope = "any swept env" if requested is None else f"{requested} or fallback envs"
-    print(
-        f"no traces matched session {session_uuid} in {scope} ({', '.join(tried)}). "
-        f"For staging/eus, pass --env <name> --experiment <id>; if every env failed to "
-        f"connect, check the corporate VPN.",
-        file=sys.stderr,
-    )
+    lines = [f"no traces matched session {session_uuid}."]
+    if reachable_empty:
+        lines.append(f"  reachable, 0 matches: {', '.join(reachable_empty)}")
+    if unreachable:
+        lines.append(f"  could not reach: {', '.join(unreachable)}")
+    if reachable_empty:
+        lines.append(
+            "  the session UUID may be wrong, or its env isn't auto-swept (staging/eus) "
+            "- retry with --env <name>."
+        )
+    if unreachable:
+        lines.append("  if every env failed to connect, check the corporate VPN.")
+    print("\n".join(lines), file=sys.stderr)
     return None
 
 
@@ -881,8 +991,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("session", help="dump every trace of a chat session")
     sp.add_argument("session_uuid")
-    sp.add_argument("--env", help=env_help + " + experiment id")
-    sp.add_argument("--experiment", default=None)
+    sp.add_argument("--env", help=env_help)
+    sp.add_argument("--experiment", default=None,
+                    help="pin one experiment id (one env, no sweep); omit to resolve dynamically")
     sp.add_argument("--out")
     sp.add_argument("--no-cache", action="store_true")
     sp.set_defaults(func=cmd_session)
@@ -914,7 +1025,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except ConnectionFailure as e:
+        print(str(e), file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
