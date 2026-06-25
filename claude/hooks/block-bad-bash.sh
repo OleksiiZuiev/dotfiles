@@ -1,48 +1,69 @@
 #!/bin/bash
-# Guard hook: block genuinely dangerous CLI patterns.
-# Style rules (no chaining, no cd) are enforced by CLAUDE.md instructions.
-#
-# Extract only the command portion (before any quoted strings) to avoid
-# false positives from commit messages or string arguments.
-INPUT=$(cat)
-CMD_PART=$(echo "$INPUT" | sed "s/['\"].*//")
+# Guard hook for Bash tool calls (PreToolUse):
+#  - auto-approves the known-safe throwaway-worktree teardown so it doesn't trip the
+#    destructive-command prompt that fires even under auto permission mode;
+#  - blocks genuinely dangerous patterns (force push, cloud delete/destroy).
+# Style rules (no chaining, no cd) are enforced by CLAUDE.md, not here.
 
-# GIT_DIR/GIT_WORK_TREE env vars — use `git -C <path>` instead
-if echo "$CMD_PART" | grep -qE '^\s*(GIT_DIR|GIT_WORK_TREE)='; then
+INPUT=$(cat)
+
+# The PreToolUse payload is JSON; the real command is tool_input.command. Parsing is gated
+# behind a cheap substring pre-filter so python runs only for a command that could actually
+# match — every other Bash call (ls, git status, builds, tests) skips it and the hook stays fast.
+extract_cmd() {
+  printf '%s' "$INPUT" \
+    | python -c 'import sys,json; sys.stdout.write(json.load(sys.stdin).get("tool_input",{}).get("command",""))' 2>/dev/null
+}
+
+CMD=""
+if [[ "$INPUT" == *rm* || "$INPUT" == *force* || "$INPUT" == *push* || "$INPUT" == *delete* \
+   || "$INPUT" == *purge* || "$INPUT" == *destroy* || "$INPUT" == *GIT_DIR* || "$INPUT" == *GIT_WORK_TREE* ]]; then
+  CMD=$(extract_cmd)
+fi
+
+# ---- Auto-approve: throwaway-worktree teardown -------------------------------------------
+# /ds:work-on2 and /ds:polish-pr2 fall back to `rm -rf "<...-worktrees/...>"` when
+# `git worktree remove --force` leaves the dir behind on Windows. Auto-approve that one narrow
+# case; every other rm -rf still hits the normal prompt.
+if [[ "$CMD" =~ ^[[:space:]]*rm[[:space:]]+-[rf][rf][[:space:]] ]] && [[ "$CMD" == *-worktrees/* ]]; then
+  printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"Auto-approved throwaway-worktree teardown: rm -rf of a *-worktrees/* path (/ds:work-on2, /ds:polish-pr2)."}}'
+  exit 0
+fi
+
+# ---- Block: genuinely dangerous patterns -------------------------------------------------
+# A dangerous command lives on the FIRST line of the command; commit-message prose lives in
+# heredoc bodies on later lines (or inside a -m "..." string). So scan only the first line,
+# with quoted string literals stripped, so a message that merely mentions e.g. "--force" or
+# "kubectl delete" can't false-trigger a block. (Limitation: a dangerous command buried on a
+# later line of a multi-line command isn't caught — but command chaining is avoided by
+# convention anyway, so dangerous commands are first-line.)
+CMD_NOSTR=$(printf '%s' "$CMD" | sed -n '1p' | sed "s/\"[^\"]*\"//g; s/'[^']*'//g")
+
+if [[ "$CMD_NOSTR" =~ ^[[:space:]]*(GIT_DIR|GIT_WORK_TREE)= ]]; then
   echo "BLOCKED: Use 'git -C <path>' instead of GIT_DIR/GIT_WORK_TREE env vars." >&2
   exit 2
 fi
-
-# Force push — irreversible remote history loss
-if echo "$CMD_PART" | grep -qE 'git\s+push\s+.*--(force|force-with-lease)'; then
+if echo "$CMD_NOSTR" | grep -qE 'git[[:space:]]+push[[:space:]].*--(force|force-with-lease)'; then
   echo "BLOCKED: Force push detected. This can cause irreversible remote history loss." >&2
   exit 2
 fi
-if echo "$CMD_PART" | grep -qE 'git\s+push\s+-[a-zA-Z]*f'; then
+if echo "$CMD_NOSTR" | grep -qE 'git[[:space:]]+push[[:space:]]+-[a-zA-Z]*f'; then
   echo "BLOCKED: Force push (-f) detected. This can cause irreversible remote history loss." >&2
   exit 2
 fi
-
-# Azure destructive operations
-if echo "$CMD_PART" | grep -qE '\baz\b.*\b(delete|purge)\b'; then
+if echo "$CMD_NOSTR" | grep -qE '\baz\b.*\b(delete|purge)\b'; then
   echo "BLOCKED: Azure destructive operation (delete/purge) detected." >&2
   exit 2
 fi
-
-# AWS destructive operations
-if echo "$CMD_PART" | grep -qE '\baws\b.*\bdelete\b'; then
+if echo "$CMD_NOSTR" | grep -qE '\baws\b.*\bdelete\b'; then
   echo "BLOCKED: AWS destructive operation (delete) detected." >&2
   exit 2
 fi
-
-# Kubernetes destructive operations
-if echo "$CMD_PART" | grep -qE '\bkubectl\s+delete\b'; then
+if echo "$CMD_NOSTR" | grep -qE '\bkubectl[[:space:]]+delete\b'; then
   echo "BLOCKED: kubectl delete detected." >&2
   exit 2
 fi
-
-# Terraform destroy
-if echo "$CMD_PART" | grep -qE '\bterraform\s+destroy\b'; then
+if echo "$CMD_NOSTR" | grep -qE '\bterraform[[:space:]]+destroy\b'; then
   echo "BLOCKED: terraform destroy detected." >&2
   exit 2
 fi
