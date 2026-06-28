@@ -423,10 +423,10 @@ Use the Task tool with a subagent (`model: "haiku"`) to update the ticket contex
 - Branch name (`F`)
 - Repository name
 - What was accomplished
-- Key decisions made
+- Key decisions made — for each, include the **rationale (the *why*)** when it is clear from the session: the option chosen, the main alternative rejected, and the reason. Where the rationale isn't clear, pass the decision alone — do **not** invent one.
 - Files changed
 
-The subagent should append a new session entry following the existing document format.
+The subagent should append a new session entry following the existing document format. Record each decision in the template's `#### Key Decisions` → `- {decision}: {rationale}` form. When no rationale was supplied for a decision, record just the decision without a fabricated reason.
 
 Mark the todo `completed`.
 
