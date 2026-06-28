@@ -58,12 +58,13 @@ steps are mandatory and run in order; the tool is only for visibility.
 Create these items (all with status `pending`):
 1. `🌳 Create isolated worktree` — see Step 2.9
 2. `🔧 Implementation` — placeholder, will be replaced with plan tasks in Step 3
-3. `💾 Commit (one commit in the worktree)` — see Step 4
-4. `🔀 Fold-back onto feature branch` — see Step 5
-5. `🧹 Remove throwaway worktree` — see Step 6
-6. `📝 Update ticket context: launch sub-agent` — see Step 7
-7. `🚀 Push & PR` — see Step 8
-8. `✅ Final summary` — see Step 9
+3. `🔎 Convention check (Sonnet sub-agent)` — see Step 3.5
+4. `💾 Commit (one commit in the worktree)` — see Step 4
+5. `🔀 Fold-back onto feature branch` — see Step 5
+6. `🧹 Remove throwaway worktree` — see Step 6
+7. `📝 Update ticket context: launch sub-agent` — see Step 7
+8. `🚀 Push & PR` — see Step 8
+9. `✅ Final summary` — see Step 9
 
 ### Ticket Context Configuration
 
@@ -136,6 +137,8 @@ Create a detailed implementation plan covering:
 
 Do NOT include worktree or post-implementation steps in the plan — those are already pre-seeded in the todo list from Step 0.5 and will run automatically.
 
+Before finalizing, apply the **Convention-Aware Plan Self-Check (Step 2.7)** to revise the plan so it names how it complies with the repo's design-level conventions.
+
 - **If auto-plan mode is active**: write the plan as a `## Plan` markdown section in your response, skip `EnterPlanMode`/`ExitPlanMode` entirely, and proceed directly to Step 2.9.
 - **Otherwise**: call `EnterPlanMode`, write the plan, then call `ExitPlanMode` and wait for user approval before continuing.
 
@@ -181,10 +184,28 @@ Plan the follow-up change. The plan should:
 
 Do NOT include worktree or post-implementation steps in the plan — those are already pre-seeded in the todo list from Step 0.5.
 
+Before finalizing, apply the **Convention-Aware Plan Self-Check (Step 2.7)** to revise the plan so it names how it complies with the repo's design-level conventions.
+
 - **If auto-plan mode is active**: write the plan as a `## Plan` markdown section in your response, skip `EnterPlanMode`/`ExitPlanMode` entirely, and proceed directly to Step 2.9.
 - **Otherwise**: call `EnterPlanMode`, write the plan, then call `ExitPlanMode` and wait for user approval before continuing.
 
 Then proceed to **Step 2.9** (shared flow).
+
+### Step 2.7: Convention-Aware Plan Self-Check
+
+Applies to both **Step 2A.5** and **Step 2B.4**, in interactive and `+auto-plan` modes. Run it on the drafted plan *before* presenting it — before `ExitPlanMode`, or before writing the `## Plan` section under auto-plan.
+
+The goal: make the plan demonstrably comply with the conventions of the repo you're working in — especially the **design-level** rules that are expensive to fix once the code exists. Scale the effort to the size of the change (a one-line follow-up needs little; a new component needs more).
+
+1. Identify the areas/files the plan will create or touch.
+2. Discover the conventions that apply to them: the user's global `~/.claude/CLAUDE.md`, plus every `AGENTS.md` and `CLAUDE.md` found in each of those directories up to the repo root (most-specific first; a nested file refines the root).
+3. Revise the plan so it **names** how it complies with the design-level rules, rather than restating the rule. Concretely:
+   - Name the methods/functions you'll add and keep their scope tight — avoid one long method where the conventions favor small ones.
+   - State **where** new code lands — prefer a component specific to this change over bloating a large shared component, and say which.
+   - Call out any other structural convention the change has to honor.
+4. The mechanical rules (comment style, naming, dead-history comments) are **not** the focus here — those are enforced after implementation by the Step 3.5 convention check. Keep this step about structure and design.
+
+Then continue with the auto-plan / `EnterPlanMode` finalization in the calling step.
 
 ### Step 2.9: Create the Isolated Worktree
 
@@ -237,6 +258,27 @@ Implement the plan directly (no sub-agent — you have full context from plannin
 ## Post-Implementation Steps
 
 Work through these in order — using your tracking tool, mark each `in_progress` when starting and `completed` when done. All commit and git operations target the worktree `WT`.
+
+### Step 3.5: Convention Compliance Check (Sonnet sub-agent)
+
+Mark `🔎 Convention check (Sonnet sub-agent)` as `in_progress` via your tracking tool. This runs after implementation and **before** the commit, so its fixes land in the single Step 4 commit.
+
+Launch a `Task` sub-agent with `model: "sonnet"` to check the freshly written code against **your own conventions** and auto-apply the safe subset of fixes. The rules are **not hardcoded here** — they are read from the conventions that already apply to the changed files. This is a deliberately narrow proof-of-concept: prove a convention-sourced check works before broadening it (e.g. before adding a user-level per-repo overlay as a further source).
+
+**Sub-agent prompt:**
+> You are checking uncommitted changes in a git worktree against the repository's own conventions and applying only the safe, mechanical fixes.
+>
+> 1. List the changed files: `git -C "{WT}" diff --name-only HEAD`.
+> 2. Discover the conventions that apply to those files: the user's global `~/.claude/CLAUDE.md`, plus every `AGENTS.md` and `CLAUDE.md` found in each changed file's directory and its ancestors up to the repo root. Read them all (most-specific first; a nested file refines the root).
+> 3. Read the actual diff: `git -C "{WT}" diff HEAD`.
+> 4. From those conventions, enforce **only the mechanical, locally-fixable rules** — the kind that can be safely corrected in a finished diff without redesign. Examples of what qualifies: comments that merely restate the code, refactoring-history comments ("refactored from…", "now uses…", "previously…"), trivial naming/formatting deviations the conventions explicitly call out. **Do NOT** make design-level changes (decomposition, moving logic between components, method-splitting) — those are handled at planning time, not here.
+> 5. Apply the qualifying fixes directly to the files (absolute paths under `{WT}`; `Read` each file before `Edit`). Don't touch anything a rule doesn't clearly cover.
+> 6. Be conservative: when a rule needs judgment or a fix would amount to a rewrite, leave it and mention it rather than applying it.
+> 7. Return a short bullet list of what you changed (file + one-line reason), or "no changes — diff already complies".
+
+**Sub-agent allowed tools:** `Read, Edit, Grep, Glob, Bash(git *)`
+
+Record the sub-agent's summary (count of fixes, or "clean") for the final summary, then mark the todo `completed`.
 
 ### Step 4: Commit (one commit in the worktree)
 
@@ -448,6 +490,7 @@ Work completed: {TICKET_ID}
 Phase: Fresh start / Continuation
 Change: [brief description of what was done]
 Files modified: [count]
+Convention check: N fixes applied / clean
 Worktree: {WT} → removed / kept (fold-back blocked)
 Fold-back: clean / conflict resolved / blocked
 Committed: {PUSHED_SHA} — {COMMIT_URL}  /  {SHA} (worktree, not pushed — fold-back blocked)
