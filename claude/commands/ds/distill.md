@@ -68,11 +68,19 @@ ledger needs an entry).
    `--git-common-dir` always points at the **main** repo's `.git`, so this is identical from the main
    repo and any of its worktrees. (If leaf names ever collide across orgs, fall back to
    `{org}-{repo}` — note it and ask the user.)
-   - **Consume path:** `~/.claude/overlays/{repo-key}.md`
-   - **Write path:** `~/dotfiles/claude/overlays/{repo-key}.md` (the dotfiles source; the consume
-     path is its symlink). Edit the write path, never the symlink target directly.
 
-2. **Scope:**
+2. **Dotfiles repo root** — where the rules are *written* and committed. Don't assume `~/dotfiles`
+   (it isn't a real path); resolve it from the symlinked global CLAUDE.md so it works on any machine:
+   ```bash
+   dotfiles=$(dirname "$(dirname "$(readlink -f ~/.claude/CLAUDE.md)")")   # e.g. /c/work/github/OleksiiZuiev/dotfiles
+   ```
+   Path roles:
+   - **Consume paths** (symlinks under the real `~/.claude`, what `/ds:work-on2` reads):
+     `~/.claude/overlays/{repo-key}.md`, `~/.claude/CLAUDE.md`.
+   - **Write paths** (the dotfiles source, what you Edit/commit): `{dotfiles}/claude/overlays/{repo-key}.md`,
+     `{dotfiles}/claude/CLAUDE.md`. Edit the write paths, never the symlink targets directly.
+
+3. **Scope:**
    - **No argument** → current branch. Diff base is `origin/main..HEAD`; PR is the current branch's PR
      (`gh pr view`); ticket id is extracted from the branch name (strip up to the first `/`, take the
      first two hyphen-separated segments, uppercase — e.g. `feature/int-435-foo` → `INT-435`).
@@ -183,11 +191,11 @@ Mark `⚖️ Triage` `completed` once every candidate has a decision.
 
 Mark `📤 Route` `in_progress`. Apply only approved/modified rules; nothing else.
 
-- **Global** → `Edit ~/dotfiles/claude/CLAUDE.md`: append the imperative bullet to the **best-fit
+- **Global** → `Edit {dotfiles}/claude/CLAUDE.md`: append the imperative bullet to the **best-fit
   existing `#Commandments for …` block** named in triage (inline, in that block's voice — do **not**
   create a separate "distilled" section). Match the surrounding bullet style.
 - **Overlay** `## Enforced` / `## Plan directives` → append the bullet (with a short `(src: …)` note)
-  under the chosen section in `~/dotfiles/claude/overlays/{repo-key}.md`. If the overlay file doesn't
+  under the chosen section in `{dotfiles}/claude/overlays/{repo-key}.md`. If the overlay file doesn't
   exist yet, create it from the template above.
 
 ### Step 5: RECORD the ledger + commit
@@ -201,10 +209,10 @@ Mark `🧾 Record` `in_progress`.
    - `### Dismissed rules`: append a short fingerprint for each **dismissed** candidate.
 2. **Commit the dotfiles repo** (separate git repo; commit without prompting — the user has standing
    approval for dotfiles commits during this work). Stage only the files this run changed
-   (`~/dotfiles/claude/CLAUDE.md` and/or `~/dotfiles/claude/overlays/{repo-key}.md`):
+   (`{dotfiles}/claude/CLAUDE.md` and/or `{dotfiles}/claude/overlays/{repo-key}.md`):
    ```bash
-   git -C "$HOME/dotfiles" add claude/CLAUDE.md "claude/overlays/{repo-key}.md"
-   git -C "$HOME/dotfiles" commit -m "$(cat <<'EOF'
+   git -C "$dotfiles" add claude/CLAUDE.md "claude/overlays/{repo-key}.md"
+   git -C "$dotfiles" commit -m "$(cat <<'EOF'
    distill: promote steering rules from <repo-key>/<scope>
 
    <one line per promoted rule: destination + summary>
@@ -213,7 +221,7 @@ Mark `🧾 Record` `in_progress`.
    ```
    End the message with the environment's `Co-Authored-By` trailer.
 3. **If a *new* overlay file was created**, the symlink doesn't exist yet — run
-   `powershell.exe -File "$HOME/dotfiles/install-admin.ps1"` once so `/ds:work-on2` can read it from
+   `powershell.exe -File "$dotfiles/install-admin.ps1"` once so `/ds:work-on2` can read it from
    `~/.claude/overlays/`. Editing an **existing** overlay or global CLAUDE.md flows through the
    existing symlink — **skip** the install in that case.
 
