@@ -199,11 +199,12 @@ The goal: make the plan demonstrably comply with the conventions of the repo you
 
 1. Identify the areas/files the plan will create or touch.
 2. Discover the conventions that apply to them: the user's global `~/.claude/CLAUDE.md`, plus every `AGENTS.md` and `CLAUDE.md` found in each of those directories up to the repo root (most-specific first; a nested file refines the root).
-3. Revise the plan so it **names** how it complies with the design-level rules, rather than restating the rule. Concretely:
+3. Also read the **repo-keyed steering overlay** if present — your personal, user-level rules for this repo (maintained by `/ds:distill`). Resolve `{repo-key}` as the basename of the main repo root: `basename "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"` (worktree-stable — `--git-common-dir` always points at the main repo's `.git`). Read `~/.claude/overlays/{repo-key}.md` and fold its `## Plan directives` bullets into this self-check alongside the discovered conventions. If the file or that section is absent, proceed with just the discovered conventions.
+4. Revise the plan so it **names** how it complies with the design-level rules, rather than restating the rule. Concretely:
    - Name the methods/functions you'll add and keep their scope tight — avoid one long method where the conventions favor small ones.
    - State **where** new code lands — prefer a component specific to this change over bloating a large shared component, and say which.
    - Call out any other structural convention the change has to honor.
-4. The mechanical rules (comment style, naming, dead-history comments) are **not** the focus here — those are enforced after implementation by the Step 3.5 convention check. Keep this step about structure and design.
+5. The mechanical rules (comment style, naming, dead-history comments) are **not** the focus here — those are enforced after implementation by the Step 3.5 convention check. Keep this step about structure and design.
 
 Then continue with the auto-plan / `EnterPlanMode` finalization in the calling step.
 
@@ -263,15 +264,16 @@ Work through these in order — using your tracking tool, mark each `in_progress
 
 Mark `🔎 Convention check (Sonnet sub-agent)` as `in_progress` via your tracking tool. This runs after implementation and **before** the commit, so its fixes land in the single Step 4 commit.
 
-Launch a `Task` sub-agent with `model: "sonnet"` to check the freshly written code against **your own conventions** and auto-apply the safe subset of fixes. The rules are **not hardcoded here** — they are read from the conventions that already apply to the changed files. This is a deliberately narrow proof-of-concept: prove a convention-sourced check works before broadening it (e.g. before adding a user-level per-repo overlay as a further source).
+Launch a `Task` sub-agent with `model: "sonnet"` to check the freshly written code against **your own conventions** and auto-apply the safe subset of fixes. The rules are **not hardcoded here** — they are read from two sources: the conventions that already apply to the changed files, **plus** your repo-keyed steering overlay's `## Enforced` rules (`~/.claude/overlays/{repo-key}.md`, maintained by `/ds:distill`). The overlay carries the recurring, already-stated-but-ignored mechanical rules that most need a hard check. Kept deliberately narrower than `/ds:review`: it enforces mechanical, locally-fixable rules only, never a full audit.
 
 **Sub-agent prompt:**
 > You are checking uncommitted changes in a git worktree against the repository's own conventions and applying only the safe, mechanical fixes.
 >
 > 1. List the changed files: `git -C "{WT}" diff --name-only HEAD`.
 > 2. Discover the conventions that apply to those files: the user's global `~/.claude/CLAUDE.md`, plus every `AGENTS.md` and `CLAUDE.md` found in each changed file's directory and its ancestors up to the repo root. Read them all (most-specific first; a nested file refines the root).
+> 2b. Also read the repo-keyed steering overlay if present: compute `{repo-key}` as `basename "$(dirname "$(git -C "{WT}" rev-parse --path-format=absolute --git-common-dir)")"`, then read `~/.claude/overlays/{repo-key}.md`. Treat every bullet under its `## Enforced` section as a **priority mechanical rule** for this repo — enforce it in addition to the mechanical subset inferred from the conventions above. If the file or that section is absent, skip.
 > 3. Read the actual diff: `git -C "{WT}" diff HEAD`.
-> 4. From those conventions, enforce **only the mechanical, locally-fixable rules** — the kind that can be safely corrected in a finished diff without redesign. Examples of what qualifies: comments that merely restate the code, refactoring-history comments ("refactored from…", "now uses…", "previously…"), trivial naming/formatting deviations the conventions explicitly call out. **Do NOT** make design-level changes (decomposition, moving logic between components, method-splitting) — those are handled at planning time, not here.
+> 4. From those conventions **and the overlay's `## Enforced` rules**, enforce **only the mechanical, locally-fixable rules** — the kind that can be safely corrected in a finished diff without redesign. Examples of what qualifies: comments that merely restate the code, refactoring-history comments ("refactored from…", "now uses…", "previously…"), trivial naming/formatting deviations the conventions explicitly call out. **Do NOT** make design-level changes (decomposition, moving logic between components, method-splitting) — those are handled at planning time, not here.
 > 5. Apply the qualifying fixes directly to the files (absolute paths under `{WT}`; `Read` each file before `Edit`). Don't touch anything a rule doesn't clearly cover.
 > 6. Be conservative: when a rule needs judgment or a fix would amount to a rewrite, leave it and mention it rather than applying it.
 > 7. Return a short bullet list of what you changed (file + one-line reason), or "no changes — diff already complies".

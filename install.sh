@@ -175,6 +175,15 @@ if [ -d "$DOTFILES_DIR/claude/scripts" ]; then
     done
 fi
 
+# Claude overlays (repo-keyed personal steering)
+if [ -d "$DOTFILES_DIR/claude/overlays" ]; then
+    mkdir -p "$TARGET_HOME/.claude/overlays"
+    for overlay in "$DOTFILES_DIR"/claude/overlays/*.md; do
+        [ -e "$overlay" ] || continue
+        create_link "$overlay" "$TARGET_HOME/.claude/overlays/$(basename "$overlay")"
+    done
+fi
+
 # Install VS Code settings
 echo ""
 echo "Installing VS Code configuration..."
