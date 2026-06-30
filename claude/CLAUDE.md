@@ -9,8 +9,11 @@
 #Commandments for approaching coding
 - Prefer simple solutions
 - When possible use TDD: write a test, check that it is failing, write the code and check it is passing
-- Add explaining comments, only when it is not clear from the code itself. Or when asked explicitly. Prefer expressive code to comments.
-- Comments must describe what the code does now, not what changed to get here. Especially during refactoring: never write "refactored from X", "now uses Y instead of Z", "previously did W", "moved from A". Once the refactor is in the past, these comments become noise that misleads readers. Write comments that would still make sense to someone reading the code a year from now with no knowledge of its history.
+- Test only your own contract: don't write tests that re-verify a dependency's behaviour (the validation library, the framework) or a trivially-true invariant.
+- Keep a test in the file or suite named for the subject it exercises; when a test's subject changes, move or rename it to match.
+- Add explaining comments only when the code isn't self-evident, or when asked. Prefer expressive code to comments, and delete any comment, JSDoc, or docstring that merely restates the code, a field name, or a type — keep only the non-obvious *why*; when in doubt, cut.
+- Comments must describe what the code does now, not what changed to get here. Especially during refactoring: never write "refactored from X", "now uses Y instead of Z", "previously did W", "moved from A". Once the refactor is in the past, these comments become noise that misleads readers. Write comments that would still make sense to someone reading the code a year from now with no knowledge of its history. The same applies to speculative or future-tense rationale ("in case a future flow needs this", "kept for when X") and references to abandoned approaches — and to test names: name a test for the behaviour it asserts, never for an intermediate approach that was dropped.
+- Don't describe another module's internals, or a contract owned elsewhere (another service, another repo's payload), in a comment — it drifts stale. Point to the one authoritative definition instead.
 
 #Commandments for bash commands
 - NEVER use `cd` in Bash commands — not to the current directory, not to any other directory
