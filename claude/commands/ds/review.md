@@ -398,7 +398,7 @@ Otherwise, launch a `general-purpose` sub-agent (`model: "haiku"`) to append a n
 - **Key decisions:** notable smells worth offline follow-up — pull the 1–3 highest-severity / most significant smells from the report as bullets, each `<file:line> — <one-line summary>`. Omit the section entirely if there are no smells or none feels significant.
 - **Files changed:** omit. This command does not modify the working tree.
 
-The sub-agent should append a new section under `## Sessions` following the existing document template (see `~/dotfiles/claude/CLAUDE.md` "Ticket Context Documents" → Document Template). If the file does not exist, create it.
+The sub-agent should append a new section under `## Sessions` following the existing document template (see `~/.claude/CLAUDE.md` "Ticket Context Documents" → Document Template). If the file does not exist, create it.
 
 **Sub-agent allowed tools:** `Bash(git *), Read, Write, Edit`
 

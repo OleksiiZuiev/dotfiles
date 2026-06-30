@@ -27,7 +27,7 @@ EOF
     local real_claude="$HOME/.local/bin/claude.exe"
 
     # Refresh repo map in background
-    bash "$HOME/dotfiles/claude/scripts/update-repo-map.sh" &>/dev/null &
+    bash "$HOME/.claude/scripts/update-repo-map.sh" &>/dev/null &
 
     # Helper: record a repo/worktree dir in the shared ~/.claude_repos history
     _lclaude_add_to_history() {

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Generates repo-map.md by scanning local GitHub repos
-# Usage: bash ~/dotfiles/claude/scripts/update-repo-map.sh
+# Usage: bash ~/.claude/scripts/update-repo-map.sh
 
 GITHUB_ROOT="/c/work/github"
 OUTPUT_FILE="${CLAUDE_REPO_MAP:-/c/work/claude-data/repo-map.md}"
@@ -34,7 +34,7 @@ extract_summary() {
 # Write header
 cat > "$OUTPUT_FILE" << 'HEADER'
 # Local Repo Map
-<!-- Regenerate: bash ~/dotfiles/claude/scripts/update-repo-map.sh -->
+<!-- Regenerate: bash ~/.claude/scripts/update-repo-map.sh -->
 HEADER
 echo "<!-- Last updated: $(date +%Y-%m-%d) -->" >> "$OUTPUT_FILE"
 cat >> "$OUTPUT_FILE" << 'TABLE'

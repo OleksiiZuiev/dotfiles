@@ -56,7 +56,7 @@ Repos are stored at `C:\work\github\{org}\{repo-name}`.
 
 Example: user says "look at `unified-to/unified-csharp-sdk`" → read files from `C:\work\github\unified-to\unified-csharp-sdk\`.
 
-Regenerate the map: `bash ~/dotfiles/claude/scripts/update-repo-map.sh`
+Regenerate the map: `bash ~/.claude/scripts/update-repo-map.sh`
 
 # Symlink Management
 
@@ -125,7 +125,7 @@ export CLAUDE_REPO_MAP="/c/work/claude-data/repo-map.md"
 
 Default: `/c/work/claude-data/repo-map.md`
 
-Regenerate: `bash ~/dotfiles/claude/scripts/update-repo-map.sh`
+Regenerate: `bash ~/.claude/scripts/update-repo-map.sh`
 
 # MLflow telemetry
 

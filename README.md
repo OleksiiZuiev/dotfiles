@@ -30,11 +30,11 @@ Modular bash scripts loaded via `~/.bashrc`:
 ### New Machine Bootstrap
 
 ```bash
-# Clone the repo
-git clone https://github.com/OleksiiZuiev/dotfiles.git ~/dotfiles
+# Clone the repo (repos live under /c/work/github/{org}/{repo})
+git clone https://github.com/OleksiiZuiev/dotfiles.git /c/work/github/OleksiiZuiev/dotfiles
 
 # Run the install script
-cd ~/dotfiles
+cd /c/work/github/OleksiiZuiev/dotfiles
 ./install.sh
 ```
 
