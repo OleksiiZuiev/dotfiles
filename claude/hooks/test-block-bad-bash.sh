@@ -27,10 +27,16 @@ check() { # $1 name  $2 command  $3 want_exit  $4 want_stdout_substr (empty => e
 }
 
 # --- Auto-approve branch ---
+check "worktree-teardown -> allow" \
+  'worktree-teardown "C:/work/github/org/repo-worktrees/int-123-foo-a1b2c3" "feature/int-123-foo-a1b2c3"' 0 '"permissionDecision":"allow"'
+check "worktree-teardown backslash path -> allow" \
+  'worktree-teardown "C:\work\github\org\repo-worktrees\int-123-foo-a1b2c3"' 0 '"permissionDecision":"allow"'
 check "rm -rf worktree path -> allow" \
   'rm -rf "C:/work/github/org/repo-worktrees/int-123-foo-a1b2c3"' 0 '"permissionDecision":"allow"'
 check "rm -fr worktree path -> allow" \
   'rm -fr "C:/work/github/org/repo-worktrees/x-deadbeef"' 0 '"permissionDecision":"allow"'
+check "rm -rf worktree backslash path -> allow" \
+  'rm -rf "C:\work\github\org\repo-worktrees\int-123-foo-a1b2c3"' 0 '"permissionDecision":"allow"'
 check "rm -rf non-worktree path -> no allow" \
   'rm -rf "C:/work/github/org/repo/node_modules"' 0 ''
 check "rm -rf root -> no allow (defers to normal prompt)" \

@@ -17,15 +17,29 @@ extract_cmd() {
 
 CMD=""
 if [[ "$INPUT" == *rm* || "$INPUT" == *force* || "$INPUT" == *push* || "$INPUT" == *delete* \
-   || "$INPUT" == *purge* || "$INPUT" == *destroy* || "$INPUT" == *GIT_DIR* || "$INPUT" == *GIT_WORK_TREE* ]]; then
+   || "$INPUT" == *purge* || "$INPUT" == *destroy* || "$INPUT" == *teardown* \
+   || "$INPUT" == *GIT_DIR* || "$INPUT" == *GIT_WORK_TREE* ]]; then
   CMD=$(extract_cmd)
 fi
 
-# ---- Auto-approve: throwaway-worktree teardown -------------------------------------------
-# /ds:work-on2 and /ds:polish-pr2 fall back to `rm -rf "<...-worktrees/...>"` when
-# `git worktree remove --force` leaves the dir behind on Windows. Auto-approve that one narrow
-# case; every other rm -rf still hits the normal prompt.
-if [[ "$CMD" =~ ^[[:space:]]*rm[[:space:]]+-[rf][rf][[:space:]] ]] && [[ "$CMD" == *-worktrees/* ]]; then
+# ---- Auto-approve: throwaway-worktree teardown helper ------------------------------------
+# /ds:work-on2 and /ds:polish-pr2 call `worktree-teardown <path> [branch]` (a bash.d
+# function) to tear down their private worktrees. Its `rm -rf` lives inside the function, so
+# the command Claude issues carries no dangerous token — but allow it explicitly so the
+# no-prompt guarantee is deterministic rather than resting on the destructive classifier
+# happening to ignore an unknown command.
+if [[ "$CMD" =~ ^[[:space:]]*worktree-teardown[[:space:]] ]]; then
+  printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"Auto-approved worktree-teardown (/ds:work-on2, /ds:polish-pr2 throwaway-worktree helper)."}}'
+  exit 0
+fi
+
+# ---- Auto-approve: raw rm -rf of a worktree path (defense-in-depth) ----------------------
+# The teardown helper above is the primary path. This still covers a stray raw
+# `rm -rf "<...-worktrees/...>"` — e.g. a manual cleanup — matching either a forward-slash or
+# a Windows backslash separator. Auto-approve that one narrow case; every other rm -rf still
+# hits the normal prompt.
+if [[ "$CMD" =~ ^[[:space:]]*rm[[:space:]]+-[rf][rf][[:space:]] ]] \
+   && [[ "$CMD" == *-worktrees/* || "$CMD" == *-worktrees\\* ]]; then
   printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"Auto-approved throwaway-worktree teardown: rm -rf of a *-worktrees/* path (/ds:work-on2, /ds:polish-pr2)."}}'
   exit 0
 fi
