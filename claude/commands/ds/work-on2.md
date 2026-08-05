@@ -1,17 +1,34 @@
 ---
-description: Work on a Linear ticket in an isolated worktree, then fold the commit back onto the feature branch — lets multiple sessions share one branch without colliding. Flags: +auto-plan
+description: Work on a Linear ticket — convention-checked plan, implement, one commit, push. Flags: +temp-worktree (isolate in a throwaway worktree and fold back), +auto-plan
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskUpdate, TaskList, AskUserQuestion, EnterPlanMode, TodoWrite
-argument-hint: [+auto-plan] [+fold-timeout=<Nm>] [extra context]
+argument-hint: [+temp-worktree] [+auto-plan] [+fold-timeout=<Nm>] [extra context]
 ---
 
 You are helping the user work on a Linear ticket. This is the **v2** of `/ds:work-on`:
-the implementation happens in a **private throwaway worktree** off the feature branch, and
-the single resulting commit is **folded back** onto the live feature tip. This lets several
-independent sessions work the same feature branch at once without trampling each other's
-working tree, and tolerates another session committing in the meantime.
+same auto-detection of fresh start vs continuation, same interactive planning, plus a
+convention-aware plan self-check and a post-implementation convention check, ending in
+exactly one commit that gets pushed.
 
-It is otherwise the same workflow as `/ds:work-on`: auto-detects fresh start vs continuation,
-plans interactively, then runs the post-implementation steps.
+By default the work happens **in the current checkout**. The `+temp-worktree` flag switches
+on an isolation lifecycle: the implementation runs in a **private throwaway worktree** off
+the feature branch and the resulting commit is **folded back** onto the live feature tip —
+which lets several independent sessions work the same feature branch at once without
+trampling each other's working tree, and tolerates another session committing in the meantime.
+
+### Temp-Worktree Mode
+
+{{#if $ARGUMENTS}}
+{{!-- Isolation is opt-in. The + prefix avoids the Claude CLI consuming it as a CLI flag. --}}
+If the text "{{$ARGUMENTS}}" contains `+temp-worktree`, then **temp-worktree mode is active**. In this mode:
+- Step 2.9 creates a throwaway worktree, Step 5 folds the commit back onto the feature branch, and Step 6 tears the worktree down
+- Strip `+temp-worktree` from the arguments before processing the rest as extra context
+{{/if}}
+
+**Unless that flag is present, temp-worktree mode is OFF — this is the default.** In default
+mode you work directly in the current checkout: **skip Steps 2.9, 5 and 6 entirely**. There is
+no worktree to create, no dependency sync to run, no fold-back to perform and nothing to tear
+down — the Step 4 commit lands straight on the feature branch. `+fold-timeout` is meaningless
+in default mode and is ignored (still strip it from the arguments).
 
 ### Auto-Plan Mode
 
@@ -19,7 +36,7 @@ plans interactively, then runs the post-implementation steps.
 {{!-- Check if +auto-plan flag is present in arguments. Uses + prefix instead of -- to avoid Claude CLI consuming it as a CLI flag --}}
 If the text "{{$ARGUMENTS}}" contains `+auto-plan`, then **auto-plan mode is active**. In this mode:
 - Do **NOT** call `EnterPlanMode` or `ExitPlanMode`. The `ExitPlanMode` tool always renders an approval prompt the user must clear, so calling it would defeat the flag — no prompt text can suppress that gate.
-- Instead, write the full plan as a `## Plan` markdown section directly in your response (for transparency), then proceed straight to worktree creation (Step 2.9).
+- Instead, write the full plan as a `## Plan` markdown section directly in your response (for transparency), then proceed straight to Step 2.9.
 - Strip `+auto-plan` from the arguments before processing the rest as extra context
 {{/if}}
 
@@ -55,13 +72,14 @@ steps are mandatory and run in order; the tool is only for visibility.
 > mean: update whichever tracking tool you pre-seeded here (or your inline list). Never
 > skip a step just because a specific tool name is unavailable.
 
-Create these items (all with status `pending`):
-1. `🌳 Create isolated worktree` — see Step 2.9
+Create these items (all with status `pending`). Items 1, 5 and 6 are **temp-worktree mode
+only — omit them entirely in default mode**:
+1. `🌳 Create isolated worktree` — see Step 2.9 *(temp-worktree mode only)*
 2. `🔧 Implementation` — placeholder, will be replaced with plan tasks in Step 3
 3. `🔎 Convention check (Sonnet sub-agent)` — see Step 3.5
-4. `💾 Commit (one commit in the worktree)` — see Step 4
-5. `🔀 Fold-back onto feature branch` — see Step 5
-6. `🧹 Remove throwaway worktree` — see Step 6
+4. `💾 Commit (exactly one commit)` — see Step 4
+5. `🔀 Fold-back onto feature branch` — see Step 5 *(temp-worktree mode only)*
+6. `🧹 Remove throwaway worktree` — see Step 6 *(temp-worktree mode only)*
 7. `📝 Update ticket context: launch sub-agent` — see Step 7
 8. `🚀 Push & PR` — see Step 8
 9. `✅ Final summary` — see Step 9
@@ -71,13 +89,26 @@ Create these items (all with status `pending`):
 Context path: `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}`
 Context file: `{context-path}/{TICKET_ID}.md`
 
+### Working Location (`WT`)
+
+Every step below refers to the working location as `WT`. What it points at depends on the mode:
+
+- **Temp-worktree mode**: the throwaway worktree created in Step 2.9.
+- **Default mode**: the absolute path of the **current working directory** — capture it once with
+  `pwd` in Step 2.9.
+
+Either way `git -C "{WT}" …` and `{WT}/<path>` are literally correct, so the steps read the same
+in both modes.
+
 ### Critical Rules
 
-- **The implementation worktree is sacred.** From Step 2.9 onward, ALL file changes
-  (`Edit`/`Write`) use absolute paths **under the worktree `WT`**, and ALL git runs as
+- **In temp-worktree mode, the implementation worktree is sacred.** From Step 2.9 onward, ALL file
+  changes (`Edit`/`Write`) use absolute paths **under the worktree `WT`**, and ALL git runs as
   `git -C "$WT" …`. **Never modify files under the current working directory** — that is the
   feature branch's own worktree and a concurrent session may be relying on it. The only
   things done in the current directory are the fold-back (Step 5) and cleanup (Step 6).
+  In default mode this rule does not apply: `WT` *is* the current checkout, and edits, builds and
+  the commit all happen there.
 - **If auto-plan mode is active**: Do NOT call `EnterPlanMode` or `ExitPlanMode`. Write the full plan as a `## Plan` markdown section in your response, then proceed directly to Step 2.9. There is no approval gate — skipping it is the entire point of the flag.
 - **If auto-plan mode is NOT active**: You MUST call `EnterPlanMode` before any implementation work, then write the plan and call `ExitPlanMode`. The user gets a permission prompt to review and approve. NEVER write or modify code without an approved plan.
 
@@ -208,9 +239,18 @@ The goal: make the plan demonstrably comply with the conventions of the repo you
 
 Then continue with the auto-plan / `EnterPlanMode` finalization in the calling step.
 
-### Step 2.9: Create the Isolated Worktree
+### Step 2.9: Establish the Working Location
 
-Mark `🌳 Create isolated worktree` as `in_progress` via your tracking tool. Do this AFTER plan approval and BEFORE any file changes.
+Do this AFTER plan approval and BEFORE any file changes.
+
+**Default mode (no `+temp-worktree`):** run `pwd` and store the result as `WT` — you work in the
+current checkout. Confirm you are still on the feature branch `F`. A **dirty working tree is
+fine** here (there is no fold-back to protect); just be careful to commit only your own changes
+in Step 4. There is no todo for this — go straight to Step 3.
+
+**Everything below is temp-worktree mode only.**
+
+Mark `🌳 Create isolated worktree` as `in_progress` via your tracking tool.
 
 **Pre-flight (in the current directory — the feature branch's worktree):**
 - Confirm you are on the feature branch `F` (it must match `{type}/{ticket}-{slug}`).
@@ -228,15 +268,20 @@ Mark `🌳 Create isolated worktree` as `in_progress` via your tracking tool. Do
 
 Remember `F`, `T`, and `WT` for the rest of the session. Mark the todo `completed`.
 
-### Step 3: Implement the Plan (in the worktree)
+### Step 3: Implement the Plan (in `WT`)
 
 Using your tracking tool, replace the `🔧 Implementation` placeholder with specific implementation tasks from the plan. Each task should be a separate item.
 
-Implement the plan directly (no sub-agent — you have full context from planning), but **entirely inside the worktree `WT`**:
-- File edits: absolute paths under `WT`. **Read each file at its `{WT}` path before
-  editing** — planning-phase reads were against a different worktree path, so the Edit
-  tool needs a fresh Read of the `{WT}` copy.
+Implement the plan directly (no sub-agent — you have full context from planning), **entirely inside `WT`**:
+- File edits: absolute paths under `WT`.
 - Git: `git -C "$WT" …`.
+- Build/test: invoke the tool with its directory flag pointed at `WT`
+  (e.g. `uv run --directory "{WT}/<subdir>" pytest …`, `dotnet test "{WT}/..."`,
+  `npm --prefix "{WT}" test`, `go test -C "{WT}" ./...`). Do not `cd`.
+
+**Temp-worktree mode only** — a throwaway worktree starts empty of everything but tracked files:
+- **Read each file at its `{WT}` path before editing** — planning-phase reads were against a
+  different worktree path, so the Edit tool needs a fresh Read of the `{WT}` copy.
 - **Install deps first — a fresh worktree has none.** A newly created worktree shares no
   `.venv` / `node_modules` / build outputs with the main checkout. Before building or
   testing, install/sync dependencies *in the worktree* (point at the subproject dir as
@@ -247,9 +292,6 @@ Implement the plan directly (no sub-agent — you have full context from plannin
   - Node: `npm --prefix "{WT}" install`.   .NET: `dotnet restore`.
   If lint/type/test report mass unresolved-import / module-not-found errors, that is the
   missing install — **not** a code defect. Sync, then re-run.
-- Build/test: invoke the tool with its directory flag pointed at `WT`
-  (e.g. `uv run --directory "{WT}/<subdir>" pytest …`, `dotnet test "{WT}/..."`,
-  `npm --prefix "{WT}" test`, `go test -C "{WT}" ./...`). Do not `cd`.
 
 1. Execute each implementation task sequentially
 2. Run tests and verify as you go (against `WT`)
@@ -258,7 +300,7 @@ Implement the plan directly (no sub-agent — you have full context from plannin
 
 ## Post-Implementation Steps
 
-Work through these in order — using your tracking tool, mark each `in_progress` when starting and `completed` when done. All commit and git operations target the worktree `WT`.
+Work through these in order — using your tracking tool, mark each `in_progress` when starting and `completed` when done. All commit and git operations target `WT`.
 
 ### Step 3.5: Convention Compliance Check (Sonnet sub-agent)
 
@@ -282,15 +324,18 @@ Launch a `Task` sub-agent with `model: "sonnet"` to check the freshly written co
 
 Record the sub-agent's summary (count of fixes, or "clean") for the final summary, then mark the todo `completed`.
 
-### Step 4: Commit (one commit in the worktree)
+### Step 4: Commit (exactly one commit)
 
-Mark `💾 Commit (one commit in the worktree)` as `in_progress` via your tracking tool.
+Mark `💾 Commit (exactly one commit)` as `in_progress` via your tracking tool.
 
-Make **exactly one** commit in the worktree, then capture its SHA:
+Make **exactly one** commit in `WT`, then capture its SHA:
 
 1. Run `git -C "{WT}" status` and `git -C "{WT}" diff` to see all changes.
 2. Run `git -C "{WT}" log --oneline -5` to match the recent commit message style.
 3. Stage the relevant files: `git -C "{WT}" add <specific files>` (avoid .env, credentials, etc.).
+   In **default mode** the tree may have been dirty before you started — stage **only** the files
+   you changed in Step 3 and leave any pre-existing modifications untouched, so the one commit
+   cannot swallow unrelated work. Never `git add -A` / `git add .`.
 4. Commit using a HEREDOC (use the `Co-Authored-By` trailer your environment/harness specifies; the line below is the default):
    ```bash
    git -C "{WT}" commit -m "$(cat <<'EOF'
@@ -306,6 +351,10 @@ Make **exactly one** commit in the worktree, then capture its SHA:
 Mark the todo `completed`.
 
 ### Step 5: Fold-Back onto the Feature Branch
+
+**Temp-worktree mode only.** In default mode the Step 4 commit is already on `F` — there is
+nothing to fold back. Skip to Step 7. (`SHA` is then the commit on `F`; only a Step 8 rebase
+can still rewrite it, which is why Step 8 captures `PUSHED_SHA` separately.)
 
 Mark `🔀 Fold-back onto feature branch` as `in_progress` via your tracking tool.
 
@@ -400,6 +449,8 @@ Mark the todo `completed` once the commit is on `F`.
 
 ### Step 6: Remove the Throwaway Worktree
 
+**Temp-worktree mode only.** In default mode there is no worktree to remove — skip to Step 7.
+
 Mark `🧹 Remove throwaway worktree` as `in_progress` via your tracking tool. Only run this after a successful fold-back.
 
 Tear down the worktree in one call:
@@ -437,9 +488,9 @@ Mark the todo `completed`.
 
 Mark `🚀 Push & PR` as `in_progress` via your tracking tool.
 
-The fold-back (Step 5) put your commit on the *local* feature tip, but another session
-may have **pushed** to the remote `{F}` in the meantime (Step 5 only handles a *local*
-concurrent commit). Integrate the remote before pushing:
+Your commit is on the *local* feature tip (put there by Step 5's fold-back in temp-worktree
+mode, or directly by Step 4 in default mode), but another session may have **pushed** to the
+remote `{F}` in the meantime. Integrate the remote before pushing:
 
 1. Fetch the remote tip: `git fetch origin "{F}"`.
 2. If local has diverged from `origin/{F}`, rebase your folded-back commit(s) on top:
@@ -453,9 +504,9 @@ concurrent commit). Integrate the remote before pushing:
      repeat fetch → rebase → push (up to ~3 attempts). **Never** use `--force`.
    - On success, capture the pushed commit for the summary: `PUSHED_SHA = git rev-parse HEAD`
      (in the current dir, like the `git fetch`/`git push` above) and
-     `COMMIT_URL = "$(gh repo view --json url -q .url)/commit/{PUSHED_SHA}"`. The cherry-pick
-     in Step 5 (and any rebase above) rewrites the SHA, so `PUSHED_SHA` — not the worktree
-     `SHA` from Step 4 — is the commit that actually landed on the remote.
+     `COMMIT_URL = "$(gh repo view --json url -q .url)/commit/{PUSHED_SHA}"`. Any rebase above
+     — and, in temp-worktree mode, the Step 5 cherry-pick — rewrites the SHA, so `PUSHED_SHA`,
+     not the Step 4 `SHA`, is the commit that actually landed on the remote.
 4. Your Step 3 verification predates any commits the rebase pulled in (usually unrelated
    areas). CI on the PR is the backstop for the integrated tip; optionally re-run the
    targeted tests if the rebase touched the same area you changed.
@@ -491,11 +542,12 @@ Show what was implemented:
 ```
 Work completed: {TICKET_ID}
 Phase: Fresh start / Continuation
+Mode: in-place / temp-worktree
 Change: [brief description of what was done]
 Files modified: [count]
 Convention check: N fixes applied / clean
-Worktree: {WT} → removed / kept (fold-back blocked)
-Fold-back: clean / conflict resolved / blocked
+Worktree: {WT} → removed / kept (fold-back blocked)   [omit this line in default mode]
+Fold-back: clean / conflict resolved / blocked        [omit this line in default mode]
 Committed: {PUSHED_SHA} — {COMMIT_URL}  /  {SHA} (worktree, not pushed — fold-back blocked)
 Ticket context updated: yes/no
 PR: created #N <url> (draft) / pushed to existing #N <url> / not pushed (fold-back blocked)
@@ -513,4 +565,5 @@ Suggest next steps:
 - Note any assumptions made during planning
 - If the ticket references external docs (Notion, Confluence, etc.), fetch and incorporate that context
 - Context documents persist across worktrees, enabling continuity when switching branches
-- This command leaves the feature branch `F` with exactly one new commit and no leftover worktree — the isolation is invisible once it's done
+- Either mode leaves the feature branch `F` with exactly one new commit and no leftover plumbing — in temp-worktree mode the isolation is invisible once it's done
+- Reach for `+temp-worktree` when another session is (or may be) working the same feature branch; for a solo session the default in-place mode does the same work without the worktree setup, dependency sync, file re-reads and fold-back

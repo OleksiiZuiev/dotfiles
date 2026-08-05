@@ -1,50 +1,80 @@
 ---
-description: Address review comments on a PR in an isolated worktree, then fold the commits back onto the feature branch — lets multiple sessions share one branch without colliding.
+description: Address review comments on a PR — merit-assessed one-by-one, one commit per fix, replies deferred until the SHAs settle. Flags: +temp-worktree (isolate in a throwaway worktree and fold back)
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, TodoWrite, AskUserQuestion
-argument-hint: [<pr-number>]
+argument-hint: [+temp-worktree] [<pr-number>]
 ---
 
 You are addressing human review comments on a pull request. This is the **v2** of
-`/ds:polish-pr`: the implementation (file edits + commits) happens in a **private throwaway
-worktree** off the feature branch, and the resulting commits are **folded back** onto the live
-feature tip. This lets several independent sessions polish the same feature branch at once
-without trampling each other's working tree, and tolerates another session committing in the
-meantime.
+`/ds:polish-pr`: same workflow — fetch comments, assess each on merit (thinking-buddy posture),
+implement approved fixes, reply to threads, push, optionally update the PR description — with
+the replies deferred to the end so they always cite the SHA that actually landed.
 
-It is otherwise the same workflow as `/ds:polish-pr`: fetch comments, assess each on merit
-(thinking-buddy posture), implement approved fixes, reply to threads, push, and optionally
-update the PR description.
+By default the fixes are made **in the current checkout**. The `+temp-worktree` flag switches on
+an isolation lifecycle: the implementation (file edits + commits) happens in a **private
+throwaway worktree** off the feature branch and the resulting commits are **folded back** onto
+the live feature tip — which lets several independent sessions polish the same feature branch at
+once without trampling each other's working tree, and tolerates another session committing in
+the meantime.
+
+### Temp-Worktree Mode
+
+{{#if $ARGUMENTS}}
+{{!-- Isolation is opt-in. The + prefix avoids the Claude CLI consuming it as a CLI flag. --}}
+If the text "{{$ARGUMENTS}}" contains `+temp-worktree`, then **temp-worktree mode is active**. In this mode:
+- Step 6 creates a throwaway worktree, Step 8 folds the fix-commits back onto the feature branch, and Step 9 tears the worktree down
+- Strip `+temp-worktree` from the arguments before parsing the rest (see Step 0.1 — what remains is the PR number, if any)
+{{/if}}
+
+**Unless that flag is present, temp-worktree mode is OFF — this is the default.** In default
+mode you work directly in the current checkout: **skip Steps 6, 8 and 9 entirely**. There is no
+worktree to create, no dependency sync to run, no fold-back to perform and nothing to tear down —
+the Step 7 fix-commits land straight on the feature branch.
+
+### Working Location (`WT`)
+
+Every step below refers to the working location as `WT`. What it points at depends on the mode:
+
+- **Temp-worktree mode**: the throwaway worktree created in Step 6.
+- **Default mode**: the absolute path of the **current working directory** — capture it once with
+  `pwd` before Step 7.
+
+Either way `git -C "{WT}" …` and `{WT}/<path>` are literally correct, so the steps read the same
+in both modes.
 
 ## The Central Adaptation (read this first)
 
 In `/ds:polish-pr` (v1) each comment is handled as **edit → commit → reply** in one loop, and
-the push happens at the end. In v2 the fold-back's **cherry-pick** (and any push-time
-**rebase**) **rewrites the commit SHAs**, so a reply posted against a worktree SHA would point
-at a commit that no longer exists on the branch. Therefore v2 **defers ALL GitHub replies**
-(fixed / skipped / dismissed) until **after fold-back + push**, when the final SHAs are known.
+the push happens at the end. In v2 a **rebase at push time** — and, in temp-worktree mode, the
+fold-back's **cherry-pick** — **rewrites the commit SHAs**, so a reply posted mid-loop would
+point at a commit that no longer exists on the branch. Therefore v2 **defers ALL GitHub replies**
+(fixed / skipped / dismissed) until **after the push**, when the final SHAs are known. This
+holds in **both** modes: the default mode has no cherry-pick, but a push-time rebase alone is
+enough to invalidate an early reply.
 
 The flow is split into three zones:
-- **Before the worktree (current dir, read-only):** detect PR, fetch comments + thread IDs,
-  display summary, scope assessment, triage, per-comment plan + approval. No edits.
-- **Inside the worktree:** implement each approved fix, one commit per fix. No replies, no push.
-- **After the worktree (current dir):** fold-back → remove worktree → push → post all replies
-  → update PR description → summary.
+- **Read-only front-end (current dir):** detect PR, fetch comments + thread IDs, display
+  summary, scope assessment, triage, per-comment plan + approval. No edits.
+- **Implementation (in `WT`):** implement each approved fix, one commit per fix. No replies, no push.
+- **Integration (current dir):** fold-back → remove worktree *(temp-worktree mode)* → push →
+  post all replies → update PR description → summary.
 
 ## Critical Rules
 
-- **The implementation worktree is sacred.** From Step 6 (worktree creation) onward, ALL file
-  changes (`Edit`/`Write`) use absolute paths **under the worktree `WT`**, and ALL git runs as
-  `git -C "$WT" …`. **Never modify files under the current working directory** during
-  implementation — that is the feature branch's own worktree and a concurrent session may be
-  relying on it. The only things done in the current directory are the fold-back (Step 8),
-  cleanup (Step 9), push (Step 10), and GitHub replies / PR-description (Steps 11–12).
+- **In temp-worktree mode, the implementation worktree is sacred.** From Step 6 (worktree
+  creation) onward, ALL file changes (`Edit`/`Write`) use absolute paths **under the worktree
+  `WT`**, and ALL git runs as `git -C "$WT" …`. **Never modify files under the current working
+  directory** during implementation — that is the feature branch's own worktree and a concurrent
+  session may be relying on it. The only things done in the current directory are the fold-back
+  (Step 8), cleanup (Step 9), push (Step 10), and GitHub replies / PR-description (Steps 11–12).
+  In default mode this rule does not apply: `WT` *is* the current checkout, and edits, builds and
+  the commits all happen there.
 - **Defer replies.** Do not post any GitHub reply (fixed/skipped/dismissed) until the final
-  SHAs are settled in Step 10. Replies in Step 11 must reference `FINAL_SHA`, never a worktree
-  SHA.
-- **A fresh worktree has no deps.** A newly created worktree shares no `.venv` / `node_modules`
-  / build outputs with the main checkout. If a fix needs a build or test, install/sync deps
-  *in the worktree* first (see Step 7). Mass unresolved-import / module-not-found errors after
-  a fresh worktree mean the missing install — **not** a code defect.
+  SHAs are settled in Step 10. Replies in Step 11 must reference `FINAL_SHA`, never a
+  pre-push SHA. Applies in both modes.
+- **In temp-worktree mode, a fresh worktree has no deps.** A newly created worktree shares no
+  `.venv` / `node_modules` / build outputs with the main checkout. If a fix needs a build or
+  test, install/sync deps *in the worktree* first (see Step 7). Mass unresolved-import /
+  module-not-found errors after a fresh worktree mean the missing install — **not** a code defect.
 - **Never `--force`.** Push hardening uses fetch → rebase → retry, never a force-push.
 
 ## Your Task
@@ -55,14 +85,15 @@ The flow is split into three zones:
 tool this build exposes — `TodoWrite` if available, otherwise track it inline in your messages.
 Either way these steps are mandatory and run in order; the tool is only for visibility.
 
-Create these items (all `pending`):
+Create these items (all `pending`). Items 4, 6 and 7 are **temp-worktree mode only — omit them
+entirely in default mode**:
 1. `📥 Fetch review comments + thread IDs` — Steps 0.1–2
 2. `🧭 Scope assessment + triage` — Steps 3–4
 3. `📝 Plan phase: per-comment assessment + approval` — Step 5
-4. `🌳 Create isolated worktree` — Step 6
-5. `🔧 Implement approved fixes (one commit per fix, in worktree)` — Step 7
-6. `🔀 Fold-back onto feature branch` — Step 8
-7. `🧹 Remove throwaway worktree` — Step 9
+4. `🌳 Create isolated worktree` — Step 6 *(temp-worktree mode only)*
+5. `🔧 Implement approved fixes (one commit per fix)` — Step 7
+6. `🔀 Fold-back onto feature branch` — Step 8 *(temp-worktree mode only)*
+7. `🧹 Remove throwaway worktree` — Step 9 *(temp-worktree mode only)*
 8. `🚀 Push (fetch → rebase → push)` — Step 10
 9. `💬 Post all replies (fixed / skipped / dismissed)` — Step 11
 10. `📄 Update PR description` — Step 12
@@ -71,7 +102,8 @@ Create these items (all `pending`):
 ### Step 0.1: Detect PR and Feature Branch
 
 1. **Determine the PR number** (`PR_NUMBER`):
-   - If `$1` is provided and non-empty, use it.
+   - Strip `+temp-worktree` from the arguments first. If what remains is non-empty, use it as
+     the PR number.
    - Otherwise auto-detect from the current branch:
      ```bash
      gh pr view --json number --jq '.number'
@@ -163,7 +195,7 @@ is silent — no user interaction.
 For each in-scope unresolved thread with replies:
 1. Read the full thread conversation (original comment + all replies).
 2. Check the current state of the code at the commented location (read in the **current dir**
-   — these are read-only checks before the worktree exists).
+   — this whole phase is read-only, before any edits are made).
 3. Assess whether the reviewer's concern is already addressed — by a code change, an
    explanatory reply, or both.
 4. **If addressed**: exclude from processing; record the thread and the reason (e.g., "code
@@ -216,21 +248,30 @@ d. **Handle Skipped Comments** — if "Skip", ask for rationale via `AskUserQues
 e. **Handle Dismissed Comments** — if "Dismiss", use your thinking-buddy assessment as the
    rationale automatically (no extra prompt). Record it for the reply phase.
 
-**Output of this phase** (carry into the worktree):
+**Output of this phase** (carry into implementation):
 - **Approved fixes** — an ordered list; each entry records its **thread ID**, target file(s),
   and the intended change.
 - **Skipped** comments (+ rationale).
 - **Dismissed** comments (+ rationale).
 
 **Zero-fix guard:** if there are **no approved code fixes** (everything was skipped/dismissed),
-skip Steps 6–10 entirely (no worktree, no fold-back, no push) and jump straight to **Step 11**
-to post the skip/dismiss replies, then Step 13. Mark the worktree/fold-back/push todos as not
-applicable.
+skip Steps 6–10 entirely (nothing to implement, fold back or push) and jump straight to
+**Step 11** to post the skip/dismiss replies, then Step 13. Mark whichever of the
+implementation/worktree/fold-back/push todos you created as not applicable.
 
-### Step 6: Create the Isolated Worktree
+### Step 6: Establish the Working Location
 
-Mark `🌳 Create isolated worktree` as `in_progress`. Do this AFTER all approvals and BEFORE any
-file changes.
+Do this AFTER all approvals and BEFORE any file changes.
+
+**Default mode (no `+temp-worktree`):** run `pwd` and store the result as `WT` — you work in the
+current checkout. Confirm you are still on the feature branch `F`. A **dirty working tree is
+fine** here (there is no fold-back to protect); Step 7 already stages only each fix's own files,
+so keep it that way and leave pre-existing modifications untouched. There is no todo for this —
+go straight to Step 7.
+
+**Everything below is temp-worktree mode only.**
+
+Mark `🌳 Create isolated worktree` as `in_progress`.
 
 **Pre-flight (in the current directory — the feature branch's worktree):**
 - Confirm you are on the feature branch `F`.
@@ -255,22 +296,24 @@ file changes.
 
 Remember `F`, `T`, and `WT` for the rest of the session. Mark the todo `completed`.
 
-### Step 7: Implement Approved Fixes (in the worktree, one commit per fix)
+### Step 7: Implement Approved Fixes (one commit per fix)
 
 Mark `🔧 Implement approved fixes` as `in_progress`.
 
-Work the **approved fixes in order**, **entirely inside the worktree `WT`**:
-- File edits: absolute paths under `WT`. **Read each file at its `{WT}` path before editing** —
-  the plan-phase reads were against the current dir, so the Edit tool needs a fresh Read of the
-  `{WT}` copy.
+Work the **approved fixes in order**, **entirely inside `WT`**:
+- File edits: absolute paths under `WT`.
 - Git: `git -C "$WT" …`.
+- Build/test: invoke the tool with its directory flag pointed at `WT`
+  (`uv run --directory "{WT}/<subdir>" pytest …`, `dotnet test "{WT}/..."`,
+  `npm --prefix "{WT}" test`, `go test -C "{WT}" ./...`). Do not `cd`.
+
+**Temp-worktree mode only** — a throwaway worktree starts empty of everything but tracked files:
+- **Read each file at its `{WT}` path before editing** — the plan-phase reads were against the
+  current dir, so the Edit tool needs a fresh Read of the `{WT}` copy.
 - **Install deps first if you will build/test** — a fresh worktree has none:
   - Python / uv workspace: `uv sync --all-packages --directory "{WT}/<subdir>"` (a plain
     `uv run` builds a venv missing the workspace-member editables → `ModuleNotFoundError`).
   - Node: `npm --prefix "{WT}" install`.  .NET: `dotnet restore "{WT}/..."`.
-- Build/test: invoke the tool with its directory flag pointed at `WT`
-  (`uv run --directory "{WT}/<subdir>" pytest …`, `dotnet test "{WT}/..."`,
-  `npm --prefix "{WT}" test`, `go test -C "{WT}" ./...`). Do not `cd`.
 
 For **each** approved fix:
 1. Read the relevant file(s) at their `{WT}` path; make the change with Edit/Write under `WT`.
@@ -289,7 +332,7 @@ For **each** approved fix:
    EOF
    )"
    ```
-4. Capture the worktree SHA: `git -C "{WT}" rev-parse HEAD` → record `WT_SHA[thread]` for this fix.
+4. Capture the commit SHA: `git -C "{WT}" rev-parse HEAD` → record `WT_SHA[thread]` for this fix.
 5. **Do NOT reply. Do NOT push.**
 
 Keep the ordered mapping `thread → WT_SHA` (and the commit order) for fold-back. For an
@@ -297,6 +340,11 @@ Keep the ordered mapping `thread → WT_SHA` (and the commit order) for fold-bac
 thread maps to its own SHA). Mark the todo `completed` when all fixes are committed.
 
 ### Step 8: Fold-Back onto the Feature Branch
+
+**Temp-worktree mode only.** In default mode the Step 7 fix-commits are already on `F` — there is
+nothing to fold back. Set `FOLDED_SHA[thread] = WT_SHA[thread]` for every fix and skip to
+Step 10. (Step 10 then settles `FINAL_SHA` as usual — only a push-time rebase can still rewrite
+these.)
 
 Mark `🔀 Fold-back onto feature branch` as `in_progress`.
 
@@ -332,6 +380,8 @@ Mark the todo `completed` once all fix-commits are on `F`.
 
 ### Step 9: Remove the Throwaway Worktree
 
+**Temp-worktree mode only.** In default mode there is no worktree to remove — skip to Step 10.
+
 Mark `🧹 Remove throwaway worktree` as `in_progress`. Only run after a fully successful fold-back.
 
 Tear down the worktree in one call:
@@ -350,9 +400,10 @@ Mark the todo `completed`.
 
 ### Step 10: Push (and settle the final SHAs)
 
-Mark `🚀 Push` as `in_progress`. The fold-back put your commits on the *local* feature tip, but
-another session may have **pushed** to the remote `{F}` in the meantime. Decide whether to
-push, then integrate the remote.
+Mark `🚀 Push` as `in_progress`. Your fix-commits are on the *local* feature tip (put there by
+Step 8's fold-back in temp-worktree mode, or directly by Step 7 in default mode), but another
+session may have **pushed** to the remote `{F}` in the meantime. Decide whether to push, then
+integrate the remote.
 
 - **If there ARE deferred comments** (from Step 3): every push triggers a CI review round, so
   pushing partial work wastes CI cycles. Show "Addressed X of Y comments. Z deferred to next
@@ -376,7 +427,7 @@ push, then integrate the remote.
    - If **rejected (non-fast-forward)** — a session pushed inside the race window — repeat
      fetch → rebase → push (up to ~3 attempts). **Never** use `--force`.
 4. **Settle `FINAL_SHA`:**
-   - **If no rebase occurred** in step 2, the cherry-pick SHAs are final: `FINAL_SHA = FOLDED_SHA`.
+   - **If no rebase occurred** in step 2, the commits are final as they stand: `FINAL_SHA = FOLDED_SHA`.
    - **If a rebase occurred** (it rewrote every folded commit), recompute the mapping. The
      commits you added are exactly those ahead of the remote base; list them in order:
      ```bash
@@ -447,14 +498,15 @@ Mark `✅ Final summary` as `in_progress`. Show:
 
 ```
 PR: #{PR_NUMBER}
+Mode: in-place / temp-worktree
 Addressed: N comments
   - <file>:<line> — Fixed in {FINAL_SHA}   (or "local only — not pushed" when push was deferred)
 Auto-skipped (already addressed): <list with reasons>
 Skipped (reply posted): <list with rationale>
 Dismissed (reply posted): <list with rationale>
 Deferred to next round: <list with effort> — run /ds:polish-pr2 again
-Worktree: {WT} → removed / kept (fold-back blocked)
-Fold-back: clean / conflict resolved / blocked
+Worktree: {WT} → removed / kept (fold-back blocked)   [omit this line in default mode]
+Fold-back: clean / conflict resolved / blocked        [omit this line in default mode]
 Pushed: yes ({F}) / no (deferred) / no (fold-back blocked)
 PR description: updated / skipped / n-a (not pushed)
 ```
@@ -490,20 +542,26 @@ Remind the user to **manually resolve** the conversations after reviewing the ch
 - **PR Description Updates**: always run the check (unless nothing was pushed); present what's
   stale and let the user decide.
 
-**New in v2:**
+**New in v2 (both modes):**
+- **Deferred replies**: replies are posted only in Step 11, against `FINAL_SHA` — never a
+  pre-push SHA — because a push-time rebase (and, in temp-worktree mode, the cherry-pick)
+  rewrites SHAs.
+- **Never `--force`**: push integrates via fetch → rebase → retry only.
+- **Zero-fix guard**: if all comments are skipped/dismissed, skip implementation, fold-back and
+  push, and go straight to posting skip/dismiss replies.
+
+**Temp-worktree mode only (`+temp-worktree`):**
 - **Worktree is sacred**: no current-dir `Edit`/`Write`/mutating `git` before Step 8. All
   implementation is `git -C "$WT"` + absolute `WT` paths.
-- **Deferred replies**: replies are posted only in Step 11, against `FINAL_SHA` — never a
-  worktree SHA — because cherry-pick and rebase rewrite SHAs.
 - **Per-fix fold-back + SHA remap**: each fix is cherry-picked onto the live tip in order; a
   push-time rebase re-maps `FINAL_SHA` via `git log --reverse origin/{F}..HEAD`.
 - **Fold-back-blocked recovery**: on an unresolvable cherry-pick/rebase conflict, STOP, keep
   the worktree, print a recovery handle, post no replies, and report the partial outcome.
 - **Fresh-worktree deps**: install/sync deps in `WT` before building/testing; mass
   unresolved-import errors are the missing install, not a code defect.
-- **Never `--force`**: push integrates via fetch → rebase → retry only.
-- **Zero-fix guard**: if all comments are skipped/dismissed, skip the worktree/fold-back/push
-  and go straight to posting skip/dismiss replies.
+- **When to reach for it**: another session is (or may be) working the same feature branch. For
+  a solo polish round the default in-place mode does the same work without the worktree setup,
+  dependency sync, file re-reads and fold-back.
 
 ### GitHub CLI Commands Reference
 
