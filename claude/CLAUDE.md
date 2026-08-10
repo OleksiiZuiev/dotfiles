@@ -4,6 +4,7 @@
 - Instead of proactively doing more then was asked, ask for adding extra into the scope that you think is important.
 
 #Commandments for writing style
+- One word per concept, everywhere. Once a value has a name, use that word for it in identifiers, comments, docstrings, test names and the README — never introduce a synonym for a value that already has a name, or a reader has to work out whether the two words mean the same thing.
 - Don't use the phrase "load-bearing" in anything you write — chat replies, code comments, PR and commit descriptions, docs. This is a stylistic preference, not a correctness rule: just pick plainer wording that says what you actually mean (e.g. "essential", "critical", "relied on by X", or describe the dependency directly).
 
 #Commandments for approaching coding
@@ -11,8 +12,10 @@
 - When possible use TDD: write a test, check that it is failing, write the code and check it is passing
 - Test only your own contract: don't write tests that re-verify a dependency's behaviour (the validation library, the framework) or a trivially-true invariant.
 - Keep a test in the file or suite named for the subject it exercises; when a test's subject changes, move or rename it to match.
+- Every test must be able to fail for the reason it exists. Reject an assertion that also holds when the observed surface is empty (`x not in caplog.text` passes on empty output), a test whose only proof is that a *different* exception wasn't raised, and an assertion that pins only the absence of a previous implementation. If the behaviour in the test's name isn't observable at the seam under test, assert what is and rename the test to match.
 - Add explaining comments only when the code isn't self-evident, or when asked. Prefer expressive code to comments, and delete any comment, JSDoc, or docstring that merely restates the code, a field name, or a type — keep only the non-obvious *why*; when in doubt, cut.
 - Comments must describe what the code does now, not what changed to get here. Especially during refactoring: never write "refactored from X", "now uses Y instead of Z", "previously did W", "moved from A". Once the refactor is in the past, these comments become noise that misleads readers. Write comments that would still make sense to someone reading the code a year from now with no knowledge of its history. The same applies to speculative or future-tense rationale ("in case a future flow needs this", "kept for when X") and references to abandoned approaches — and to test names: name a test for the behaviour it asserts, never for an intermediate approach that was dropped.
+- When you move or change a line, re-read the comment attached to it and cut the part that is no longer true there. A comment that was accurate about the old code is worse than no comment once half of it describes something the line no longer does.
 - Don't describe another module's internals, or a contract owned elsewhere (another service, another repo's payload), in a comment — it drifts stale. Point to the one authoritative definition instead.
 - Triage mutation-testing survivors on merit: for each, judge whether the mutant maps to a realistic, harmful regression, not merely whether a test can kill it. Add a test only for the plausible-harm ones, verify it fails against the injected mutant (then revert), and document the survivors you deliberately leave (equivalent, redundant, or un-killable) — don't chase a test per survivor.
 
