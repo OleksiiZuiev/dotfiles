@@ -297,7 +297,7 @@ Use the Task tool with a subagent (`model: "haiku"`) to update the ticket contex
 - Key decisions made
 - Files changed
 
-The subagent should append a new session entry following the existing document format.
+The subagent should append a new session entry following the existing document format — or, when the context file does not exist yet, create it from the template in the `ticket-context` skill (`~/.claude/skills/ticket-context/SKILL.md`).
 
 Mark `📝 Update ticket context: launch sub-agent` as `completed` via TodoWrite.
 

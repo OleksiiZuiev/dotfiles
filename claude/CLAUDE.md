@@ -30,24 +30,6 @@
 - For non-git commands in a different directory, use absolute paths
 - This allows granular permission control per command
 
-#Commandments for writing bash functions
-- These apply to shell functions in this dotfiles repo's `bash.d/`.
-- Every function must support `-h`/`--help`: print idiomatic CLI usage and `return 0` without side effects, intercepted as the function's first statement:
-  ```bash
-  if [[ "$1" == "-h" || "$1" == "--help" ]]; then
-      cat <<'EOF'
-  Usage: <fn> <args>
-  ...
-  Options:
-    -h, --help    Show this help and exit
-  EOF
-      return 0
-  fi
-  ```
-- The `--help` text is the single source of truth for usage; keep the top-of-file comment to a brief one-line purpose.
-- When you create or change a `bash.d/` function (its arguments or behavior), create or update its `--help` in the same change.
-- Reference pattern: `bash.d/claude-merge-rebase.sh` (uses a shared usage helper when multiple functions share help).
-
 # Local GitHub Repos
 
 > **IMPORTANT**: When the user mentions ANY repo, package, SDK, library, or dependency by name — even casually — ALWAYS check the local filesystem FIRST before searching the web or claiming you can't access it. This includes references like `unified-to/unified-csharp-sdk`, "the unified SDK", "check the platform repo", etc.
@@ -65,117 +47,14 @@ Example: user says "look at `unified-to/unified-csharp-sdk`" → read files from
 
 Regenerate the map: `bash ~/.claude/scripts/update-repo-map.sh`
 
-# Symlink Management
-
-Files in this repo are symlinked to `~/.claude/` and `~/.bash.d/` by the install script. After creating new files that need to be symlinked, the install script must be re-run.
-
-On Windows without Developer Mode, use `install-admin.ps1` in the repo root — it self-elevates to admin (UAC prompt) and runs `install.sh --home`.
-
 # Ticket Context Documents
 
-Session history for Linear tickets, stored outside the repo for worktree access.
-
-## Configuration
-
-Set the environment variable to customize the storage location:
-
-```bash
-export CLAUDE_TICKET_CONTEXTS_DIR="/c/work/ticket-contexts"
-```
-
-Default: `/c/work/ticket-contexts/`
-
-## Structure
-
-Each ticket gets its own file: `{TICKET-ID}.md` containing:
-- Ticket info and Linear link
-- Session history (accomplishments, decisions, files changed)
-
-## Document Template
-
-```markdown
-# {TICKET-ID}: {Ticket Title}
-
-## Ticket Info
-- **Linear Link**: https://linear.app/team/issue/{TICKET-ID}
-- **Created**: {YYYY-MM-DD}
-
-## Sessions
-
-### {YYYY-MM-DD HH:MM} - {Brief Session Title}
-**Branch**: `{branch-name}`
-**Repository**: `{repo-name}`
-
-#### Accomplished
-- {bullet list}
-
-#### Key Decisions
-- {decision}: {rationale}
-
-#### Files Changed
-- `{path}` - {description}
-
----
-```
-
-# Repo Map
-
-A generated index of all local GitHub repos with README-derived summaries. Used for resolving partial or ambiguous repo references.
-
-## Configuration
-
-Set the environment variable to customize the storage location:
-
-```bash
-export CLAUDE_REPO_MAP="/c/work/claude-data/repo-map.md"
-```
-
-Default: `/c/work/claude-data/repo-map.md`
-
-Regenerate: `bash ~/.claude/scripts/update-repo-map.sh`
+Linear session history lives in `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET-ID}.md`.
+Path convention and the document template: the `ticket-context` skill.
 
 # MLflow telemetry
 
-- **VPN required.** All `*.devds.net` hosts only resolve over the corporate VPN;
-  off-VPN you get `getaddrinfo failed` (DNS), not an HTTP error. `mlflow_dump.py`
-  turns that into a "connect the corporate VPN" message. Transient DNS blips can
-  also happen on-VPN — one retry is reasonable.
-- **Environment matrix** (DataSnipper agents-and-tools). Source: infra
-  `agentserver-<env>.tfvars` key `mlflow_tracking_uri`.
-
-  | env alias | tracking URI | notes |
-  |---|---|---|
-  | `dev` / `devweu` | `https://mlflow-devweu.devds.net` | auto-swept |
-  | `prd` / `prod` / `prdweu` | `https://mlflow-prdweu.devds.net` | auto-swept; default for plain `prd`/`prod` |
-  | `prdeus` | `https://mlflow-prdeus.devds.net` | auto-swept; older MLflow (see per-trace note) |
-  | `stg` / `stgweu`, `stgeus` | `https://mlflow-<env>.devds.net` | reachable via explicit `--env`; not auto-swept |
-  | `deveus` | `https://mlflow-deveus.devds.net` | unreachable — TLS hostname mismatch; skip it |
-
-  **Experiment ids are resolved at runtime, not hardcoded.** For `session`,
-  `mlflow_dump.py` lists each env's experiments and searches those named `agent-server*`
-  (e.g. `agent-server`, `agent-server-local-dev`) first, then sweeps the rest — so a
-  renamed/renumbered experiment is still found. (This replaced a stale baked-in map:
-  `devweu` was pinned to experiment `9`, but `9` is now a `disclosure-accuracy` experiment
-  and the agent-server traces had moved to `1` (`agent-server-local-dev`), so a valid UUID
-  falsely read as "no traces matched".) Pin one explicitly with `--experiment <id>` (one
-  env, no sweep). With no `--env`, `session` auto-sweeps `devweu`→`prdweu`→`prdeus` and
-  prints which matched; a "no traces matched" message now separates *reachable, 0 matches*
-  from *couldn't reach* (the latter usually the VPN). To list an env's experiments by hand:
-  `POST {uri}/api/2.0/mlflow/experiments/search {"max_results":1000}`.
-- Chat-session UUID lives in trace `request_metadata` under `mlflow.trace.session`.
-  Search filter: `metadata.\`mlflow.trace.session\` = '<uuid>'` (NOT `tags.`).
-- For full per-trace span data, use `GET /api/3.0/mlflow/traces/get?trace_id=…` on
-  the current weu servers. On the older `prdeus` server that endpoint 404s; the
-  pre-3.3.0 path `GET /ajax-api/2.0/mlflow/get-trace-artifact?request_id=<tr-id>`
-  (note the param is `request_id`, not `trace_id`) is the working one — it returns
-  only a UI subset of spans (no TOOL/LLM spans; the full pydantic-ai history lives
-  in each span's `mlflow.spanOutputs`). `mlflow_dump.py` falls back to it
-  automatically, and its `messages <tr-id>` subcommand renders that history.
-- Responses regularly exceed 10 MB (a single span can be ~14 MB). **Do not pull
-  traces through `WebFetch`.** Use `~/.claude/scripts/mlflow_dump.py` instead — it
-  writes compact projections to `~/.cache/mlflow-dump/` and only emits full span
-  payloads on demand. Pick the env with `--env`:
-  `mlflow_dump.py session <uuid> --env prd` / `trace <tr-id> --env prd` /
-  `span <tr-id> <span-id> --env prd` / `messages <tr-id> --env prd` (`--env`
-  overrides `MLFLOW_TRACKING_URI`; omit it on `session` to auto-sweep envs).
-  The `/ds:analyze-mlflow <id> <env> <prompt>` slash command wraps this end-to-end.
+DataSnipper MLflow lives on `*.devds.net` — corporate VPN required. Never pull traces through
+`WebFetch`; use `~/.claude/scripts/mlflow_dump.py`. Env matrix, session-filter syntax and the
+`prdeus` legacy-API quirk: the `datasnipper-mlflow` skill. `/ds:analyze-mlflow <id> <env> <prompt>`
+wraps it end-to-end.

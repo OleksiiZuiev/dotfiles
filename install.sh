@@ -184,6 +184,25 @@ if [ -d "$DOTFILES_DIR/claude/overlays" ]; then
     done
 fi
 
+# Claude skills (each skill is a directory: SKILL.md plus any bundled files)
+if [ -d "$DOTFILES_DIR/claude/skills" ]; then
+    mkdir -p "$TARGET_HOME/.claude/skills"
+    for skill in "$DOTFILES_DIR"/claude/skills/*/; do
+        [ -d "$skill" ] || continue
+        skill="${skill%/}"
+        create_link "$skill" "$TARGET_HOME/.claude/skills/$(basename "$skill")"
+    done
+fi
+
+# Claude rules (scoped by `paths:` frontmatter; always-on without it)
+if [ -d "$DOTFILES_DIR/claude/rules" ]; then
+    mkdir -p "$TARGET_HOME/.claude/rules"
+    for rule in "$DOTFILES_DIR"/claude/rules/*.md; do
+        [ -e "$rule" ] || continue
+        create_link "$rule" "$TARGET_HOME/.claude/rules/$(basename "$rule")"
+    done
+fi
+
 # Install VS Code settings
 echo ""
 echo "Installing VS Code configuration..."
