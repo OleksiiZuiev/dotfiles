@@ -2,7 +2,7 @@
 # Generates repo-map.md by scanning local GitHub repos
 # Usage: bash ~/.claude/scripts/update-repo-map.sh
 
-GITHUB_ROOT="/c/work/github"
+GITHUB_ROOTS="${CLAUDE_GITHUB_ROOTS:-/c/work/github}"
 OUTPUT_FILE="${CLAUDE_REPO_MAP:-/c/work/claude-data/repo-map.md}"
 
 mkdir -p "$(dirname "$OUTPUT_FILE")"
@@ -39,38 +39,44 @@ HEADER
 echo "<!-- Last updated: $(date +%Y-%m-%d) -->" >> "$OUTPUT_FILE"
 cat >> "$OUTPUT_FILE" << 'TABLE'
 
-| Repo | Org | Summary |
-|------|-----|---------|
+| Repo | Org | Path | Summary |
+|------|-----|------|---------|
 TABLE
 
-# Scan repos
-for org_dir in "$GITHUB_ROOT"/*/; do
-    [ -d "$org_dir" ] || continue
-    local_org=$(basename "$org_dir")
+# Scan repos. A root that does not exist on this OS is skipped, so the same
+# roots list is safe to export to every shell.
+IFS=':' read -r -a roots <<< "$GITHUB_ROOTS"
+for github_root in "${roots[@]}"; do
+    [ -d "$github_root" ] || continue
 
-    for repo_dir in "$org_dir"*/; do
-        [ -d "$repo_dir/.git" ] || continue
-        local_repo=$(basename "$repo_dir")
+    for org_dir in "$github_root"/*/; do
+        [ -d "$org_dir" ] || continue
+        local_org=$(basename "$org_dir")
 
-        # Find README (case-insensitive)
-        readme=""
-        for candidate in "$repo_dir"README.md "$repo_dir"readme.md "$repo_dir"Readme.md; do
-            if [ -f "$candidate" ]; then
-                readme="$candidate"
-                break
+        for repo_dir in "$org_dir"*/; do
+            [ -d "$repo_dir/.git" ] || continue
+            local_repo=$(basename "$repo_dir")
+
+            # Find README (case-insensitive)
+            readme=""
+            for candidate in "$repo_dir"README.md "$repo_dir"readme.md "$repo_dir"Readme.md; do
+                if [ -f "$candidate" ]; then
+                    readme="$candidate"
+                    break
+                fi
+            done
+
+            if [ -n "$readme" ]; then
+                summary=$(extract_summary "$readme")
+            else
+                summary="No description"
             fi
+
+            # Escape pipes in summary
+            summary="${summary//|/\\|}"
+
+            echo "| $local_repo | $local_org | ${repo_dir%/} | $summary |" >> "$OUTPUT_FILE"
         done
-
-        if [ -n "$readme" ]; then
-            summary=$(extract_summary "$readme")
-        else
-            summary="No description"
-        fi
-
-        # Escape pipes in summary
-        summary="${summary//|/\\|}"
-
-        echo "| $local_repo | $local_org | $summary |" >> "$OUTPUT_FILE"
     done
 done
 

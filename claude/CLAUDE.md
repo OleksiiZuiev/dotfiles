@@ -36,9 +36,11 @@
 
 Repos are stored at `C:\work\github\{org}\{repo-name}`.
 
+**Exception — UpLink.** It lives on ext4 in WSL at `~/work/github/datasnipper-enterprise/UpLink`; there is no Windows clone. A Windows shell cannot usefully edit it, so each OS keeps its own map: `~/.claude/repo-map.md` in WSL, `/c/work/claude-data/repo-map.md` on Windows (Windows repos only).
+
 **Resolution steps** (follow in order for every repo/library mention):
 1. **Exact `org/repo`**: resolve directly to `C:\work\github\{org}\{repo}` and READ from that path
-2. **Partial or ambiguous name**: read `${CLAUDE_REPO_MAP:-/c/work/claude-data/repo-map.md}` for the full repo list with descriptions, match by name or summary, then READ from the matched path
+2. **Partial or ambiguous name**: read `${CLAUDE_REPO_MAP:-/c/work/claude-data/repo-map.md}` for the full repo list, match by name or summary, then READ from the path in its `Path` column
 3. **Multiple matches**: show candidates and ask user to confirm
 4. **Not found locally**: only then fall back to web search or tell the user the repo isn't available locally
 5. **Before reading code**: if the resolved repo is not the current working directory, run `git pull` in that repo to ensure you're reading the latest code
