@@ -90,7 +90,8 @@ _claude_resolve_conflicts() {
     local op="$1"
     local target_ref="$2"
     local source_branch="$3"
-    local real_claude="$HOME/.local/bin/claude.exe"
+    local real_claude
+    real_claude=$(claude_bin)
 
     local conflicting_files
     conflicting_files=$(git diff --name-only --diff-filter=U | tr '\n' ' ')

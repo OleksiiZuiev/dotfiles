@@ -20,7 +20,8 @@ EOF
     fi
 
     local INDEX_FILE="${CLAUDE_NAMED_SESSIONS:-/c/work/claude-data/named-sessions.json}"
-    local real_claude="$HOME/.local/bin/claude.exe"
+    local real_claude
+    real_claude=$(claude_bin)
     local query="${1:-}"
 
     if [[ ! -f "$INDEX_FILE" ]]; then

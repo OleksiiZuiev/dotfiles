@@ -24,7 +24,8 @@ EOF
     fi
 
     local HISTORY_FILE="$HOME/.claude_repos"
-    local real_claude="$HOME/.local/bin/claude.exe"
+    local real_claude
+    real_claude=$(claude_bin)
 
     # Refresh repo map in background
     bash "$HOME/.claude/scripts/update-repo-map.sh" &>/dev/null &
