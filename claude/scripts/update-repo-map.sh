@@ -2,6 +2,10 @@
 # Generates repo-map.md by scanning local GitHub repos
 # Usage: bash ~/.claude/scripts/update-repo-map.sh
 
+# A non-interactive shell skips ~/.bashrc, so the per-OS defaults may not be in
+# the environment yet. Sourcing is idempotent and keeps an explicit override.
+[ -r "$HOME/.bash.d/repo-roots.sh" ] && . "$HOME/.bash.d/repo-roots.sh"
+
 GITHUB_ROOTS="${CLAUDE_GITHUB_ROOTS:-/c/work/github}"
 OUTPUT_FILE="${CLAUDE_REPO_MAP:-/c/work/claude-data/repo-map.md}"
 
