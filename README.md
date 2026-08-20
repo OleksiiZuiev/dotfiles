@@ -77,6 +77,28 @@ For settings that shouldn't be version controlled (machine-specific paths, secre
 2. Edit with your machine-specific settings
 3. The file will be loaded automatically but won't be in git
 
+## Windows Terminal
+
+Windows Terminal's `settings.json` is not symlinked from here — it lives under
+`%LOCALAPPDATA%\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\` and Windows Terminal
+rewrites it whenever settings change through the UI. Apply these overrides by hand per machine.
+
+The WSL app ships its own profile fragment
+(`%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\Microsoft.WSL\{guid}.json`) that sets
+`"suppressApplicationTitle": true`. Windows Terminal then ignores every title the running application
+emits, so the tab keeps the distro name and Claude Code's session title never shows — unlike a Git
+Bash tab. The fragment is regenerated when the WSL app updates, so the override belongs in your own
+`settings.json`, whose profile entries layer on top of fragments. Add to the WSL profile entry in
+`profiles.list`, matched by its `guid`:
+
+```json
+"bellStyle": [ "audible", "window", "taskbar" ],
+"suppressApplicationTitle": false
+```
+
+`bellStyle` matches the `Git Bash` profile, so the tab flashes and the taskbar button blinks when
+Claude Code rings the bell.
+
 ## Directory Structure
 
 ```

@@ -20,6 +20,7 @@
     ],
     "defaultMode": "auto"
   },
+  "model": "opus[1m]",
   "hooks": {
     "PreToolUse": [
       {
@@ -38,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$USERPROFILE\\.claude\\hooks\\toast.ps1\" -EventName Stop"
+            "command": "bash ~/.claude/hooks/toast.sh Stop"
           }
         ]
       }
@@ -49,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$USERPROFILE\\.claude\\hooks\\toast.ps1\" -EventName Notification"
+            "command": "bash ~/.claude/hooks/toast.sh Notification"
           }
         ]
       }
@@ -61,9 +62,9 @@
   },
   "enabledPlugins": {
     "slack@claude-plugins-official": true,
-    "csharp-lsp@claude-plugins-official": true,
+    "csharp-lsp@claude-plugins-official": false,
     "playwright@claude-plugins-official": false,
-    "document-skills@anthropic-agent-skills": true
+    "document-skills@anthropic-agent-skills": false
   },
   "extraKnownMarketplaces": {
     "anthropic-agent-skills": {
@@ -74,7 +75,9 @@
     }
   },
   "alwaysThinkingEnabled": true,
-  "effortLevel": "medium",
+  "effortLevel": "xhigh",
+  "skipWorkflowUsageWarning": true,
+  "theme": "dark",
   "skipAutoPermissionPrompt": true,
   "mcpServers": {
     "playwright": {
@@ -85,6 +88,5 @@
         "http://localhost:9222"
       ]
     }
-  },
-  "model": "sonnet"
+  }
 }
