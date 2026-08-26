@@ -514,17 +514,39 @@ remote `{F}` in the meantime. Integrate the remote before pushing:
 6. **If no PR exists**: launch a Task sub-agent (`model: "sonnet"`) to create a draft PR.
 
 **Sub-agent prompt:**
-> Create a draft PR for the current branch.
+> Create a draft PR for the current branch, automatically detecting whether it is stacked on another feature branch.
 >
 > 1. Get the ticket ID from the branch name: strip everything before the first `/`, take the first two hyphen-separated segments, uppercase them (e.g., `feature/eng-123-foo` → `ENG-123`)
 > 2. Fetch the Linear ticket using `mcp__linear-server__get_issue` with the ticket ID and `includeRelations: true`
 > 3. Read the ticket context file at `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET_ID}.md` if it exists
 > 4. Run `git log --oneline origin/main..HEAD` and `git diff origin/main...HEAD --stat` to understand all changes
-> 5. Create a draft PR using `gh pr create --draft` with:
->    - Title: short summary derived from the ticket title and changes
->    - Body: structured description with sections for Summary, Linear ticket link, and Test plan
->    - Use HEREDOC for the body to preserve formatting
-> 6. Return the PR URL and number
+> 4b. Detect the base branch for the PR:
+>    ```bash
+>    OLDEST_NEW=$(git log --format="%H" origin/main..HEAD | tail -1)
+>    if [ -n "$OLDEST_NEW" ]; then
+>      PARENT_COMMIT=$(git rev-parse "${OLDEST_NEW}^1")
+>      PARENT_BRANCH=$(git branch -r --contains "$PARENT_COMMIT" \
+>        | grep -v -E "HEAD|origin/(main|master)" | head -1 | xargs)
+>      BASE_BRANCH="${PARENT_BRANCH#origin/}"
+>    fi
+>    BASE_BRANCH="${BASE_BRANCH:-main}"
+>    ```
+>    If BASE_BRANCH is not "main", this is a stacked PR — follow steps 5b–5d below instead of step 5.
+> 5. **If BASE_BRANCH is "main"** — create a standard draft PR:
+>    `gh pr create --draft` with title (short summary from ticket title and changes) and body with sections: Summary, Linear ticket link, Test plan. Use HEREDOC for the body.
+> 5b. **If BASE_BRANCH is not "main"** — stacked PR flow:
+>    - Verify the parent branch has an open PR: `gh pr view "$BASE_BRANCH" --json number,url -q '"\(.number) \(.url)"'`
+>      If no open PR exists for the parent, warn the user: "Parent branch $BASE_BRANCH has no open PR — create one first, then re-run to link the stack." Then fall back to step 5 with `--base "$BASE_BRANCH"` (no `gh stack link`).
+>    - Capture PARENT_PR_NUM from the output above.
+>    - Ensure the `gh-stack` extension is installed: `gh extension list | grep -q gh-stack || gh extension install github/gh-stack`
+> 5c. Create the PR targeting the parent branch:
+>    `gh pr create --draft --base "$BASE_BRANCH"` with title and body. Open the body with the stacked-PR notice:
+>    `> ⚡ Stacked on #PARENT_PR_NUM (\`$BASE_BRANCH\`) — will retarget to main when that branch merges.`
+>    Followed by the standard sections: Summary, Linear ticket link, Test plan. Use HEREDOC for the body.
+> 5d. Register the stack with the GitHub native stacked-PR system:
+>    `gh stack link "$BASE_BRANCH" "$(git branch --show-current)"`
+>    Capture and report the output (confirms stack registration).
+> 6. Return the PR URL and number (and `gh stack link` output if this was a stacked PR)
 
 **Sub-agent allowed tools:** `Bash(git *), Bash(gh *), mcp__linear-server__get_issue, Read, Glob`
 
