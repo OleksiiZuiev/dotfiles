@@ -23,13 +23,13 @@ if [[ "$INPUT" == *rm* || "$INPUT" == *force* || "$INPUT" == *push* || "$INPUT" 
 fi
 
 # ---- Auto-approve: throwaway-worktree teardown helper ------------------------------------
-# /ds:work-on2 and /ds:polish-pr2 call `worktree-teardown <path> [branch]` (a bash.d
+# /ds:work-on and /ds:polish-pr call `worktree-teardown <path> [branch]` (a bash.d
 # function) to tear down their private worktrees. Its `rm -rf` lives inside the function, so
 # the command Claude issues carries no dangerous token — but allow it explicitly so the
 # no-prompt guarantee is deterministic rather than resting on the destructive classifier
 # happening to ignore an unknown command.
 if [[ "$CMD" =~ ^[[:space:]]*worktree-teardown[[:space:]] ]]; then
-  printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"Auto-approved worktree-teardown (/ds:work-on2, /ds:polish-pr2 throwaway-worktree helper)."}}'
+  printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"Auto-approved worktree-teardown (/ds:work-on, /ds:polish-pr throwaway-worktree helper)."}}'
   exit 0
 fi
 
@@ -40,7 +40,7 @@ fi
 # hits the normal prompt.
 if [[ "$CMD" =~ ^[[:space:]]*rm[[:space:]]+-[rf][rf][[:space:]] ]] \
    && [[ "$CMD" == *-worktrees/* || "$CMD" == *-worktrees\\* ]]; then
-  printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"Auto-approved throwaway-worktree teardown: rm -rf of a *-worktrees/* path (/ds:work-on2, /ds:polish-pr2)."}}'
+  printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"Auto-approved throwaway-worktree teardown: rm -rf of a *-worktrees/* path (/ds:work-on, /ds:polish-pr)."}}'
   exit 0
 fi
 

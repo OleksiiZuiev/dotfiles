@@ -13,7 +13,7 @@ work: the same corrections get re-spent next session.
 - **Global `~/.claude/CLAUDE.md`** — rules that generalize across every repo.
 - **Repo-keyed overlay `~/.claude/overlays/{repo-key}.md`** — your personal, user-level rules for
   *this* repo (no need to generalize repo-wide; they're your lens on someone else's codebase). The
-  overlay has two consumer sections, each read by a different `/ds:work-on2` step:
+  overlay has two consumer sections, each read by a different `/ds:work-on` step:
   - `## Enforced (post-gen check)` — mechanical, recurring rules the Step 3.5 post-gen check enforces
     hard. **This is the main output:** the steering thinkie proved that *stated* guidance loses to
     surrounding code at codegen time (the "trim comments" rule was in global CLAUDE.md **and** the
@@ -35,7 +35,7 @@ work: the same corrections get re-spent next session.
 # Steering overlay — {repo-key}
 
 Personal user-level steering for this repo. Maintained by /ds:distill;
-consumed by /ds:work-on2 (Step 2.7 → Plan directives, Step 3.5 → Enforced).
+consumed by /ds:work-on (Step 2.7 → Plan directives, Step 3.5 → Enforced).
 
 ## Enforced (post-gen check)
 <!-- Mechanical, recurring rules the Step 3.5 post-gen check enforces hard. -->
@@ -53,7 +53,7 @@ consumed by /ds:work-on2 (Step 2.7 → Plan directives, Step 3.5 → Enforced).
 - <short fingerprint of a dismissed candidate>
 ```
 
-`/ds:work-on2` only reads `## Enforced` and `## Plan directives`; the `## Distill ledger` is private
+`/ds:work-on` only reads `## Enforced` and `## Plan directives`; the `## Distill ledger` is private
 bookkeeping. Create the file from this template the first time anything routes to the overlay (or the
 ledger needs an entry).
 
@@ -61,7 +61,7 @@ ledger needs an entry).
 
 ### Step 0: Resolve repo-key and scope
 
-1. **Repo-key** (worktree-stable — the same trick the statusline and `/ds:work-on2` Step 2.9 use):
+1. **Repo-key** (worktree-stable — the same trick the statusline and `/ds:work-on` Step 2.9 use):
    ```bash
    repo_key=$(basename "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")")
    ```
@@ -75,7 +75,7 @@ ledger needs an entry).
    dotfiles=$(dirname "$(dirname "$(readlink -f ~/.claude/CLAUDE.md)")")   # e.g. /c/work/github/OleksiiZuiev/dotfiles
    ```
    Path roles:
-   - **Consume paths** (symlinks under the real `~/.claude`, what `/ds:work-on2` reads):
+   - **Consume paths** (symlinks under the real `~/.claude`, what `/ds:work-on` reads):
      `~/.claude/overlays/{repo-key}.md`, `~/.claude/CLAUDE.md`.
    - **Write paths** (the dotfiles source, what you Edit/commit): `{dotfiles}/claude/overlays/{repo-key}.md`,
      `{dotfiles}/claude/CLAUDE.md`. Edit the write paths, never the symlink targets directly.
@@ -221,7 +221,7 @@ Mark `🧾 Record` `in_progress`.
    ```
    End the message with the environment's `Co-Authored-By` trailer.
 3. **If a *new* overlay file was created**, the symlink doesn't exist yet — run
-   `powershell.exe -File "$dotfiles/install-admin.ps1"` once so `/ds:work-on2` can read it from
+   `powershell.exe -File "$dotfiles/install-admin.ps1"` once so `/ds:work-on` can read it from
    `~/.claude/overlays/`. Editing an **existing** overlay or global CLAUDE.md flows through the
    existing symlink — **skip** the install in that case.
 
@@ -241,7 +241,7 @@ Committed: <sha>     Install re-run: yes (new overlay) / no
 ```
 
 List the promoted rules with their destinations. Suggest next steps:
-- The newly enforced rules take effect on the next `/ds:work-on2` run in this repo (Step 3.5 reads
+- The newly enforced rules take effect on the next `/ds:work-on` run in this repo (Step 3.5 reads
   `## Enforced`, Step 2.7 reads `## Plan directives`).
 - Re-run `/ds:distill` after more corrections; the ledger keeps it from re-proposing.
 
@@ -250,7 +250,7 @@ List the promoted rules with their destinations. Suggest next steps:
   already-handled — say so. The user decides.
 - **Two outputs, two homes:** the bulk is already-stated-but-ignored mechanical rules → `## Enforced`
   (for the check); genuinely new structural/global rules → `## Plan directives` / global CLAUDE.md.
-- **Distill only pays off because the consumer exists** — `/ds:work-on2` Step 3.5 enforces `## Enforced`
+- **Distill only pays off because the consumer exists** — `/ds:work-on` Step 3.5 enforces `## Enforced`
   and Step 2.7 folds in `## Plan directives`.
 - **Deferred (not v1):** drafting an upstream PR to a repo's `AGENTS.md`; report-only mode; ingesting
   accumulated `*.findings.md`.

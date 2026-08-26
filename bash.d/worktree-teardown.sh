@@ -7,7 +7,7 @@ worktree-teardown() {
 Usage: worktree-teardown <worktree-path> [temp-branch]
 
 Remove a throwaway git worktree and clean up after it. Built for the
-/ds:work-on2 and /ds:polish-pr2 isolation model, where each session works in a
+/ds:work-on and /ds:polish-pr isolation model, where each session works in a
 private worktree under <repo>-worktrees/ and folds its commit back onto the
 feature branch.
 

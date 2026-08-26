@@ -1,7 +1,7 @@
 # Steering overlay — agents-and-tools
 
 Personal user-level steering for this repo. Maintained by /ds:distill;
-consumed by /ds:work-on2 (Step 2.7 → Plan directives, Step 3.5 → Enforced).
+consumed by /ds:work-on (Step 2.7 → Plan directives, Step 3.5 → Enforced).
 
 ## Enforced (post-gen check)
 <!-- Mechanical, recurring rules the Step 3.5 post-gen check enforces hard. -->

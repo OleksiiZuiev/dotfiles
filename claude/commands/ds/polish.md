@@ -177,4 +177,4 @@ List the addressed findings with their SHAs, the skipped ones with rationale, an
 - **Tiny parse surface:** only the `### F\d+ · ` heading and `Status` are parsed; only `Status`/`Resolution` are written. Producers can enrich the other fields freely without breaking this command.
 - **No auto-implementation:** never implement a fix without explicit user approval via `AskUserQuestion`.
 - **Batch approval:** when a repeating pattern is detected, offer "Approve all similar" to avoid per-item prompts for the same mechanical fix.
-- **Conventions:** honor the nearest `CLAUDE.md`/`AGENTS.md` to each edited file plus the user's global style rules, the same way `/ds:work-on2` resolves conventions per subproject.
+- **Conventions:** honor the nearest `CLAUDE.md`/`AGENTS.md` to each edited file plus the user's global style rules, the same way `/ds:work-on` resolves conventions per subproject.

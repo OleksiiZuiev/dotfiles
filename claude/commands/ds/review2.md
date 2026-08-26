@@ -13,7 +13,7 @@ The command never touches the working tree — no edits, no commits, no pushes. 
 - **`MODE=own`** (PR author == you): print the full categorized report and write an audit entry to ticket context.
 - **`MODE=draft-comments`** (PR author ≠ you): print the full categorized report and additionally render copy-paste-ready `Draft comment:` blocks for **confident findings only**, grouped by `file:line`. Smells appear in the report for your private read but are not drafted as PR comments. No ticket-context writes.
 
-**`+comment`** (either mode) posts the findings to the PR as one inline review instead of leaving you to copy-paste. The confident/smell split is the confidence signal: confident findings post behind a single batch confirmation, and each smell is triaged one-by-one with `AskUserQuestion` — the same in-the-loop posture `/ds:polish-pr2` uses. So with the flag on, a smell *can* reach the PR; without it, the no-post default above still holds.
+**`+comment`** (either mode) posts the findings to the PR as one inline review instead of leaving you to copy-paste. The confident/smell split is the confidence signal: confident findings post behind a single batch confirmation, and each smell is triaged one-by-one with `AskUserQuestion` — the same in-the-loop posture `/ds:polish-pr` uses. So with the flag on, a smell *can* reach the PR; without it, the no-post default above still holds.
 
 **Distinction from siblings:**
 - `/ds:pre-review` — style/naming/conventions on the local diff, before push. Cosmetic.
@@ -26,7 +26,7 @@ The command never touches the working tree — no edits, no commits, no pushes. 
 ### Step 0: Detect PR & Gather Inputs
 
 0. **Parse arguments.** `$ARGUMENTS` may contain an optional `+comment` flag, an optional PR number and an optional `--to <file>` flag, in any order:
-   - `POST_COMMENTS` = `on` if the text contains `+comment`, else `off`. **Strip the `+comment` token before parsing anything else** — otherwise it is mistaken for the PR number. (The `+` prefix, as in `/ds:polish-pr2`'s `+temp-worktree`, stops the Claude CLI consuming it as a CLI flag.)
+   - `POST_COMMENTS` = `on` if the text contains `+comment`, else `off`. **Strip the `+comment` token before parsing anything else** — otherwise it is mistaken for the PR number. (The `+` prefix, as in `/ds:polish-pr`'s `+temp-worktree`, stops the Claude CLI consuming it as a CLI flag.)
    - `OUT_FILE` = the token following `--to` (the findings file to write findings into), else empty. When set, Step 3.6 appends the findings to it as shared-format item blocks.
    - `PR_ARG` = the first bare token that is **not** `--to` and not its value, else empty.
 
@@ -487,7 +487,7 @@ Mark `🎯 Anchor findings to diff lines` as `completed`.
 
 Mark `🙋 Triage smells (in-the-loop)` as `in_progress`.
 
-A confident finding has a concrete fix and a trivial counter-argument, so it needs no per-item decision — it goes straight to the Step 3.9 preview. A smell is the opposite: a live trade-off, or a problem with no obvious fix. Those get your judgement one at a time, on the same pattern as `/ds:polish-pr2` Step 5.
+A confident finding has a concrete fix and a trivial counter-argument, so it needs no per-item decision — it goes straight to the Step 3.9 preview. A smell is the opposite: a live trade-off, or a problem with no obvious fix. Those get your judgement one at a time, on the same pattern as `/ds:polish-pr` Step 5.
 
 If there are no smells, print `> No smells to triage.` and continue.
 
