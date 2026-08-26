@@ -1,31 +1,37 @@
 ---
 description: Ten-dimensional review of the current PR — code quality plus reliability, operability, configuration and efficacy, with every finding tiered by user impact.
-allowed-tools: Bash(git *), Bash(gh *), Bash(ls *), Bash(find *), Read, Write, Edit, Grep, Glob, Task, TodoWrite, mcp__linear-server__get_issue
-argument-hint: [<pr-number>] [--to <file>]
+allowed-tools: Bash(git *), Bash(gh *), Bash(ls *), Bash(find *), Read, Write, Edit, Grep, Glob, Task, TodoWrite, AskUserQuestion, mcp__linear-server__get_issue
+argument-hint: [+comment] [<pr-number>] [--to <file>]
 ---
 
 You are performing a substantive review of a pull request. The goal is to absorb the mechanical reviewer effort on bigger PRs by surfacing the issues a thoughtful human reviewer would actually raise across ten dimensions: **simplicity, performance, codebase consistency, readability, extraction/duplication, test coverage, reliability, operability, configuration/capacity, and efficacy/claims**.
 
-Every finding is categorized at capture time as either **confident** (concrete proposed change with a trivial/empty counter-argument) or **smell** (real trade-off surfaced by the counter-argument, or no concrete fix). Smells are first-class output — they don't need to come with a fix, and they are not posted as draft PR comments. Every finding also carries an **impact tier** — `user-facing`, `efficacy` or `maintenance` — which is what the report leads with, because that is the tier a merge decision turns on.
+Every finding is categorized at capture time as either **confident** (concrete proposed change with a trivial/empty counter-argument) or **smell** (real trade-off surfaced by the counter-argument, or no concrete fix). Smells are first-class output — they don't need to come with a fix. Every finding also carries an **impact tier** — `user-facing`, `efficacy` or `maintenance` — which is what the report leads with, because that is the tier a merge decision turns on.
 
-The command does not apply changes, commit, or push. It surfaces findings in chat for the user to read and act on selectively in follow-up prompts. The mode-aware behavior:
+The command never touches the working tree — no edits, no commits, no pushes. It surfaces findings in chat for the user to read and act on selectively in follow-up prompts. The one thing it can write is the PR itself, and only behind the `+comment` flag. The mode-aware behavior:
 
 - **`MODE=own`** (PR author == you): print the full categorized report and write an audit entry to ticket context.
 - **`MODE=draft-comments`** (PR author ≠ you): print the full categorized report and additionally render copy-paste-ready `Draft comment:` blocks for **confident findings only**, grouped by `file:line`. Smells appear in the report for your private read but are not drafted as PR comments. No ticket-context writes.
+
+**`+comment`** (either mode) posts the findings to the PR as one inline review instead of leaving you to copy-paste. The confident/smell split is the confidence signal: confident findings post behind a single batch confirmation, and each smell is triaged one-by-one with `AskUserQuestion` — the same in-the-loop posture `/ds:polish-pr2` uses. So with the flag on, a smell *can* reach the PR; without it, the no-post default above still holds.
 
 **Distinction from siblings:**
 - `/ds:pre-review` — style/naming/conventions on the local diff, before push. Cosmetic.
 - `/ds:polish-pr` — addresses *human* reviewer comments already posted on the PR.
 - `/ds:review` — the six-dimension v1. Still the daily driver; this command is its trial successor.
-- `/ds:review2` (this command) — v1's six dimensions plus the reliability & operations cluster, impact tiering, and two reach fixes: the installed source of a changed dependency is in scope, and unchanged sibling files are inventoried so a file that *should* have changed can be found.
+- `/ds:review2` (this command) — v1's six dimensions plus the reliability & operations cluster, impact tiering, two reach fixes (the installed source of a changed dependency is in scope, and unchanged sibling files are inventoried so a file that *should* have changed can be found), and `+comment` to post the findings to the PR instead of leaving you to copy-paste them.
 
 ## Your Task
 
 ### Step 0: Detect PR & Gather Inputs
 
-0. **Parse arguments.** `$ARGUMENTS` may contain an optional PR number and an optional `--to <file>` flag, in any order:
+0. **Parse arguments.** `$ARGUMENTS` may contain an optional `+comment` flag, an optional PR number and an optional `--to <file>` flag, in any order:
+   - `POST_COMMENTS` = `on` if the text contains `+comment`, else `off`. **Strip the `+comment` token before parsing anything else** — otherwise it is mistaken for the PR number. (The `+` prefix, as in `/ds:polish-pr2`'s `+temp-worktree`, stops the Claude CLI consuming it as a CLI flag.)
    - `OUT_FILE` = the token following `--to` (the findings file to write findings into), else empty. When set, Step 3.6 appends the findings to it as shared-format item blocks.
    - `PR_ARG` = the first bare token that is **not** `--to` and not its value, else empty.
+
+   When `POST_COMMENTS=on`, print the flag line so the posting behaviour is visible before any analysis runs:
+   > `+comment: on — confident findings post after one confirmation; smells are triaged one-by-one. Nothing reaches GitHub unconfirmed.`
 
 1. **Resolve the PR number.**
    - If `PR_ARG` is set, use PR **#`PR_ARG`**.
@@ -92,6 +98,14 @@ Before doing anything else, use TodoWrite to create the per-mode checklist. The 
 4. `✅ Final summary`
 
 **If `OUT_FILE` is set** (either mode): insert `📄 Write findings to <OUT_FILE>` immediately after `📋 Findings report`.
+
+**If `POST_COMMENTS=on`** (either mode): insert these three after `📋 Findings report` — or after `📄 Write findings to <OUT_FILE>` when that item exists too:
+
+1. `🎯 Anchor findings to diff lines`
+2. `🙋 Triage smells (in-the-loop)`
+3. `🚀 Preview & post review to PR`
+
+In `MODE=draft-comments` with `POST_COMMENTS=on`, do **not** seed `🗒️ Print draft PR comments (confident only)` — the Step 3.9 preview supersedes it.
 
 ### Step 1: Load Shared Context
 
@@ -230,41 +244,66 @@ Launch the ten reviewers below **in a single message with ten parallel `Task` to
 > - Do NOT propose changes that violate the ticket acceptance criteria or any prior decision listed above. If you believe an acceptance criterion is itself the problem, say so as a finding rather than quietly working around it.
 > - You may use `git show`, `Grep`, and `Glob` to look at the surrounding code for context — but stay within your dimension's lane.
 
-#### Draft-comments addendum (`MODE=draft-comments` only)
+#### Draft-comment addendum (`MODE=draft-comments` **or** `POST_COMMENTS=on`)
 
-When `MODE=draft-comments`, append the following to the shared brief **before** the per-dimension addendum. It extends the output contract so every confident finding ships with a copy-paste-ready PR comment.
+Append the following to the shared brief **before** the per-dimension addendum whenever `MODE=draft-comments` **or** `POST_COMMENTS=on`. It extends the output contract so a finding ships with the PR comment already written, next to the reasoning that produced it.
 
-> **Additional output requirement (draft-comments mode):** for every finding with `Category: confident`, append a `**Draft comment:**` block immediately after `**Code context:**`. Smells get no draft comment — they appear in the report but are not posted to the PR.
+**Which findings get a draft depends on the flag:**
+- `POST_COMMENTS=off` (draft-comments mode alone): **confident findings only**. Smells stay reviewer-only.
+- `POST_COMMENTS=on`: **every finding, confident and smell**. A smell's draft is written in question form and is not posted until you approve it one-by-one in Step 3.8.
+
+Substitute the applicable scope into the brief below where it says `<drafting scope>`.
+
+> **Additional output requirement:** for every finding within `<drafting scope>`, append a `**Draft comment:**` block immediately after `**Code context:**`.
 >
-> Updated per-confident-finding shape:
+> Updated per-finding shape:
 >
 > ```
 > 1. `path/to/file:line-range` — <one-line summary>
 >    **Severity:** high | medium | low
 >    **Impact:** user-facing | efficacy | maintenance
->    **Category:** confident
+>    **Category:** confident | smell
 >    **Why:** <1–2 sentence reasoning>
 >    **Counter-argument:** <strongest case against this finding; "none" if no real case exists>
->    **Proposed change:** <concrete, actionable description>
+>    **Proposed change:** <concrete, actionable description, OR "(needs unpacking)">
 >    **Code context:**
 >    ```diff
 >    <~5–10 lines as unified diff>
 >    ```
 >    **Draft comment:**
->    > <GitHub-flavored markdown — see drafting rules below>
+>    > <GitHub-flavored markdown — see the shape and drafting rules below>
 > ```
 >
-> **Drafting rules for the comment:**
+> **Comment shape — every draft uses these labels, in this order:**
+>
+> ```
+> **Problem:** <one sentence>
+> **Suggestion:** <the concrete change>
+> **Alternatives:** <the other viable option(s)>      ← smells only; omit for confident findings
+> ```
+>
+> The labels are not decoration: the author must be able to read the defect and the proposed change without inferring either from prose.
+>
+> **Drafting rules:**
 > - Write from the reviewer's voice, addressing the PR author directly.
-> - Open with the problem in one sentence — no "I noticed that…" / "It seems like…" filler.
-> - **For an `Impact: user-facing` finding, that first sentence names who is affected and how** — which users, in which situation, and how far it spreads beyond the one session. This is what separates a comment an author acts on from one they file as a nit.
-> - **For an `Impact: efficacy` finding, quote the claim or acceptance criterion first**, then name the code that contradicts it.
-> - Follow with a concrete suggestion: actionable, not a vague concern.
-> - Prefer a fenced ` ```suggestion ` block when the change is a single small edit GitHub can apply directly. Skip the suggestion block for structural changes.
-> - 1–3 sentences total. No restating of severity (that's reviewer mental model, not author-facing).
+> - **Problem** is one sentence — no "I noticed that…" / "It seems like…" filler.
+> - **For an `Impact: user-facing` finding, Problem names who is affected and how** — which users, in which situation, and how far it spreads beyond the one session. This is what separates a comment an author acts on from one they file as a nit.
+> - **For an `Impact: efficacy` finding, Problem quotes the claim or acceptance criterion first**, then names the code that contradicts it.
+> - **Suggestion** is actionable, not a vague concern.
+> - 1–3 sentences per label. No restating of severity (that's reviewer mental model, not author-facing).
 > - Avoid hedging adjectives ("maybe", "perhaps could possibly"); stay direct but collaborative.
-> - Do NOT include the `**Draft comment:**` block on smells (`Category: smell`) — smells are reviewer-only notes.
-> - Do NOT include the `**Draft comment:**` block on the `No issues found.` short-circuit.
+> - Do NOT add an attribution footer to an individual comment — it appears once in the review body.
+>
+> **Confident findings** — assertion voice. **Problem** states the defect. Follow the labelled block with a fenced ` ```suggestion ` block **only** when the change is a single small edit GitHub can apply directly; never for a structural change. No `**Alternatives:**` line.
+>
+> **Smell findings** — question voice, because a smell is by definition a live trade-off:
+> - **Problem** states the concern *as a question* the author is better placed to answer.
+> - **Suggestion** names the option you lean toward.
+> - **Alternatives** names the other viable option(s) — this line is what makes it a smell rather than a defect, so it is required.
+> - Never a ` ```suggestion ` block: there is more than one viable answer, and GitHub's one-click apply would misrepresent that.
+> - Where `Proposed change:` is `(needs unpacking)`, **Suggestion** says what would settle the question — the check to run, the source to read, the person to ask — instead of proposing a fix you cannot justify.
+>
+> Do NOT include the `**Draft comment:**` block on the `No issues found.` short-circuit.
 
 #### Per-dimension prompt addendum
 
@@ -362,6 +401,7 @@ Mark `📋 Findings report` as `in_progress`.
    > **Review passed — no substantive findings.**
 
    - If `OUT_FILE` is set, also print `> OUT_FILE: nothing written (no findings).` — no item blocks are added (Step 3.6 is skipped).
+   - If `POST_COMMENTS=on`, also print `> +comment: nothing to post.` — Steps 3.7–3.9 are skipped.
    - **If `MODE=own`:** proceed to Step 8 (ticket context gets a "Review passed" session entry), then Step 9.
    - **If `MODE=draft-comments`:** skip directly to Step 9 (final summary).
 
@@ -404,12 +444,147 @@ Append the findings to `OUT_FILE` as shared-format item blocks so `/ds:polish <O
 
 Mark `📄 Write findings to <OUT_FILE>` as `completed`.
 
+### Step 3.7: Anchor Findings to Diff Lines (`POST_COMMENTS=on` only)
+
+Runs in **both** modes. If `POST_COMMENTS=off`, skip Steps 3.7–3.9 entirely. On the zero-findings short-circuit you never reach this step — print `> +comment: nothing to post.` there instead.
+
+Mark `🎯 Anchor findings to diff lines` as `in_progress`.
+
+GitHub accepts an inline review comment only on a line inside a diff hunk, and this command's brief explicitly puts findings *outside* the changed lines in scope. So before anything is posted, every finding is routed to one of two destinations.
+
+1. **Head SHA:**
+   ```bash
+   gh pr view <pr-number> --json headRefOid --jq '.headRefOid'   # HEAD_SHA
+   ```
+
+2. **Unpushed-commit guard (`MODE=own` only).** In `MODE=own` the report was built from the local working tree, but GitHub anchors comments against the *pushed* head. Compare:
+   ```bash
+   git rev-parse HEAD
+   ```
+   If it differs from `HEAD_SHA`, the local diff's line numbers do not describe the PR — every anchor would be wrong, or worse, land on unrelated code. Stop here:
+   > Local HEAD (`<sha>`) differs from the PR head (`<HEAD_SHA>`). Push first, then re-run with `+comment` — comment anchors are computed against the pushed diff.
+
+   The report above and any `--to <file>` output are already written and stay valid. Skip Steps 3.7–3.9, mark their todos not applicable, and continue to the mode branch.
+
+3. **Build the commentable-line set** from the PR's own diff — `gh pr diff <pr-number>`, **not** the local `git diff`, so both modes anchor against exactly what GitHub will accept. For each file, parse the hunk headers `@@ -a,b +c,d @@`; the RIGHT-side lines `c` through `c+d-1` are commentable (added and context lines both count).
+
+4. **Route each finding** by its `file:line-range`:
+   - Range end inside the set → `INLINE`, with `side: RIGHT` and `line` = the range end. Add `start_line` and `start_side: RIGHT` when the range start falls in the **same hunk**; when it doesn't, collapse to the single end line rather than spanning hunks.
+   - Otherwise → `BODY`. This is the expected home for an unchanged caller the diff breaks, a docstring the diff falsifies, or a sibling file that should have changed — findings no diff-anchored comment can reach.
+
+5. **Dedup guard.** A re-run after a push must not duplicate the review:
+   ```bash
+   gh api repos/{owner}/{repo}/pulls/<pr-number>/comments --paginate \
+     --jq '.[] | select(.user.login=="<ME>") | "\(.path):\(.line)"'
+   ```
+   Mark any finding whose `path:line` already carries a comment of yours as `already-posted` and drop it from the payload. Count them; they are reported, not silently discarded.
+
+6. Print: `> Anchoring: <I> inline, <B> into review body, <D> skipped as already posted.`
+
+Mark `🎯 Anchor findings to diff lines` as `completed`.
+
+### Step 3.8: Triage Smells In-the-Loop (`POST_COMMENTS=on` only)
+
+Mark `🙋 Triage smells (in-the-loop)` as `in_progress`.
+
+A confident finding has a concrete fix and a trivial counter-argument, so it needs no per-item decision — it goes straight to the Step 3.9 preview. A smell is the opposite: a live trade-off, or a problem with no obvious fix. Those get your judgement one at a time, on the same pattern as `/ds:polish-pr2` Step 5.
+
+If there are no smells, print `> No smells to triage.` and continue.
+
+**a. Scope guard first.** Ten dimensions can surface a lot of smells, and one `AskUserQuestion` each would be an interrogation. If the smell count is **greater than 8**, ask once via `AskUserQuestion` before the loop:
+- **Review all `<N>`** — every smell gets a decision
+- **Only `user-facing` + `efficacy`** — the tiers a merge turns on; the rest stay in the chat report
+- **Let me pick** — you name the finding ids to triage
+- **Post no smells** — skip the loop; confident findings still post
+
+Anything out of scope is recorded as `not posted (deferred)` and stays in the chat report only.
+
+**b. Then one at a time.** For each in-scope smell, print:
+- its flat report id, `file:line`, and one-line summary
+- `Why`, `Counter-argument`, `Proposed change`
+- its `Code context:` block
+- the drafted comment body verbatim, so you approve the exact words that will be posted
+- its destination: `inline at <path>:<line>` or `review body (not anchorable to the diff)`
+
+Then `AskUserQuestion`:
+- **Post as drafted** — add to the payload
+- **Post all remaining smells in this dimension** — batch escape hatch, so a long tail of same-dimension smells can't turn into ten prompts
+- **Modify wording** — you give the angle, redraft it, show the new body, and confirm once before adding
+- **Don't post** — stays in the chat report only
+
+Wait for each decision before showing the next smell. Confident findings never enter this loop.
+
+**c. Print the tally:** `> Smells: <A> approved for posting, <D> declined, <F> deferred out of scope.`
+
+Mark `🙋 Triage smells (in-the-loop)` as `completed`.
+
+### Step 3.9: Preview, Confirm, Post (`POST_COMMENTS=on` only)
+
+Mark `🚀 Preview & post review to PR` as `in_progress`.
+
+**a. Assemble the review body.** In order:
+1. One line naming the source — "Automated ten-dimension review via `/ds:review2`."
+2. `Posted: <U> user-facing, <E> efficacy, <M> maintenance.`
+3. `### Findings outside the diff` — every `BODY` finding as `` `file:line` `` followed by its Problem/Suggestion (and Alternatives) block. Omit this heading entirely when there are none.
+4. `🤖 Generated with [Claude Code](https://claude.ai/claude-code)` — **once, here only.** Never on an individual comment.
+
+**b. Preview.** Print the payload exactly as it will appear on GitHub: the review body, then each inline comment under a `path:line (side)` header. Order by impact tier — `user-facing`, then `efficacy`, then `maintenance` — and within a tier by `path` then ascending `line`, so the author reads what blocks a merge first. Close with the counts:
+
+```
+<C> confident inline, <S> approved smells inline, <B> in review body.
+```
+
+**c. Gate.** One `AskUserQuestion`:
+- **Post review** — post everything previewed
+- **Post inline only** — drop the `Findings outside the diff` section, keep the inline comments
+- **Cancel** — post nothing
+
+On **Cancel**, print `> Cancelled — nothing posted to the PR.` and continue to the mode branch. The report stands as the deliverable.
+
+**d. Post.** Write the payload to a JSON file under the session scratchpad, then submit it as one review:
+```bash
+gh api --method POST repos/{owner}/{repo}/pulls/<pr-number>/reviews --input <payload.json>
+```
+Payload shape:
+```json
+{
+  "commit_id": "<HEAD_SHA>",
+  "body": "<review body>",
+  "event": "COMMENT",
+  "comments": [
+    {"path": "src/a.py", "line": 42, "side": "RIGHT", "body": "..."},
+    {"path": "src/b.py", "start_line": 10, "start_side": "RIGHT", "line": 14, "side": "RIGHT", "body": "..."}
+  ]
+}
+```
+- `event` is **always `COMMENT`**. `APPROVE` and `REQUEST_CHANGES` are rejected on your own PR, and this command is not a merge gate in either mode.
+- One batched review is one notification and one reviewable unit — that is why it is preferred over posting each comment standalone.
+
+**e. Failure handling.** The batch POST is atomic: a single unacceptable anchor returns 422 and nothing lands. On a 422 naming a line or path, do **not** guess which comment offended. Fall back to two passes:
+1. Post the review body alone, with `"comments": []`.
+2. Post each inline comment individually, one JSON file per comment so the body needs no shell escaping and `line` stays an integer:
+   ```bash
+   gh api --method POST repos/{owner}/{repo}/pulls/<pr-number>/comments --input <one-comment.json>
+   ```
+   ```json
+   {"commit_id": "<HEAD_SHA>", "path": "src/a.py", "line": 42, "side": "RIGHT", "body": "..."}
+   ```
+   Each failure is then isolated. Report which comments landed and which did not, naming the ones that failed and why. No retry loops.
+
+On success, print the review URL from the response's `html_url`.
+
+Mark `🚀 Preview & post review to PR` as `completed`.
+
 ### Mode branch
 
 - **If `MODE=own`:** proceed to **Step 8** (Update Ticket Context).
-- **If `MODE=draft-comments`:** proceed to **Step 3.5** (Print Draft PR Comments), then **Step 9**.
+- **If `MODE=draft-comments`:**
+  - `POST_COMMENTS=off` → proceed to **Step 3.5** (Print Draft PR Comments), then **Step 9**.
+  - `POST_COMMENTS=on` → **skip Step 3.5** and go straight to **Step 9**. The Step 3.9 preview already showed every comment and they are posted; a copy-paste block would be dead weight.
 
-### Step 3.5: Print Draft PR Comments (`MODE=draft-comments` only)
+### Step 3.5: Print Draft PR Comments (`MODE=draft-comments` and `POST_COMMENTS=off` only)
+
+Skip this step when `POST_COMMENTS=on` — Step 3.9 both previewed and posted the comments.
 
 Mark `🗒️ Print draft PR comments (confident only)` as `in_progress`.
 
@@ -461,7 +636,7 @@ Otherwise, launch a `general-purpose` sub-agent (`model: "haiku"`) to append a n
 - **Session title:** `Review via /ds:review2` (or `Review passed (no findings)` for the zero-findings path)
 - **Branch name** (from `git branch --show-current`)
 - **Repository name** (from `git remote get-url origin` or `gh repo view --json name`)
-- **Accomplished:** one line — `<T> findings surfaced — <C> confident, <S> smells across 10 dimensions; <U> user-facing, <E> efficacy.` On the zero-findings path: `Review passed — no substantive findings across 10 dimensions.`
+- **Accomplished:** one line — `<T> findings surfaced — <C> confident, <S> smells across 10 dimensions; <U> user-facing, <E> efficacy.` On the zero-findings path: `Review passed — no substantive findings across 10 dimensions.` When `+comment` posted, append `; <P> posted to the PR (<C2> confident, <S2> approved smells)` — the next session needs to know which findings are already public.
 - **Key decisions:** the findings worth carrying into the next session — take every `user-facing` and `efficacy` finding first (those change what merges), then fill up to 3–5 bullets with the most significant `maintenance` smells. Each bullet `<file:line> — <one-line summary>`. Omit the section entirely if nothing qualifies.
 - **Files changed:** omit. This command does not modify the working tree.
 
@@ -483,13 +658,17 @@ The summary format differs by mode.
 /ds:review2 — PR #<N> (<title>)
 Findings: <T> total — <C> confident, <S> smells — across 10 dimensions (H high, M medium, L low)
 Impact: <U> user-facing, <E> efficacy, <M> maintenance
+Posted to PR: <P> comments (<I> inline, <B> in review body) — <review-url>
 Ticket context updated: yes / no — <reason if no>
 ```
+
+Include the `Posted to PR:` line only when `POST_COMMENTS=on`. When nothing was posted, say why in place of the counts: `none (cancelled)`, `none (nothing eligible)`, or `none (local HEAD differs from PR head — push and re-run)`.
 
 Suggest next steps:
 - Address the user-facing and efficacy findings before asking for human review — those are the two tiers a reviewer blocks on.
 - Engage with individual findings in chat (reference by `#N`) to discuss, dismiss, or act on them.
 - Re-run `/ds:review2` after addressing the major findings if more rounds are needed.
+- Re-run with `+comment` to post the findings you want on the record for your reviewers — the dedup guard keeps a second run from duplicating anything already posted. *(Skip this line when `POST_COMMENTS=on` already ran.)*
 - Proceed to human review (mark PR ready with `gh pr ready` if it's a draft).
 
 **If `MODE=draft-comments`:**
@@ -503,24 +682,38 @@ Drafted as PR comments: <C> (confident only — smells excluded)
 No changes were made to the branch, PR, or ticket context.
 ```
 
+**When `POST_COMMENTS=on`,** replace the last two lines — the "no changes" claim is false once comments are posted:
+
+```
+Posted to PR: <P> comments (<I> inline, <B> in review body) — <review-url>
+No changes were made to the branch or ticket context.
+```
+
 Suggest next steps:
-- Copy the draft comments above into the GitHub PR review, user-facing tier first.
-- Use the smells (above the draft section) as a private prompt list for offline discussion with the author.
-- Re-run `/ds:review2 <pr-number>` after the author pushes updates.
+- Copy the draft comments above into the GitHub PR review, user-facing tier first. *(`POST_COMMENTS=on`: they are already posted — check the review URL renders as intended.)*
+- Use the smells (above the draft section) as a private prompt list for offline discussion with the author. *(`POST_COMMENTS=on`: only the smells you declined remain private.)*
+- Re-run `/ds:review2 <pr-number>` after the author pushes updates. With `+comment`, the dedup guard means a re-run adds only what is new.
 
 Mark `✅ Final summary` as `completed`.
 
 ## Important Notes
 
-- **Relationship to `/ds:review`**: this is the trial v2. It keeps every v1 behaviour — mode detection, the `Counter-argument` bar, the confident/smell split, `--to <file>`, the ticket-context audit — and adds four dimensions, the impact tier, and two reach fixes. `/ds:review` stays in place as the daily driver until v2 is trusted.
-- **Mode-aware flow**: the command auto-detects `own` vs `draft-comments` mode from PR author at Step 0.4. Both modes print the full categorized report; `own` additionally writes a ticket-context audit entry, `draft-comments` additionally prints copy-paste-ready draft comments for confident findings only.
-- **No apply / commit / push**: this command surfaces findings only. It does not edit files, commit, or push. The user reads the report and acts on individual findings in follow-up chat as needed.
+- **Relationship to `/ds:review`**: this is the trial v2. It keeps every v1 behaviour — mode detection, the `Counter-argument` bar, the confident/smell split, `--to <file>`, the ticket-context audit — and adds four dimensions, the impact tier, two reach fixes, and `+comment`. `/ds:review` stays in place as the daily driver until v2 is trusted, and does **not** get `+comment` — the flag is part of what v2 is trialling.
+- **Mode-aware flow**: the command auto-detects `own` vs `draft-comments` mode from PR author at Step 0.4. Both modes print the full categorized report; `own` additionally writes a ticket-context audit entry, `draft-comments` additionally prints copy-paste-ready draft comments for confident findings only. `+comment` is orthogonal to the mode — it works in both, and in `draft-comments` it replaces the copy-paste block with a posted review.
+- **Never touches the working tree**: this command does not edit files, commit, or push, in any mode, with or without `+comment`. The user reads the report and acts on individual findings in follow-up chat as needed. The single outward write it can make is posting comments to the PR, and only under `+comment`.
+- **`+comment` semantics**: the confident/smell split *is* the confidence signal, so no new judgement is invented for posting. A **confident** finding — concrete fix, trivial counter-argument — posts behind one batch confirmation. A **smell** — real trade-off, or no concrete fix — gets a per-finding `AskUserQuestion` in Step 3.8, and posts only if you approve it, in question form with its alternatives named. This is the one thing that overrides the default that smells are never posted. All three impact tiers are eligible; `maintenance` is not filtered out.
+- **Nothing reaches GitHub unconfirmed**: Step 3.9 previews the exact review body and every inline comment, then gates on a single `AskUserQuestion` with a Cancel option. Confident findings need no per-item approval, but they do not bypass that gate.
+- **`event` is always `COMMENT`**: `APPROVE` and `REQUEST_CHANGES` are rejected by GitHub on your own PR, and this command is not a merge gate on anyone else's. It posts observations, never a verdict.
+- **Inline comments can only anchor inside a diff hunk**, but this command's brief deliberately puts findings outside the changed lines in scope. Step 3.7 routes each finding accordingly: anchorable ones become inline comments, the rest fold into the review body under `Findings outside the diff`. Nothing is dropped for being unanchorable. The batched review POST is atomic, so one bad anchor 422s the whole thing — the fallback posts the body alone, then each comment individually, and reports which landed.
+- **`+comment` in `MODE=own` requires a pushed head**: the `own`-mode report is built from the local working tree, but GitHub anchors comments against the pushed head. Step 3.7 compares `git rev-parse HEAD` to the PR's `headRefOid` and refuses to post when they differ, because every anchor would be off. The report itself is still valid and still printed.
+- **A re-run is safe**: Step 3.7's dedup guard drops any finding whose `path:line` already carries a comment of yours, so running `+comment` again after the author pushes adds only what is new instead of duplicating the review.
+- **Attribution once**: the `🤖 Generated with Claude Code` line goes in the review body only. Repeating it on twelve inline comments is noise.
 - **Impact tiering**: every finding carries `user-facing`, `efficacy` or `maintenance`, and the report leads with a tiered summary so the merge-relevant findings are read first. The tier is independent of both severity and category — a smell can be user-facing, a confident finding can be maintenance. Most findings are `maintenance`; that is the honest default, and reviewers are told not to inflate a tier to get read.
 - **Dependency source is in scope**: Step 1.6 resolves where a changed dependency's installed source can be read (local clone first, then the project's installed tree), and the shared brief forbids asserting a dependency's behaviour that was not read. Where the source is unavailable, a reviewer must frame the finding as a question naming what would answer it. This is what lets a reviewer check a library's real contract instead of trusting the calling code's assumption about it.
 - **Sibling inventory finds what the diff cannot show**: Step 1.7 lists the unchanged files beside each changed one. A per-environment config updated in six of nine files, a provider adapter family missing one member, a migration without its pair — none of these appear in a diff, so nothing else can reach them. The Configuration & Capacity reviewer owns the check.
 - **Findings are not confined to changed lines**: the shared brief says so explicitly, so an unchanged caller the diff breaks, or an unchanged docstring the diff falsifies, is fair game — anchored to a real `file:line` either way.
 - **Findings-file output (`--to <file>`)**: when `--to <file>` is passed, Step 3.6 *additionally* appends the findings to that file as shared-format item blocks (under a dated `## /ds:review2 — DATE` group), so `/ds:polish <file>` can triage and apply them later. The `Impact` field rides along as a free-form field — `/ds:polish` parses only the `### F<n> · ` heading and `Status`, so the extra field passes through untouched.
-- **Render findings as text**: the report is printed as a regular text message. There is no selection prompt — the report is the deliverable.
+- **Render findings as text**: the report is printed as a regular text message, and it is the deliverable. Without `+comment` there is no selection prompt at all; with it, the only prompts are the smell triage in Step 3.8 and the post gate in Step 3.9, both of which act on the already-printed report rather than replacing it.
 - **Sub-agents are read-only**: analysis sub-agents have no `Edit`/`Write` in their allowed tools. The main agent never edits the working tree.
 - **Fewer high-signal findings**: every sub-agent prompt instructs to skip borderline issues, and that bar applies to the four new dimensions exactly as it does to the six original ones. Ten reviewers is not a licence for a longer report — a run that returns twenty mediocre findings is a worse outcome than one that returns five good ones.
 - **Lane discipline between neighbours**: Performance owns data structures and query patterns; Reliability owns concurrency stalls and event-loop blocking. Operability owns whether a failure is *visible*; Reliability owns whether it *happens*. Configuration owns the value of a knob; Efficacy owns whether the change it belongs to achieves its stated purpose. Each addendum names the boundary so two reviewers don't file the same finding twice.
