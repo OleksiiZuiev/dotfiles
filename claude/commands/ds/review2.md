@@ -10,8 +10,8 @@ Every finding is categorized at capture time as either **confident** (concrete p
 
 The command never touches the working tree — no edits, no commits, no pushes. It surfaces findings in chat for the user to read and act on selectively in follow-up prompts. The one thing it can write is the PR itself, and only behind the `+comment` flag. The mode-aware behavior:
 
-- **`MODE=own`** (PR author == you): print the full categorized report and write an audit entry to ticket context.
-- **`MODE=draft-comments`** (PR author ≠ you): print the full categorized report and additionally render copy-paste-ready `Draft comment:` blocks for **confident findings only**, grouped by `file:line`. Smells appear in the report for your private read but are not drafted as PR comments. No ticket-context writes.
+- **`MODE=own`** (PR author == you): print the categorized report and write an audit entry to ticket context.
+- **`MODE=draft-comments`** (PR author ≠ you): print the categorized report and additionally render copy-paste-ready `Draft comment:` blocks for **confident findings only**, grouped by `file:line`. Smells appear in the report for your private read but are not drafted as PR comments. No ticket-context writes.
 
 **`+comment`** (either mode) posts the findings to the PR as one inline review instead of leaving you to copy-paste. The confident/smell split is the confidence signal: confident findings post behind a single batch confirmation, and each smell is triaged one-by-one with `AskUserQuestion` — the same in-the-loop posture `/ds:polish-pr` uses. So with the flag on, a smell *can* reach the PR; without it, the no-post default above still holds.
 
@@ -355,7 +355,7 @@ Mark `📋 Findings report` as `in_progress`.
 
 3. **Assign a flat 1..N id across the shown findings only**, in dimension order (the order of the table above), so every finding can be referenced unambiguously in follow-up chat. Numbering is contiguous — do not leave gaps where a finding was held back, because a gap at `#4` invites a question about a finding that is not in the report to answer it from.
 
-4. **Print the full aggregated report as a regular text message** before calling any other tool. The user can ONLY see your text output — they cannot see sub-agent return values.
+4. **Print the aggregated report as a regular text message** before calling any other tool. The user can ONLY see your text output — they cannot see sub-agent return values.
 
    The report leads with the impact summary, because that is the tier a merge decision turns on and the detail below it is long. Then the per-dimension body, each dimension split into **Confident** then **Smells**.
 
@@ -744,7 +744,7 @@ Mark `✅ Final summary` as `completed`.
 ## Important Notes
 
 - **Relationship to `/ds:review`**: this is the trial v2. It keeps every v1 behaviour — mode detection, the mandatory `Counter-argument`, the confident/smell split, `--to <file>`, the ticket-context audit — and adds four dimensions, the impact tier, two reach fixes, and `+comment`. `/ds:review` stays in place as the daily driver until v2 is trusted, and does **not** get `+comment` — the flag is part of what v2 is trialling.
-- **Mode-aware flow**: the command auto-detects `own` vs `draft-comments` mode from PR author at Step 0.4. Both modes print the full categorized report; `own` additionally writes a ticket-context audit entry, `draft-comments` additionally prints copy-paste-ready draft comments for confident findings only. `+comment` is orthogonal to the mode — it works in both, and in `draft-comments` it replaces the copy-paste block with a posted review.
+- **Mode-aware flow**: the command auto-detects `own` vs `draft-comments` mode from PR author at Step 0.4. Both modes print the categorized report; `own` additionally writes a ticket-context audit entry, `draft-comments` additionally prints copy-paste-ready draft comments for confident findings only. `+comment` is orthogonal to the mode — it works in both, and in `draft-comments` it replaces the copy-paste block with a posted review.
 - **Never touches the working tree**: this command does not edit files, commit, or push, in any mode, with or without `+comment`. The user reads the report and acts on individual findings in follow-up chat as needed. The single outward write it can make is posting comments to the PR, and only under `+comment`.
 - **`+comment` semantics**: the confident/smell split *is* the confidence signal, so no new judgement is invented for posting. A **confident** finding — concrete fix, trivial counter-argument — posts behind one batch confirmation. A **smell** — real trade-off, or no concrete fix — gets a per-finding `AskUserQuestion` in Step 3.8, and posts only if you approve it, in question form with its alternatives named. This is the one thing that overrides the default that smells are never posted. All three impact tiers are eligible; `maintenance` is not filtered out.
 - **`--bar` semantics**: the bar filters **smells only** — `low` shows all of them, `medium` (the default) holds back `maintenance` · `low` smells, `high` holds back every `maintenance` smell. Confident findings are never filtered, because a concrete fix with a trivial counter-argument is high-signal at any severity. The bar acts at **report time**, not in the sub-agent brief, so every run captures the same findings and re-running at `--bar low` reveals the held-back tail without re-analysing. `--to <file>` and `+comment` both respect it — a finding the user never read must not reach their `/ds:polish` queue or the PR — and the ticket-context entry is the one place that records what it hid.
