@@ -1,7 +1,7 @@
 ---
 description: Ten-dimensional review of the current PR — code quality plus reliability, operability, configuration and efficacy, with every finding tiered by user impact.
 allowed-tools: Bash(git *), Bash(gh *), Bash(ls *), Bash(find *), Read, Write, Edit, Grep, Glob, Task, TodoWrite, AskUserQuestion, mcp__linear-server__get_issue
-argument-hint: [+comment] [<pr-number>] [--to <file>]
+argument-hint: [+comment] [<pr-number>] [--to <file>] [--bar low|medium|high]
 ---
 
 You are performing a substantive review of a pull request. The goal is to absorb the mechanical reviewer effort on bigger PRs by surfacing the issues a thoughtful human reviewer would actually raise across ten dimensions: **simplicity, performance, codebase consistency, readability, extraction/duplication, test coverage, reliability, operability, configuration/capacity, and efficacy/claims**.
@@ -15,6 +15,16 @@ The command never touches the working tree — no edits, no commits, no pushes. 
 
 **`+comment`** (either mode) posts the findings to the PR as one inline review instead of leaving you to copy-paste. The confident/smell split is the confidence signal: confident findings post behind a single batch confirmation, and each smell is triaged one-by-one with `AskUserQuestion` — the same in-the-loop posture `/ds:polish-pr` uses. So with the flag on, a smell *can* reach the PR; without it, the no-post default above still holds.
 
+**`--bar low|medium|high`** (default `medium`) sets the **reporting bar** — how high a smell has to clear to be shown. A higher bar means fewer findings. Ten dimensions of first-class smells have a long tail of `maintenance`-tier, `low`-severity notes; the bar is what keeps that tail out of a report you have to read in one sitting.
+
+| Bar | Smells shown |
+|---|---|
+| `low` | all of them |
+| `medium` | drop smells that are `maintenance` tier **and** `low` severity |
+| `high` | smells must be `user-facing` or `efficacy` tier — every `maintenance` smell drops |
+
+**Confident findings are never filtered by the bar,** at any severity or tier: a concrete fix with a trivial counter-argument is high-signal by construction. The bar applies at report time, so every run captures the same findings and a re-run at `--bar low` reveals the held-back tail without re-analysing.
+
 **Distinction from siblings:**
 - `/ds:pre-review` — style/naming/conventions on the local diff, before push. Cosmetic.
 - `/ds:polish-pr` — addresses *human* reviewer comments already posted on the PR.
@@ -25,13 +35,19 @@ The command never touches the working tree — no edits, no commits, no pushes. 
 
 ### Step 0: Detect PR & Gather Inputs
 
-0. **Parse arguments.** `$ARGUMENTS` may contain an optional `+comment` flag, an optional PR number and an optional `--to <file>` flag, in any order:
+0. **Parse arguments.** `$ARGUMENTS` may contain an optional `+comment` flag, an optional PR number, an optional `--to <file>` flag and an optional `--bar <level>` flag, in any order:
    - `POST_COMMENTS` = `on` if the text contains `+comment`, else `off`. **Strip the `+comment` token before parsing anything else** — otherwise it is mistaken for the PR number. (The `+` prefix, as in `/ds:polish-pr`'s `+temp-worktree`, stops the Claude CLI consuming it as a CLI flag.)
    - `OUT_FILE` = the token following `--to` (the findings file to write findings into), else empty. When set, Step 3.6 appends the findings to it as shared-format item blocks.
-   - `PR_ARG` = the first bare token that is **not** `--to` and not its value, else empty.
+   - `BAR` = the token following `--bar`, else `medium`. Accepts `low`, `medium`, `high`. Anything else is not fatal — print `> Unknown bar '<value>' — using medium.` and continue with `medium`.
+   - `PR_ARG` = the first bare token that is **not** `--to` or `--bar`, and not the value of either, else empty. **Both flag values must be excluded**, or `/ds:review2 --bar high` reads `high` as the PR number.
 
    When `POST_COMMENTS=on`, print the flag line so the posting behaviour is visible before any analysis runs:
    > `+comment: on — confident findings post after one confirmation; smells are triaged one-by-one. Nothing reaches GitHub unconfirmed.`
+
+   When `BAR` is not `low`, print the bar line too, so the filter is visible before any analysis runs rather than discovered in the report:
+   > `--bar medium — maintenance·low smells are held back. Confident findings are never filtered.`
+
+   (At `--bar high`: `--bar high — only user-facing and efficacy smells are shown. Confident findings are never filtered.`)
 
 1. **Resolve the PR number.**
    - If `PR_ARG` is set, use PR **#`PR_ARG`**.
@@ -228,7 +244,7 @@ Launch the ten reviewers below **in a single message with ten parallel `Task` to
 > **Categorization criteria — set `Category` per finding:**
 > - **confident** = the proposed change is concrete AND the counter-argument is empty or trivial. Genuine no-brainers (e.g., O(n²) where O(n) is straightforward) land here — their counter-argument is honestly "none".
 > - **smell** = the counter-argument exposes a real trade-off a human would need to weigh, OR you cannot articulate a concrete fix. `Proposed change:` may be `(needs unpacking)` for smells; the human will decide what (if anything) to do.
-> - **drop entirely** = if writing the counter-argument talks you out of the finding, do not include it. The exercise of writing the counter-argument is part of the bar; weak findings self-prune here.
+> - **drop entirely** = if writing the counter-argument talks you out of the finding, do not include it. The exercise of writing the counter-argument is itself the test; weak findings self-prune here.
 >
 > **Impact criteria — set `Impact` per finding.** This is what the report is ordered by, so it decides whether a reader sees your finding first or last. It is independent of `Category` and of `Severity`: a smell can be `user-facing`, a confident finding can be `maintenance`.
 > - **user-facing** = a user's request gets slower, an error reaches them, or the service's availability now depends on something it did not depend on before. Say how far the blast radius reaches — whether it lands only on the session that triggered it, or on every concurrent session sharing the process or replica.
@@ -317,7 +333,7 @@ After the shared brief, append the dimension-specific instruction:
 | **Readability** | sonnet | "Your dimension is **readability**. Is the intent of each non-trivial change obvious from the code alone? Flag: unclear names, missing-but-needed early returns, deeply nested conditionals, long functions doing multiple things, magic literals lacking a named constant. Do NOT suggest adding comments — prefer expressive code per repo conventions." |
 | **Extraction/Duplication** | sonnet | "Your dimension is **extraction and duplication**. Use Grep to verify duplication is real (not just superficially similar). Flag: duplicated logic within the diff or between the diff and existing code, copy-paste blocks differing only in literals, extract-method candidates. Each finding must reference both/all duplicated sites." |
 | **Test Coverage** | sonnet | "Your dimension is **test coverage**. For every non-trivial behavior change in the diff — new functions/methods with logic, new conditional branches, new error paths, new public APIs, modified business rules — check whether a test exercises it. Use Grep/Glob to (a) locate test files for the changed code (test-file naming conventions vary by repo: deduce from neighbours and `CLAUDE.md`), and (b) find tests for analogous existing code so you know what 'covered' looks like in *this* repo. Flag: new logic with no test, new conditional branch covered only on the happy path, modified behavior whose existing test was not updated, new public/exported surface without an integration test where the repo's convention requires one. **Weight by consequence, not by line count** — the statement whose failure takes the service down deserves a test far more than a branch in a formatter, so say what an untested path costs when it breaks. **Also judge whether a test that exists can fail for the reason it exists**: a test that mocks the very dependency whose real contract is the risk, an assertion that also holds on empty output, a test proving only that a *different* exception wasn't raised. Where a test's subject is a dependency's behaviour rather than this code's contract, say so — the repo conventions forbid re-verifying a dependency. Skip: trivial getters/setters, pure renames, comment/doc-only changes, formatting, generated code, infra/YAML/config, and anything in directories the repo's existing tests do not cover (deduce). Respect the repo's testing posture — if `CLAUDE.md` or neighbour evidence says 'no tests for X', do not invent a requirement. Reference both the diff location and the expected test location (or analogue) in every finding." |
-| **Reliability** | opus (inherit) | "Your dimension is **reliability and failure modes**. For every new or changed call the diff introduces, ask what happens when it is slow, unreachable, or returns something the code does not expect — and **who pays**. Flag: (a) an await on a non-essential subsystem with no timeout and no `except`, where a fault there takes down something that should outlive it — startup lifecycle, request handling, shutdown; compare against how the neighbouring subsystems in the same function handle the same risk. (b) An exception that can escape a callback, hook, or background task that nothing supervises — name what stops working for the remaining life of the process when it dies, and whether anything would make that visible. (c) An `async def` body with no `await` on a path that can loop, or synchronous work (logging, serialization, CPU, blocking I/O) long enough to stall the event loop; when a timeout is configured around such a body, say plainly that it cannot fire, because a timeout that cannot preempt is worse than none — it reads as a bound that isn't there. (d) A lock, or app-scoped/process-scoped state, that turns one session's fault into every concurrent session's fault — state the blast radius explicitly rather than leaving it implied. (e) Shutdown ordering: whether a drain, flush, or close step can be skipped because an earlier step raised, and whether its timeout fits inside the platform's own grace period. (f) A failure class the change *introduces* that the old code did not have — buffering, caching, batching and retrying all trade one failure mode for another, so name the new one. Read the dependency sources in the brief rather than assuming a library's failure behaviour. The bar is a fault that is plausible in production, not any theoretical one — do not propose defensive handling nobody would add." |
+| **Reliability** | opus (inherit) | "Your dimension is **reliability and failure modes**. For every new or changed call the diff introduces, ask what happens when it is slow, unreachable, or returns something the code does not expect — and **who pays**. Flag: (a) an await on a non-essential subsystem with no timeout and no `except`, where a fault there takes down something that should outlive it — startup lifecycle, request handling, shutdown; compare against how the neighbouring subsystems in the same function handle the same risk. (b) An exception that can escape a callback, hook, or background task that nothing supervises — name what stops working for the remaining life of the process when it dies, and whether anything would make that visible. (c) An `async def` body with no `await` on a path that can loop, or synchronous work (logging, serialization, CPU, blocking I/O) long enough to stall the event loop; when a timeout is configured around such a body, say plainly that it cannot fire, because a timeout that cannot preempt is worse than none — it reads as a bound that isn't there. (d) A lock, or app-scoped/process-scoped state, that turns one session's fault into every concurrent session's fault — state the blast radius explicitly rather than leaving it implied. (e) Shutdown ordering: whether a drain, flush, or close step can be skipped because an earlier step raised, and whether its timeout fits inside the platform's own grace period. (f) A failure class the change *introduces* that the old code did not have — buffering, caching, batching and retrying all trade one failure mode for another, so name the new one. Read the dependency sources in the brief rather than assuming a library's failure behaviour. The test is a fault that is plausible in production, not any theoretical one — do not propose defensive handling nobody would add." |
 | **Operability** | sonnet | "Your dimension is **operability** — whether the person on call, who did not write this code, can see what it does when it goes wrong. Flag: (a) a failure path the change introduces or moves that nothing counts, logs, or traces — including the case where the *detector itself* fails silently and its silence is indistinguishable from healthy quiet. (b) An instrument whose claimed coverage is wider than its real coverage: read every path that reaches it and name the ones that do not — a dependency that logs-and-returns instead of raising is the usual culprit, and the claim is usually in a docstring or the PR body. (c) A label on a metric that is not also a structured field on the log record for the same event: an operator alerting on the metric cannot pivot to the logs on that dimension. Check every failure path carries the same field shape — a field present on one path and absent on its sibling is a finding, because a filter that works for one silently misses the other. (d) Log volume and cost under **sustained fault**, not steady state: one record per event for the length of an outage window, a traceback formatted inline on a request path, a multi-line dump per call. (e) A log message whose wording steers an operator to the wrong cause — most often a message hardcoded to one failure mode inside an `except` that catches several. (f) An existing alert, dashboard, or saved query this change silently invalidates: the old signal stops appearing and the change looks like a success either way. Grep for message text the diff moves or removes. Every finding must name the operational question that cannot be answered without the change you propose — do NOT propose telemetry for its own sake." |
 | **Configuration & Capacity** | sonnet | "Your dimension is **configuration and capacity**. Flag: (a) a tuned value with no stated reasoning anywhere — the diff, PR body, or ticket must say why *this* number; and any deviation from a library or platform default must be explained, in both directions (raising and lowering). (b) A value whose consequence is not worked out: what throughput, memory footprint, or latency does it imply, and does this system's actual traffic shape fit inside it? Do the arithmetic and show it in the finding. (c) A timeout or budget that does not fit inside the platform's own budget — container termination grace period, server shutdown window, upstream deadline; an unhonourable timeout is a false promise. (d) Back-pressure left unspecified: when the bounded thing is full, does the caller reject immediately or wait, and for how long? Read the dependency source from the brief rather than inferring it from an error message's wording. (e) **Cross-environment drift** — the brief lists each changed file's sibling family. A sibling that carries the same block and was not updated is a finding: say what it runs on instead, and when that first bites someone. This check must look outside the diff, and it is the one thing no other reviewer can do. (f) A version constraint that admits a behaviour change with no code change — a range where the diff depends on semantics that only a pin protects. Skip values that are obviously conventional for the ecosystem and unchanged by the diff." |
 | **Efficacy & Claims** | opus (inherit) | "Your dimension is **efficacy and claims** — does the change do what it says, and is what it says true? You are the only reviewer whose lane is the gap between stated intent and code, so do not drift into code quality. Flag: (a) the fix relabels or relocates the failure rather than removing it. Trace the root cause the ticket names through the new code and say whether the same trigger still produces the same loss under a different name. Where you cannot tell without the dependency's source, read it (paths in the brief); where you still cannot tell, raise it as a question and say precisely what would answer it. (b) A claim in a docstring, code comment, PR body, or commit message the code does not support — quote the claim, then name the path that breaks it. (c) An acceptance criterion the diff does not meet, **including one met only partly** — a rule applied to six of nine files, a counter that observes three of four paths, a bound set on one caller and not its sibling. Walk the acceptance-criteria list explicitly, one at a time, and say for each whether it is met, partly met, or unmet. (d) A new risk the change introduces that is written down nowhere — a loss class, a latency class, a new dependency. If the change is a trade rather than a win, that trade belongs in the PR body; say so. (e) A claim you cannot verify at all, and exactly what it would take to verify it. Every finding must be anchored: quote the claim or the acceptance-criterion line, then name the code that contradicts it. A vague 'this might not work' is not a finding." |
@@ -328,14 +344,23 @@ Mark `🔬 Analysis: launch review sub-agents` as `completed` after all ten sub-
 
 Mark `📋 Findings report` as `in_progress`.
 
-1. Parse each sub-agent's structured findings block, then **assign a flat 1..N id across the whole report** in dimension order (the order of the table above), so every finding can be referenced unambiguously in follow-up chat.
+1. Parse each sub-agent's structured findings block.
 
-2. **Print the full aggregated report as a regular text message** before calling any other tool. The user can ONLY see your text output — they cannot see sub-agent return values.
+2. **Apply the bar** — partition the parsed findings into `shown` and `held back`, per `BAR`:
+   - `low` — nothing is held back.
+   - `medium` — hold back each **smell** whose `Impact` is `maintenance` **and** whose `Severity` is `low`. Both conditions must hold: a `maintenance` · `medium` smell is shown, and so is a `user-facing` · `low` smell.
+   - `high` — hold back every **smell** whose `Impact` is `maintenance`, at any severity.
+
+   **Findings with `Category: confident` are never held back**, whatever their impact or severity. Record the held-back count as `HELD`; you need it for the footer, Step 8 and Step 9, but the findings themselves play no further part in this run.
+
+3. **Assign a flat 1..N id across the shown findings only**, in dimension order (the order of the table above), so every finding can be referenced unambiguously in follow-up chat. Numbering is contiguous — do not leave gaps where a finding was held back, because a gap at `#4` invites a question about a finding that is not in the report to answer it from.
+
+4. **Print the full aggregated report as a regular text message** before calling any other tool. The user can ONLY see your text output — they cannot see sub-agent return values.
 
    The report leads with the impact summary, because that is the tier a merge decision turns on and the detail below it is long. Then the per-dimension body, each dimension split into **Confident** then **Smells**.
 
    ```
-   ## /ds:review2 findings — PR #<N> (<title>)
+   ## /ds:review2 findings — PR #<N> (<title>) · bar: <BAR>
 
    ### Impact summary
 
@@ -392,28 +417,37 @@ Mark `📋 Findings report` as `in_progress`.
    ### Efficacy & Claims
    ...
 
-   **Totals:** <T> findings — <C> confident, <S> smells — across 10 dimensions (H high, M medium, L low).
+   **Totals:** <T> shown — <C> confident, <S> smells — across 10 dimensions (H high, M medium, L low).
+   > Bar: <BAR> — <HELD> smells held back. Re-run with `--bar low` to see them.
    ```
+
+   Omit the `Bar:` footer line entirely when `HELD` is 0 — which is always the case at `--bar low`. Everything the report counts is a *shown* finding; held-back smells appear nowhere in the impact summary or the per-dimension body, only in that one footer number.
 
    Within each impact tier, order by severity (high → low). Omit an impact tier's heading entirely when it has no findings. Omit the **Confident** or **Smells** subsection header for any dimension where that subsection is empty, and omit a dimension's `###` heading entirely when it returned no findings — a ten-dimension report with four empty sections is harder to read than a six-section one.
 
-3. **Zero-findings short-circuit:** if total findings == 0, print:
-   > **Review passed — no substantive findings.**
+5. **Nothing-to-show short-circuit:** if the shown count == 0, print one of two lines — which one depends on whether the reviewers found nothing or the bar hid everything they found. Do not print the first when the second is true; "review passed" is a false claim about a PR whose only findings were filtered out.
+   - **Nothing was captured** (shown == 0 **and** `HELD` == 0):
+     > **Review passed — no substantive findings.**
+   - **Everything captured was held back** (shown == 0 **and** `HELD` > 0):
+     > **No findings at bar `<BAR>`** — <HELD> smells held back, no confident findings. Re-run with `--bar low` to see them.
 
-   - If `OUT_FILE` is set, also print `> OUT_FILE: nothing written (no findings).` — no item blocks are added (Step 3.6 is skipped).
+   Either way, the rest of the run is the same:
+   - If `OUT_FILE` is set, also print `> OUT_FILE: nothing written (nothing to show).` — no item blocks are added (Step 3.6 is skipped).
    - If `POST_COMMENTS=on`, also print `> +comment: nothing to post.` — Steps 3.7–3.9 are skipped.
-   - **If `MODE=own`:** proceed to Step 8 (ticket context gets a "Review passed" session entry), then Step 9.
+   - **If `MODE=own`:** proceed to Step 8 (ticket context gets a session entry naming which of the two cases it was), then Step 9.
    - **If `MODE=draft-comments`:** skip directly to Step 9 (final summary).
 
 Mark `📋 Findings report` as `completed`.
 
 ### Step 3.6: Write Findings to File (`OUT_FILE` set only)
 
-Runs in **both** modes, before the mode branch. If `OUT_FILE` is empty, skip this step. (On the zero-findings short-circuit above you won't reach this step — nothing is written.)
+Runs in **both** modes, before the mode branch. If `OUT_FILE` is empty, skip this step. (On the nothing-to-show short-circuit above you won't reach this step — nothing is written.)
 
 Mark `📄 Write findings to <OUT_FILE>` as `in_progress`.
 
 Append the findings to `OUT_FILE` as shared-format item blocks so `/ds:polish <OUT_FILE>` can act on them later. The format is owned by `/ds:polish` (see that command for the full spec); the **writer slice** is:
+
+**Only the shown findings are written.** A smell held back by the bar does not reach the findings file — a finding you never read turning up in your `/ds:polish` queue is the same noise, just moved downstream. To capture the held-back tail in a file, re-run with `--bar low --to <file>`.
 
 1. **File shape:**
    - If `OUT_FILE` does not exist, create it with a skeleton — title, an empty Inbox, then the `---` that separates Inbox from thread:
@@ -446,7 +480,7 @@ Mark `📄 Write findings to <OUT_FILE>` as `completed`.
 
 ### Step 3.7: Anchor Findings to Diff Lines (`POST_COMMENTS=on` only)
 
-Runs in **both** modes. If `POST_COMMENTS=off`, skip Steps 3.7–3.9 entirely. On the zero-findings short-circuit you never reach this step — print `> +comment: nothing to post.` there instead.
+Runs in **both** modes. If `POST_COMMENTS=off`, skip Steps 3.7–3.9 entirely. On the nothing-to-show short-circuit you never reach this step — print `> +comment: nothing to post.` there instead.
 
 Mark `🎯 Anchor findings to diff lines` as `in_progress`.
 
@@ -489,6 +523,8 @@ Mark `🙋 Triage smells (in-the-loop)` as `in_progress`.
 
 A confident finding has a concrete fix and a trivial counter-argument, so it needs no per-item decision — it goes straight to the Step 3.9 preview. A smell is the opposite: a live trade-off, or a problem with no obvious fix. Those get your judgement one at a time, on the same pattern as `/ds:polish-pr` Step 5.
 
+Only the **shown** smells reach this loop. A smell held back by the bar is never triaged and never posted — posting a comment the user did not read would be worse than the noise the bar exists to remove.
+
 If there are no smells, print `> No smells to triage.` and continue.
 
 **a. Scope guard first.** Ten dimensions can surface a lot of smells, and one `AskUserQuestion` each would be an interrogation. If the smell count is **greater than 8**, ask once via `AskUserQuestion` before the loop:
@@ -515,6 +551,8 @@ Then `AskUserQuestion`:
 Wait for each decision before showing the next smell. Confident findings never enter this loop.
 
 **c. Print the tally:** `> Smells: <A> approved for posting, <D> declined, <F> deferred out of scope.`
+
+The bar does upstream what this scope guard does downstream, so at the default bar the guard fires far less often than it did before the bar existed. It stays as a second net — a PR can still surface more than eight `medium`-severity smells that all clear the bar.
 
 Mark `🙋 Triage smells (in-the-loop)` as `completed`.
 
@@ -619,7 +657,7 @@ Omit any tier heading that has no confident findings.
 
 Special cases:
 - Zero confident findings (only smells surfaced): print `> No confident findings to draft — the report above lists smells for your private review.` and continue.
-- Zero total (from the zero-findings short-circuit): you are not in this step — Step 3 jumped you straight to Step 9.
+- Zero shown (from the nothing-to-show short-circuit): you are not in this step — Step 3 jumped you straight to Step 9.
 
 Mark `🗒️ Print draft PR comments (confident only)` as `completed`, then jump to **Step 9**.
 
@@ -633,11 +671,12 @@ If `TICKET_ID` is `null`, mark this step `completed` with note "No ticket ID —
 
 Otherwise, launch a `general-purpose` sub-agent (`model: "haiku"`) to append a new session entry to `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET_ID}.md`. Pass it:
 
-- **Session title:** `Review via /ds:review2` (or `Review passed (no findings)` for the zero-findings path)
+- **Session title:** `Review via /ds:review2` (or `Review passed (no findings)` when nothing was captured at all)
 - **Branch name** (from `git branch --show-current`)
 - **Repository name** (from `git remote get-url origin` or `gh repo view --json name`)
-- **Accomplished:** one line — `<T> findings surfaced — <C> confident, <S> smells across 10 dimensions; <U> user-facing, <E> efficacy.` On the zero-findings path: `Review passed — no substantive findings across 10 dimensions.` When `+comment` posted, append `; <P> posted to the PR (<C2> confident, <S2> approved smells)` — the next session needs to know which findings are already public.
-- **Key decisions:** the findings worth carrying into the next session — take every `user-facing` and `efficacy` finding first (those change what merges), then fill up to 3–5 bullets with the most significant `maintenance` smells. Each bullet `<file:line> — <one-line summary>`. Omit the section entirely if nothing qualifies.
+- **Accomplished:** one line — `<T> findings surfaced — <C> confident, <S> smells across 10 dimensions; <U> user-facing, <E> efficacy.` When nothing was captured: `Review passed — no substantive findings across 10 dimensions.` When `+comment` posted, append `; <P> posted to the PR (<C2> confident, <S2> approved smells)` — the next session needs to know which findings are already public.
+- **Bar:** when `HELD` > 0, append `; reviewed at bar <BAR>, <HELD> smells held back` to the `Accomplished:` line. This is the **only** place a held-back finding is recorded, so a later session reading the audit trail is not misled into treating the review as exhaustive.
+- **Key decisions:** the findings worth carrying into the next session — take every `user-facing` and `efficacy` finding first (those change what merges), then fill up to 3–5 bullets with the most significant `maintenance` smells. Each bullet `<file:line> — <one-line summary>`. Omit the section entirely if nothing qualifies. Held-back findings are not eligible; the count on the `Accomplished:` line is all that records them.
 - **Files changed:** omit. This command does not modify the working tree.
 
 The sub-agent should append a new section under `## Sessions` following the existing document template (see `~/.claude/CLAUDE.md` "Ticket Context Documents" → Document Template). If the file does not exist, create it.
@@ -656,16 +695,18 @@ The summary format differs by mode.
 
 ```
 /ds:review2 — PR #<N> (<title>)
-Findings: <T> total — <C> confident, <S> smells — across 10 dimensions (H high, M medium, L low)
+Findings: <T> shown — <C> confident, <S> smells — across 10 dimensions (H high, M medium, L low)
+Bar: <BAR> — <HELD> smells held back
 Impact: <U> user-facing, <E> efficacy, <M> maintenance
 Posted to PR: <P> comments (<I> inline, <B> in review body) — <review-url>
 Ticket context updated: yes / no — <reason if no>
 ```
 
-Include the `Posted to PR:` line only when `POST_COMMENTS=on`. When nothing was posted, say why in place of the counts: `none (cancelled)`, `none (nothing eligible)`, or `none (local HEAD differs from PR head — push and re-run)`.
+Include the `Bar:` line only when `HELD` > 0. Include the `Posted to PR:` line only when `POST_COMMENTS=on`. When nothing was posted, say why in place of the counts: `none (cancelled)`, `none (nothing eligible)`, or `none (local HEAD differs from PR head — push and re-run)`.
 
 Suggest next steps:
 - Address the user-facing and efficacy findings before asking for human review — those are the two tiers a reviewer blocks on.
+- Re-run at `--bar low` to read the <HELD> held-back smells. *(Include this line only when `HELD` > 0.)*
 - Engage with individual findings in chat (reference by `#N`) to discuss, dismiss, or act on them.
 - Re-run `/ds:review2` after addressing the major findings if more rounds are needed.
 - Re-run with `+comment` to post the findings you want on the record for your reviewers — the dedup guard keeps a second run from duplicating anything already posted. *(Skip this line when `POST_COMMENTS=on` already ran.)*
@@ -676,11 +717,14 @@ Suggest next steps:
 ```
 /ds:review2 (draft-comments mode) — PR #<N> (<title>)
 PR author: <PR_AUTHOR>   You: <ME>
-Findings: <T> total — <C> confident, <S> smells — across 10 dimensions (H high, M medium, L low)
+Findings: <T> shown — <C> confident, <S> smells — across 10 dimensions (H high, M medium, L low)
+Bar: <BAR> — <HELD> smells held back
 Impact: <U> user-facing, <E> efficacy, <M> maintenance
 Drafted as PR comments: <C> (confident only — smells excluded)
 No changes were made to the branch, PR, or ticket context.
 ```
+
+Include the `Bar:` line only when `HELD` > 0.
 
 **When `POST_COMMENTS=on`,** replace the last two lines — the "no changes" claim is false once comments are posted:
 
@@ -692,16 +736,19 @@ No changes were made to the branch or ticket context.
 Suggest next steps:
 - Copy the draft comments above into the GitHub PR review, user-facing tier first. *(`POST_COMMENTS=on`: they are already posted — check the review URL renders as intended.)*
 - Use the smells (above the draft section) as a private prompt list for offline discussion with the author. *(`POST_COMMENTS=on`: only the smells you declined remain private.)*
+- Re-run at `--bar low` to read the <HELD> held-back smells before that discussion. *(Include this line only when `HELD` > 0.)*
 - Re-run `/ds:review2 <pr-number>` after the author pushes updates. With `+comment`, the dedup guard means a re-run adds only what is new.
 
 Mark `✅ Final summary` as `completed`.
 
 ## Important Notes
 
-- **Relationship to `/ds:review`**: this is the trial v2. It keeps every v1 behaviour — mode detection, the `Counter-argument` bar, the confident/smell split, `--to <file>`, the ticket-context audit — and adds four dimensions, the impact tier, two reach fixes, and `+comment`. `/ds:review` stays in place as the daily driver until v2 is trusted, and does **not** get `+comment` — the flag is part of what v2 is trialling.
+- **Relationship to `/ds:review`**: this is the trial v2. It keeps every v1 behaviour — mode detection, the mandatory `Counter-argument`, the confident/smell split, `--to <file>`, the ticket-context audit — and adds four dimensions, the impact tier, two reach fixes, and `+comment`. `/ds:review` stays in place as the daily driver until v2 is trusted, and does **not** get `+comment` — the flag is part of what v2 is trialling.
 - **Mode-aware flow**: the command auto-detects `own` vs `draft-comments` mode from PR author at Step 0.4. Both modes print the full categorized report; `own` additionally writes a ticket-context audit entry, `draft-comments` additionally prints copy-paste-ready draft comments for confident findings only. `+comment` is orthogonal to the mode — it works in both, and in `draft-comments` it replaces the copy-paste block with a posted review.
 - **Never touches the working tree**: this command does not edit files, commit, or push, in any mode, with or without `+comment`. The user reads the report and acts on individual findings in follow-up chat as needed. The single outward write it can make is posting comments to the PR, and only under `+comment`.
 - **`+comment` semantics**: the confident/smell split *is* the confidence signal, so no new judgement is invented for posting. A **confident** finding — concrete fix, trivial counter-argument — posts behind one batch confirmation. A **smell** — real trade-off, or no concrete fix — gets a per-finding `AskUserQuestion` in Step 3.8, and posts only if you approve it, in question form with its alternatives named. This is the one thing that overrides the default that smells are never posted. All three impact tiers are eligible; `maintenance` is not filtered out.
+- **`--bar` semantics**: the bar filters **smells only** — `low` shows all of them, `medium` (the default) holds back `maintenance` · `low` smells, `high` holds back every `maintenance` smell. Confident findings are never filtered, because a concrete fix with a trivial counter-argument is high-signal at any severity. The bar acts at **report time**, not in the sub-agent brief, so every run captures the same findings and re-running at `--bar low` reveals the held-back tail without re-analysing. `--to <file>` and `+comment` both respect it — a finding the user never read must not reach their `/ds:polish` queue or the PR — and the ticket-context entry is the one place that records what it hid.
+- **`--bar` runs the opposite way to `/code-review`'s `level`**: in the built-in `/code-review` skill, a *higher* level means *broader* coverage and *more* findings. Here a *higher* bar means *fewer*. That is why this flag is called a bar and not a level: the word would import the wrong direction from the neighbouring command. Do not "fix" the direction to match.
 - **Nothing reaches GitHub unconfirmed**: Step 3.9 previews the exact review body and every inline comment, then gates on a single `AskUserQuestion` with a Cancel option. Confident findings need no per-item approval, but they do not bypass that gate.
 - **`event` is always `COMMENT`**: `APPROVE` and `REQUEST_CHANGES` are rejected by GitHub on your own PR, and this command is not a merge gate on anyone else's. It posts observations, never a verdict.
 - **Inline comments can only anchor inside a diff hunk**, but this command's brief deliberately puts findings outside the changed lines in scope. Step 3.7 routes each finding accordingly: anchorable ones become inline comments, the rest fold into the review body under `Findings outside the diff`. Nothing is dropped for being unanchorable. The batched review POST is atomic, so one bad anchor 422s the whole thing — the fallback posts the body alone, then each comment individually, and reports which landed.
@@ -715,11 +762,11 @@ Mark `✅ Final summary` as `completed`.
 - **Findings-file output (`--to <file>`)**: when `--to <file>` is passed, Step 3.6 *additionally* appends the findings to that file as shared-format item blocks (under a dated `## /ds:review2 — DATE` group), so `/ds:polish <file>` can triage and apply them later. The `Impact` field rides along as a free-form field — `/ds:polish` parses only the `### F<n> · ` heading and `Status`, so the extra field passes through untouched.
 - **Render findings as text**: the report is printed as a regular text message, and it is the deliverable. Without `+comment` there is no selection prompt at all; with it, the only prompts are the smell triage in Step 3.8 and the post gate in Step 3.9, both of which act on the already-printed report rather than replacing it.
 - **Sub-agents are read-only**: analysis sub-agents have no `Edit`/`Write` in their allowed tools. The main agent never edits the working tree.
-- **Fewer high-signal findings**: every sub-agent prompt instructs to skip borderline issues, and that bar applies to the four new dimensions exactly as it does to the six original ones. Ten reviewers is not a licence for a longer report — a run that returns twenty mediocre findings is a worse outcome than one that returns five good ones.
+- **Fewer high-signal findings**: every sub-agent prompt instructs to skip borderline issues, and that instruction applies to the four new dimensions exactly as it does to the six original ones. Ten reviewers is not a licence for a longer report — a run that returns twenty mediocre findings is a worse outcome than one that returns five good ones.
 - **Lane discipline between neighbours**: Performance owns data structures and query patterns; Reliability owns concurrency stalls and event-loop blocking. Operability owns whether a failure is *visible*; Reliability owns whether it *happens*. Configuration owns the value of a knob; Efficacy owns whether the change it belongs to achieves its stated purpose. Each addendum names the boundary so two reviewers don't file the same finding twice.
 - **Categorization is at capture**: each finding is `confident` or `smell` based on whether the proposed fix is concrete and whether the counter-argument is trivial. Smells are first-class; they need no proposed change (`(needs unpacking)` is acceptable).
 - **Respect prior decisions**: the ticket-context summary in the shared brief is authoritative — sub-agents must not re-litigate. The exception is Efficacy, which may flag an acceptance criterion it believes is itself the problem, as a finding rather than a quiet workaround.
 - **Conventions compliance**: Step 1 discovers every `CLAUDE.md`/`AGENTS.md` applicable to the changed files (root + nested, ordered most-specific first); the Consistency reviewer checks the diff against their documented rules and cites the exact rule and its source file per violation. Purely mechanical formatting rules owned by `/ds:pre-review` are skipped to avoid overlap.
-- **Always update ticket context** (when a ticket is detected in `MODE=own`) — including on the zero-findings path. The audit trail matters.
+- **Always update ticket context** (when a ticket is detected in `MODE=own`) — including when nothing was captured, and including when the bar held everything back. The audit trail matters.
 - **`/ds:review2` is not `/ultrareview`**: this command is local-only, free, and agent-driven. Do not invoke or reference the cloud `/ultrareview`.
 - **Parallel sub-agents**: launch all ten reviewers in a single tool-use turn so they run concurrently. Do not chain them.
