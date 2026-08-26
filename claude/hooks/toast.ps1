@@ -20,19 +20,24 @@ try {
     $payload = $null
     if ($raw) { try { $payload = $raw | ConvertFrom-Json } catch { } }
 
-    # Only the main agent gets a toast. Sub-agent (Task tool) hook payloads carry
-    # an `agent_id`; main-agent events do not. Without this, fan-out commands that
-    # spawn many parallel sub-agents (e.g. /ds:review) flood the screen with toasts.
-    $agentId = if ($payload) { $payload.agent_id } else { $null }
+    # A fan-out wakes the main agent each time a sub-agent or teammate finishes, and
+    # every wake-up ends in its own Stop event. Toasting all of them buries the one
+    # that means "your work is done", so a Stop with work still in flight stays
+    # silent and the last one, once background_tasks has drained, toasts. Input is
+    # never missed: permission_prompt / idle_prompt arrive as Notification, which
+    # carries no background_tasks and so is never suppressed here.
+    $running = @($payload.background_tasks | Where-Object { $_.status -eq 'running' }).Count
 
-    # Opt-in payload trace for confirming what actually fires (off by default).
-    if ($env:CLAUDE_TOAST_DEBUG) {
-        $stamp = (Get-Date).ToString('s')
+    # Toggled by a marker file rather than an env var, because hooks inherit the
+    # Claude Code process environment and so an env gate can only be set at startup.
+    if (Test-Path -LiteralPath "$env:USERPROFILE\.claude\hooks\toast-debug.on") {
+        $decision = if ($running -gt 0) { "suppress(running=$running)" } else { 'toast' }
         Add-Content -LiteralPath "$env:USERPROFILE\.claude\hooks\toast-debug.log" `
-            -Value "$stamp`tEvent=$EventName`tagent_id=$agentId`traw=$raw" -Encoding utf8
+            -Value "$((Get-Date).ToString('s'))`tEvent=$EventName`tdecision=$decision`traw=$raw" `
+            -Encoding utf8
     }
 
-    if ($agentId) { exit 0 }
+    if ($running -gt 0) { exit 0 }
 
     $project = if ($payload -and $payload.cwd) { Split-Path $payload.cwd -Leaf } else { 'Claude Code' }
 
