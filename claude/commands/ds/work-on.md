@@ -509,7 +509,7 @@ remote `{F}` in the meantime. Integrate the remote before pushing:
 4. Your Step 3 verification predates any commits the rebase pulled in (usually unrelated
    areas). CI on the PR is the backstop for the integrated tip; optionally re-run the
    targeted tests if the rebase touched the same area you changed.
-5. Check if a PR already exists: `gh pr view --json url,number` (exit code 0 = exists).
+5. Check if a PR already exists: `gh pr view --json url,number,baseRefName` (exit code 0 = exists).
 6. **If no PR exists**: launch a Task sub-agent (`model: "sonnet"`) to create a draft PR.
 
 **Sub-agent prompt:**
@@ -519,37 +519,38 @@ remote `{F}` in the meantime. Integrate the remote before pushing:
 > 2. Fetch the Linear ticket using `mcp__linear-server__get_issue` with the ticket ID and `includeRelations: true`
 > 3. Read the ticket context file at `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET_ID}.md` if it exists
 > 4. Run `git log --oneline origin/main..HEAD` and `git diff origin/main...HEAD --stat` to understand all changes
-> 4b. Detect the base branch for the PR:
->    ```bash
->    OLDEST_NEW=$(git log --format="%H" origin/main..HEAD | tail -1)
->    if [ -n "$OLDEST_NEW" ]; then
->      PARENT_COMMIT=$(git rev-parse "${OLDEST_NEW}^1")
->      PARENT_BRANCH=$(git branch -r --contains "$PARENT_COMMIT" \
->        | grep -v -E "HEAD|origin/(main|master)" | head -1 | xargs)
->      BASE_BRANCH="${PARENT_BRANCH#origin/}"
->    fi
->    BASE_BRANCH="${BASE_BRANCH:-main}"
->    ```
->    If BASE_BRANCH is not "main", this is a stacked PR — follow steps 5b–5d below instead of step 5.
-> 5. **If BASE_BRANCH is "main"** — create a standard draft PR:
+> 4b. Detect the base branch by running `stack-parent` (a `bash.d` helper; `stack-parent --help` states the rule).
+>    It prints `<parent-branch> <pr-number>` when the branch is stacked, `<parent-branch> -` when that
+>    parent has no open PR, and nothing (exit 1) when the branch is based on main.
+>    - **Nothing** → `BASE_BRANCH=main`; go to step 5.
+>    - **`<parent> <num>`** → `BASE_BRANCH=<parent>`, `PARENT_PR_NUM=<num>`; go to steps 5b–5d.
+>    - **`<parent> -`** → warn: "Parent branch `<parent>` has no open PR — create one first, then re-run to link the stack." Then do step 5 with `--base <parent>` added (no stacked-PR notice, there is no parent PR to reference) and skip 5b–5d.
+> 5. **Base is main** — create a standard draft PR:
 >    `gh pr create --draft` with title (short summary from ticket title and changes) and body with sections: Summary, Linear ticket link, Test plan. Use HEREDOC for the body.
-> 5b. **If BASE_BRANCH is not "main"** — stacked PR flow:
->    - Verify the parent branch has an open PR: `gh pr view "$BASE_BRANCH" --json number,url -q '"\(.number) \(.url)"'`
->      If no open PR exists for the parent, warn the user: "Parent branch $BASE_BRANCH has no open PR — create one first, then re-run to link the stack." Then fall back to step 5 with `--base "$BASE_BRANCH"` (no `gh stack link`).
->    - Capture PARENT_PR_NUM from the output above.
->    - Ensure the `gh-stack` extension is installed: `gh extension list | grep -q gh-stack || gh extension install github/gh-stack`
+> 5b. **Stacked PR flow** — ensure the `gh-stack` extension is installed:
+>    `gh extension list | grep -q gh-stack || gh extension install github/gh-stack`
 > 5c. Create the PR targeting the parent branch:
 >    `gh pr create --draft --base "$BASE_BRANCH"` with title and body. Open the body with the stacked-PR notice:
 >    `> ⚡ Stacked on #PARENT_PR_NUM (\`$BASE_BRANCH\`) — will retarget to main when that branch merges.`
 >    Followed by the standard sections: Summary, Linear ticket link, Test plan. Use HEREDOC for the body.
+>    Create the PR here rather than leaving it to `gh stack link` in 5d: left to itself the extension opens the PR with its own generated title and not as a draft.
 > 5d. Register the stack with the GitHub native stacked-PR system:
->    `gh stack link "$BASE_BRANCH" "$(git branch --show-current)"`
->    Capture and report the output (confirms stack registration).
-> 6. Return the PR URL and number (and `gh stack link` output if this was a stacked PR)
+>    ```bash
+>    GH_REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)" gh stack link "$BASE_BRANCH" "$(git branch --show-current)"
+>    ```
+>    `GH_REPO` is required, not decorative: the extension parses `origin` itself and rejects an SSH host alias (`git@github-work:owner/repo.git`) that `gh` core resolves fine, dying with "none of the git remotes … point to a known GitHub host".
+>    Linking also pushes every branch in the stack to `origin`. That is harmless here because Step 8.3 already pushed this branch and the parent has an open PR, so both are on the remote already.
+>    **A link failure is not fatal** — the PR exists and already targets the right base. Report the error and carry on.
+>    Capture and report the output (it confirms stack registration).
+> 6. Return the PR URL and number (and the `gh stack link` result if this was a stacked PR)
 
-**Sub-agent allowed tools:** `Bash(git *), Bash(gh *), mcp__linear-server__get_issue, Read, Glob`
+**Sub-agent allowed tools:** `Bash, mcp__linear-server__get_issue, Read, Glob`
+(`Bash` unrestricted rather than `Bash(git *), Bash(gh *)`: neither pattern matches `stack-parent`
+or the `GH_REPO=… gh …` prefix in 5d.)
 
-7. **If PR already exists**: just note the PR URL and number from the `gh pr view` output.
+7. **If PR already exists**: note the PR URL and number from the `gh pr view` output. If its
+   `baseRefName` is not `main` and `stack-parent` names a parent, run step 5d's `gh stack link` as
+   well, so a re-run on a stacked branch converges instead of leaving the stack unregistered.
 
 Store the results (PR URL and number, plus `PUSHED_SHA` and `COMMIT_URL`) for the final summary.
 
@@ -572,6 +573,7 @@ Fold-back: clean / conflict resolved / blocked        [omit this line in default
 Committed: {PUSHED_SHA} — {COMMIT_URL}  /  {SHA} (worktree, not pushed — fold-back blocked)
 Ticket context updated: yes/no
 PR: created #N <url> (draft) / pushed to existing #N <url> / not pushed (fold-back blocked)
+Stack: based on {parent} #N — linked / link failed: {error}      [omit this line when based on main]
 ```
 
 Mark the todo `completed`.
