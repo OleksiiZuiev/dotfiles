@@ -545,8 +545,8 @@ remote `{F}` in the meantime. Integrate the remote before pushing:
 > 6. Return the PR URL and number (and the `gh stack link` result if this was a stacked PR)
 
 **Sub-agent allowed tools:** `Bash, mcp__linear-server__get_issue, Read, Glob`
-(`Bash` unrestricted rather than `Bash(git *), Bash(gh *)`: neither pattern matches `stack-parent`
-or the `GH_REPO=… gh …` prefix in 5d.)
+(`Bash` unrestricted: `stack-parent` and the `GH_REPO=… gh …` prefix in 5d match no narrower
+`Bash(...)` pattern.)
 
 7. **If PR already exists**: note the PR URL and number from the `gh pr view` output. If its
    `baseRefName` is not `main` and `stack-parent` names a parent, run step 5d's `gh stack link` as
