@@ -15,15 +15,19 @@ The command never touches the working tree — no edits, no commits, no pushes. 
 
 **`+comment`** (either mode) posts the findings to the PR as one inline review instead of leaving you to copy-paste. The confident/smell split is the confidence signal: confident findings post behind a single batch confirmation, and each smell is triaged one-by-one with `AskUserQuestion` — the same in-the-loop posture `/ds:polish-pr` uses. So with the flag on, a smell *can* reach the PR; without it, the no-post default above still holds.
 
-**`--bar low|medium|high`** (default `medium`) sets the **reporting bar** — how high a smell has to clear to be shown. A higher bar means fewer findings. Ten dimensions of first-class smells have a long tail of `maintenance`-tier, `low`-severity notes; the bar is what keeps that tail out of a report you have to read in one sitting.
+**`--bar low|medium|high`** (default `medium`) sets the **reporting bar** — how high a finding has to clear to be shown. A higher bar means fewer findings. Ten dimensions have a long tail of `maintenance`-tier, low-severity notes; the bar is what keeps that tail out of a report you have to read in one sitting.
 
-| Bar | Smells shown |
+The bar is a **severity ladder**, and it applies to **smells and confident findings alike**:
+
+| Bar | Held back |
 |---|---|
-| `low` | all of them |
-| `medium` | drop smells that are `maintenance` tier **and** `low` severity |
-| `high` | smells must be `user-facing` or `efficacy` tier — every `maintenance` smell drops |
+| `low` | nothing |
+| `medium` | findings with `low` severity |
+| `high` | findings with `low` or `medium` severity |
 
-**Confident findings are never filtered by the bar,** at any severity or tier: a concrete fix with a trivial counter-argument is high-signal by construction. The bar applies at report time, so every run captures the same findings and a re-run at `--bar low` reveals the held-back tail without re-analysing.
+**`user-facing` and `efficacy` findings are never held back, at any bar** — those are the two tiers a merge decision turns on, so severity does not get to hide one. That exemption is what makes the ladder nested: everything shown at `high` is shown at `medium`, and everything shown at `medium` is shown at `low`. In effect the bar only ever filters the `maintenance` tier, on severity.
+
+The bar applies at report time, so every run captures the same findings and a re-run at `--bar low` reveals the held-back tail without re-analysing.
 
 **Distinction from siblings:**
 - `/ds:pre-review` — style/naming/conventions on the local diff, before push. Cosmetic.
@@ -45,9 +49,9 @@ The command never touches the working tree — no edits, no commits, no pushes. 
    > `+comment: on — confident findings post after one confirmation; smells are triaged one-by-one. Nothing reaches GitHub unconfirmed.`
 
    When `BAR` is not `low`, print the bar line too, so the filter is visible before any analysis runs rather than discovered in the report:
-   > `--bar medium — maintenance·low smells are held back. Confident findings are never filtered.`
+   > `--bar medium — low-severity maintenance findings are held back, smells and confident alike. user-facing and efficacy findings always show.`
 
-   (At `--bar high`: `--bar high — only user-facing and efficacy smells are shown. Confident findings are never filtered.`)
+   (At `--bar high`: `--bar high — low- and medium-severity maintenance findings are held back, smells and confident alike. user-facing and efficacy findings always show.`)
 
 1. **Resolve the PR number.**
    - If `PR_ARG` is set, use PR **#`PR_ARG`**.
@@ -346,12 +350,14 @@ Mark `📋 Findings report` as `in_progress`.
 
 1. Parse each sub-agent's structured findings block.
 
-2. **Apply the bar** — partition the parsed findings into `shown` and `held back`, per `BAR`:
+2. **Apply the bar** — partition the parsed findings into `shown` and `held back`, per `BAR`. The rule reads the same for a smell and for a confident finding; `Category` plays no part in it:
    - `low` — nothing is held back.
-   - `medium` — hold back each **smell** whose `Impact` is `maintenance` **and** whose `Severity` is `low`. Both conditions must hold: a `maintenance` · `medium` smell is shown, and so is a `user-facing` · `low` smell.
-   - `high` — hold back every **smell** whose `Impact` is `maintenance`, at any severity.
+   - `medium` — hold back each finding whose `Severity` is `low`.
+   - `high` — hold back each finding whose `Severity` is `low` or `medium`.
 
-   **Findings with `Category: confident` are never held back**, whatever their impact or severity. Record the held-back count as `HELD`; you need it for the footer, Step 8 and Step 9, but the findings themselves play no further part in this run.
+   **Then rescue by tier: a finding whose `Impact` is `user-facing` or `efficacy` is never held back**, at any bar and any severity. Only `maintenance` findings can be filtered.
+
+   Record two counts — `HELD_S` (held-back smells) and `HELD_C` (held-back confident findings) — and their sum as `HELD`. You need all three for the footer, Step 8 and Step 9; the findings themselves play no further part in this run. Keep the two counts apart rather than reporting one number: a held-back smell is a trade-off you didn't read, but a held-back confident finding is a **concrete fix** you didn't read, and those are worth telling apart at a glance.
 
 3. **Assign a flat 1..N id across the shown findings only**, in dimension order (the order of the table above), so every finding can be referenced unambiguously in follow-up chat. Numbering is contiguous — do not leave gaps where a finding was held back, because a gap at `#4` invites a question about a finding that is not in the report to answer it from.
 
@@ -418,10 +424,10 @@ Mark `📋 Findings report` as `in_progress`.
    ...
 
    **Totals:** <T> shown — <C> confident, <S> smells — across 10 dimensions (H high, M medium, L low).
-   > Bar: <BAR> — <HELD> smells held back. Re-run with `--bar low` to see them.
+   > Bar: <BAR> — held back: <HELD_S> smells, <HELD_C> confident findings. Re-run with `--bar low` to see them.
    ```
 
-   Omit the `Bar:` footer line entirely when `HELD` is 0 — which is always the case at `--bar low`. Everything the report counts is a *shown* finding; held-back smells appear nowhere in the impact summary or the per-dimension body, only in that one footer number.
+   Omit the `Bar:` footer line entirely when `HELD` is 0 — which is always the case at `--bar low`. When only one of the two counts is 0, still print both, so the zero is stated rather than inferred from a missing clause. Everything the report counts is a *shown* finding; held-back findings appear nowhere in the impact summary or the per-dimension body, only in those two footer numbers.
 
    Within each impact tier, order by severity (high → low). Omit an impact tier's heading entirely when it has no findings. Omit the **Confident** or **Smells** subsection header for any dimension where that subsection is empty, and omit a dimension's `###` heading entirely when it returned no findings — a ten-dimension report with four empty sections is harder to read than a six-section one.
 
@@ -429,7 +435,7 @@ Mark `📋 Findings report` as `in_progress`.
    - **Nothing was captured** (shown == 0 **and** `HELD` == 0):
      > **Review passed — no substantive findings.**
    - **Everything captured was held back** (shown == 0 **and** `HELD` > 0):
-     > **No findings at bar `<BAR>`** — <HELD> smells held back, no confident findings. Re-run with `--bar low` to see them.
+     > **No findings at bar `<BAR>`** — held back: <HELD_S> smells, <HELD_C> confident findings. Re-run with `--bar low` to see them.
 
    Either way, the rest of the run is the same:
    - If `OUT_FILE` is set, also print `> OUT_FILE: nothing written (nothing to show).` — no item blocks are added (Step 3.6 is skipped).
@@ -447,7 +453,7 @@ Mark `📄 Write findings to <OUT_FILE>` as `in_progress`.
 
 Append the findings to `OUT_FILE` as shared-format item blocks so `/ds:polish <OUT_FILE>` can act on them later. The format is owned by `/ds:polish` (see that command for the full spec); the **writer slice** is:
 
-**Only the shown findings are written.** A smell held back by the bar does not reach the findings file — a finding you never read turning up in your `/ds:polish` queue is the same noise, just moved downstream. To capture the held-back tail in a file, re-run with `--bar low --to <file>`.
+**Only the shown findings are written.** A finding held back by the bar does not reach the findings file, smell or confident — a finding you never read turning up in your `/ds:polish` queue is the same noise, just moved downstream. To capture the held-back tail in a file, re-run with `--bar low --to <file>`.
 
 1. **File shape:**
    - If `OUT_FILE` does not exist, create it with a skeleton — title, an empty Inbox, then the `---` that separates Inbox from thread:
@@ -523,7 +529,7 @@ Mark `🙋 Triage smells (in-the-loop)` as `in_progress`.
 
 A confident finding has a concrete fix and a trivial counter-argument, so it needs no per-item decision — it goes straight to the Step 3.9 preview. A smell is the opposite: a live trade-off, or a problem with no obvious fix. Those get your judgement one at a time, on the same pattern as `/ds:polish-pr` Step 5.
 
-Only the **shown** smells reach this loop. A smell held back by the bar is never triaged and never posted — posting a comment the user did not read would be worse than the noise the bar exists to remove.
+Only the **shown** findings reach the PR at all. A smell held back by the bar is never triaged, and a held-back confident finding never enters the Step 3.9 payload — posting a comment the user did not read would be worse than the noise the bar exists to remove.
 
 If there are no smells, print `> No smells to triage.` and continue.
 
@@ -626,7 +632,7 @@ Skip this step when `POST_COMMENTS=on` — Step 3.9 both previewed and posted th
 
 Mark `🗒️ Print draft PR comments (confident only)` as `in_progress`.
 
-For every finding with `Category: confident`, print a focused copy-paste block. **Smells are excluded entirely from this step** — they appeared in Step 3's report for your private read; they are not posted to the PR.
+For every **shown** finding with `Category: confident`, print a focused copy-paste block. **Smells are excluded entirely from this step** — they appeared in Step 3's report for your private read; they are not posted to the PR. A confident finding the bar held back is not drafted either; it was never printed, so it is not yours to hand the author.
 
 Order the blocks by impact tier — `user-facing`, then `efficacy`, then `maintenance` — and within a tier by `file:line` (alphabetically by path, then ascending by starting line). Posting in that order means the author reads the items that block a merge first. If the same `file:line` carries confident findings from two different dimensions, include both blocks, each prefixed with `(<dimension>)`.
 
@@ -656,7 +662,8 @@ Mode: draft-comments — copy-paste these into GitHub as line comments. Confiden
 Omit any tier heading that has no confident findings.
 
 Special cases:
-- Zero confident findings (only smells surfaced): print `> No confident findings to draft — the report above lists smells for your private review.` and continue.
+- Zero shown confident findings, and `HELD_C` is 0 (the reviewers surfaced only smells): print `> No confident findings to draft — the report above lists smells for your private review.` and continue.
+- Zero shown confident findings, but `HELD_C` > 0 (the bar hid them all): print `> No confident findings to draft at bar <BAR> — <HELD_C> were held back. Re-run with --bar low before drafting.` and continue. Do not print the line above it; "the reviewers found none" is a different claim from "you filtered them out", and only one of them is true.
 - Zero shown (from the nothing-to-show short-circuit): you are not in this step — Step 3 jumped you straight to Step 9.
 
 Mark `🗒️ Print draft PR comments (confident only)` as `completed`, then jump to **Step 9**.
@@ -675,7 +682,7 @@ Otherwise, launch a `general-purpose` sub-agent (`model: "haiku"`) to append a n
 - **Branch name** (from `git branch --show-current`)
 - **Repository name** (from `git remote get-url origin` or `gh repo view --json name`)
 - **Accomplished:** one line — `<T> findings surfaced — <C> confident, <S> smells across 10 dimensions; <U> user-facing, <E> efficacy.` When nothing was captured: `Review passed — no substantive findings across 10 dimensions.` When `+comment` posted, append `; <P> posted to the PR (<C2> confident, <S2> approved smells)` — the next session needs to know which findings are already public.
-- **Bar:** when `HELD` > 0, append `; reviewed at bar <BAR>, <HELD> smells held back` to the `Accomplished:` line. This is the **only** place a held-back finding is recorded, so a later session reading the audit trail is not misled into treating the review as exhaustive.
+- **Bar:** when `HELD` > 0, append `; reviewed at bar <BAR>, held back <HELD_S> smells and <HELD_C> confident findings` to the `Accomplished:` line. This is the **only** place a held-back finding is recorded, so a later session reading the audit trail is not misled into treating the review as exhaustive. Name the two counts separately: `HELD_C` > 0 means concrete fixes exist that nobody has read, which is a different debt from an unread trade-off.
 - **Key decisions:** the findings worth carrying into the next session — take every `user-facing` and `efficacy` finding first (those change what merges), then fill up to 3–5 bullets with the most significant `maintenance` smells. Each bullet `<file:line> — <one-line summary>`. Omit the section entirely if nothing qualifies. Held-back findings are not eligible; the count on the `Accomplished:` line is all that records them.
 - **Files changed:** omit. This command does not modify the working tree.
 
@@ -696,7 +703,7 @@ The summary format differs by mode.
 ```
 /ds:review2 — PR #<N> (<title>)
 Findings: <T> shown — <C> confident, <S> smells — across 10 dimensions (H high, M medium, L low)
-Bar: <BAR> — <HELD> smells held back
+Bar: <BAR> — held back: <HELD_S> smells, <HELD_C> confident findings
 Impact: <U> user-facing, <E> efficacy, <M> maintenance
 Posted to PR: <P> comments (<I> inline, <B> in review body) — <review-url>
 Ticket context updated: yes / no — <reason if no>
@@ -706,7 +713,7 @@ Include the `Bar:` line only when `HELD` > 0. Include the `Posted to PR:` line o
 
 Suggest next steps:
 - Address the user-facing and efficacy findings before asking for human review — those are the two tiers a reviewer blocks on.
-- Re-run at `--bar low` to read the <HELD> held-back smells. *(Include this line only when `HELD` > 0.)*
+- Re-run at `--bar low` to read the <HELD> held-back findings — <HELD_C> of them are concrete fixes. *(Include this line only when `HELD` > 0; drop the trailing clause when `HELD_C` is 0.)*
 - Engage with individual findings in chat (reference by `#N`) to discuss, dismiss, or act on them.
 - Re-run `/ds:review2` after addressing the major findings if more rounds are needed.
 - Re-run with `+comment` to post the findings you want on the record for your reviewers — the dedup guard keeps a second run from duplicating anything already posted. *(Skip this line when `POST_COMMENTS=on` already ran.)*
@@ -718,7 +725,7 @@ Suggest next steps:
 /ds:review2 (draft-comments mode) — PR #<N> (<title>)
 PR author: <PR_AUTHOR>   You: <ME>
 Findings: <T> shown — <C> confident, <S> smells — across 10 dimensions (H high, M medium, L low)
-Bar: <BAR> — <HELD> smells held back
+Bar: <BAR> — held back: <HELD_S> smells, <HELD_C> confident findings
 Impact: <U> user-facing, <E> efficacy, <M> maintenance
 Drafted as PR comments: <C> (confident only — smells excluded)
 No changes were made to the branch, PR, or ticket context.
@@ -736,7 +743,7 @@ No changes were made to the branch or ticket context.
 Suggest next steps:
 - Copy the draft comments above into the GitHub PR review, user-facing tier first. *(`POST_COMMENTS=on`: they are already posted — check the review URL renders as intended.)*
 - Use the smells (above the draft section) as a private prompt list for offline discussion with the author. *(`POST_COMMENTS=on`: only the smells you declined remain private.)*
-- Re-run at `--bar low` to read the <HELD> held-back smells before that discussion. *(Include this line only when `HELD` > 0.)*
+- Re-run at `--bar low` to read the <HELD> held-back findings before that discussion — <HELD_C> of them would have been drafted as comments. *(Include this line only when `HELD` > 0; drop the trailing clause when `HELD_C` is 0.)*
 - Re-run `/ds:review2 <pr-number>` after the author pushes updates. With `+comment`, the dedup guard means a re-run adds only what is new.
 
 Mark `✅ Final summary` as `completed`.
@@ -746,8 +753,10 @@ Mark `✅ Final summary` as `completed`.
 - **Relationship to `/ds:review`**: this is the trial v2. It keeps every v1 behaviour — mode detection, the mandatory `Counter-argument`, the confident/smell split, `--to <file>`, the ticket-context audit — and adds four dimensions, the impact tier, two reach fixes, and `+comment`. `/ds:review` stays in place as the daily driver until v2 is trusted, and does **not** get `+comment` — the flag is part of what v2 is trialling.
 - **Mode-aware flow**: the command auto-detects `own` vs `draft-comments` mode from PR author at Step 0.4. Both modes print the categorized report; `own` additionally writes a ticket-context audit entry, `draft-comments` additionally prints copy-paste-ready draft comments for confident findings only. `+comment` is orthogonal to the mode — it works in both, and in `draft-comments` it replaces the copy-paste block with a posted review.
 - **Never touches the working tree**: this command does not edit files, commit, or push, in any mode, with or without `+comment`. The user reads the report and acts on individual findings in follow-up chat as needed. The single outward write it can make is posting comments to the PR, and only under `+comment`.
-- **`+comment` semantics**: the confident/smell split *is* the confidence signal, so no new judgement is invented for posting. A **confident** finding — concrete fix, trivial counter-argument — posts behind one batch confirmation. A **smell** — real trade-off, or no concrete fix — gets a per-finding `AskUserQuestion` in Step 3.8, and posts only if you approve it, in question form with its alternatives named. This is the one thing that overrides the default that smells are never posted. All three impact tiers are eligible; `maintenance` is not filtered out.
-- **`--bar` semantics**: the bar filters **smells only** — `low` shows all of them, `medium` (the default) holds back `maintenance` · `low` smells, `high` holds back every `maintenance` smell. Confident findings are never filtered, because a concrete fix with a trivial counter-argument is high-signal at any severity. The bar acts at **report time**, not in the sub-agent brief, so every run captures the same findings and re-running at `--bar low` reveals the held-back tail without re-analysing. `--to <file>` and `+comment` both respect it — a finding the user never read must not reach their `/ds:polish` queue or the PR — and the ticket-context entry is the one place that records what it hid.
+- **`+comment` semantics**: the confident/smell split *is* the confidence signal, so no new judgement is invented for posting. A **confident** finding — concrete fix, trivial counter-argument — posts behind one batch confirmation. A **smell** — real trade-off, or no concrete fix — gets a per-finding `AskUserQuestion` in Step 3.8, and posts only if you approve it, in question form with its alternatives named. This is the one thing that overrides the default that smells are never posted. The posting gate itself does not filter by impact tier — all three are eligible. What reaches the gate is whatever cleared the bar.
+- **`--bar` semantics**: the bar is a **severity ladder** over **both** categories — `low` holds back nothing, `medium` (the default) holds back `low`-severity findings, `high` holds back `low`- and `medium`-severity ones. `Category` is not consulted: a confident finding is filtered on exactly the same terms as a smell. The one exemption is by tier — a `user-facing` or `efficacy` finding is never held back at any bar, because those are the tiers a merge turns on. So in practice the bar filters the `maintenance` tier and nothing else.
+- **The ladder must stay nested**: shown-at-`high` ⊆ shown-at-`medium` ⊆ shown-at-`low`. The tier exemption is what guarantees it, and it is why the exemption applies at *every* rung rather than only at `high` — exempting `user-facing` at `high` alone would let a raised bar *reveal* a `user-facing` · `low` finding that `medium` had hidden, and every "re-run with `--bar low` to see them" line in this command assumes the opposite. Do not narrow the exemption to the top rung.
+- **What the bar respects and what records it**: it acts at **report time**, not in the sub-agent brief, so every run captures the same findings and re-running at `--bar low` reveals the held-back tail without re-analysing. `--to <file>`, the draft-comment block and `+comment` all respect it — a finding the user never read must not reach their `/ds:polish` queue or the PR — and the ticket-context entry is the one place that records what it hid. Held-back counts are reported as two numbers, `HELD_S` and `HELD_C`, because an unread trade-off and an unread concrete fix are different debts.
 - **`--bar` runs the opposite way to `/code-review`'s `level`**: in the built-in `/code-review` skill, a *higher* level means *broader* coverage and *more* findings. Here a *higher* bar means *fewer*. That is why this flag is called a bar and not a level: the word would import the wrong direction from the neighbouring command. Do not "fix" the direction to match.
 - **Nothing reaches GitHub unconfirmed**: Step 3.9 previews the exact review body and every inline comment, then gates on a single `AskUserQuestion` with a Cancel option. Confident findings need no per-item approval, but they do not bypass that gate.
 - **`event` is always `COMMENT`**: `APPROVE` and `REQUEST_CHANGES` are rejected by GitHub on your own PR, and this command is not a merge gate on anyone else's. It posts observations, never a verdict.
