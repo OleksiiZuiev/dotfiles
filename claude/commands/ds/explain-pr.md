@@ -10,7 +10,7 @@ This is **not** a review. It explains; it does not audit. Obvious smells get a q
 
 **Distinction from siblings:**
 - `/ds:create-pr` — creates the PR.
-- `/ds:pre-review` — cosmetic style/naming/convention pass on the local diff.
+- `/ds:work-on` Step 3.5 — mechanical convention pass on the freshly written code, before the commit.
 - `/ds:review` — opinionated six-dimension substantive audit (fixed output shape).
 - `/ds:analyze-pr` — answers *the user's* specific questions about a PR.
 - `/ds:polish-pr` — addresses human reviewer comments already posted on the PR.
@@ -173,7 +173,7 @@ Prompt = the **shared brief** below, then the **document spec**, then the **rule
 > - **Cross-reference every helper to its caller** (e.g. "used by `manage_x` to …") so that even an imperfect order never leaves the reader without an anchor.
 > - When the reviewer likely lacks the tech-stack context, briefly expand an essential concept in plain language — just enough to follow the change.
 > - **Confidence must be honest.** Reserve the ⚠️ "confirm with the author" flag for decisions that are BOTH high-impact AND genuinely uncertain (the "nuclear" ones). Don't flag everything.
-> - **Obvious smells only.** Do not enumerate style nits (that's `/ds:pre-review`) and do not run a six-dimension categorized audit (that's `/ds:review`). A handful of cheap, clearly-suspicious catches at most.
+> - **Obvious smells only.** Do not enumerate style nits and do not run a multi-dimension categorized audit (that's `/ds:review`). A handful of cheap, clearly-suspicious catches at most.
 > - Respect the prior decisions listed above — don't re-open settled questions.
 > - Length proportional to PR size. Don't pad. A small PR gets a short document.
 > - Return ONLY the markdown document — no preamble, no "here is the document" wrapper.

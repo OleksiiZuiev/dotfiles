@@ -478,8 +478,9 @@ Use the Task tool with a subagent (`model: "haiku"`) to update the ticket contex
 - What was accomplished
 - Key decisions made — for each, include the **rationale (the *why*)** when it is clear from the session: the option chosen, the main alternative rejected, and the reason. Where the rationale isn't clear, pass the decision alone — do **not** invent one.
 - Files changed
+- The Step 3.5 outcome, as a line of its own: `Convention check: N fixes applied` or `Convention check: clean`. A later `/ds:review2` reads this to learn that the mechanical conventions were already enforced against this diff, and narrows its Consistency reviewer to structural compliance instead of re-checking the same rules.
 
-The subagent should append a new session entry following the existing document format — or, when the context file does not exist yet, create it from the template in the `ticket-context` skill (`~/.claude/skills/ticket-context/SKILL.md`). Record each decision in the template's `#### Key Decisions` → `- {decision}: {rationale}` form. When no rationale was supplied for a decision, record just the decision without a fabricated reason.
+The subagent should record the convention-check line under the session's `#### Accomplished` bullets, and otherwise append a new session entry following the existing document format — or, when the context file does not exist yet, create it from the template in the `ticket-context` skill (`~/.claude/skills/ticket-context/SKILL.md`). Record each decision in the template's `#### Key Decisions` → `- {decision}: {rationale}` form. When no rationale was supplied for a decision, record just the decision without a fabricated reason.
 
 Mark the todo `completed`.
 

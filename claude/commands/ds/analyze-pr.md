@@ -12,7 +12,7 @@ The command has two modes, auto-detected from `$ARGUMENTS`:
 - **File mode** — `$ARGUMENTS` is a path to a markdown file that contains bulleted questions/tasks. The command plans groupings, fans out one parallel sub-agent per group, aggregates, and **appends the analysis back into the same file** below a `---` separator. The original bullets are preserved untouched. Alongside the narrative answers it also emits **shared-format item blocks** for the actionable items (a hybrid output), so `/ds:polish <file>` can triage and apply them. The format is owned by `/ds:polish`.
 
 **Distinction from siblings:**
-- `/ds:pre-review` — cosmetic style/naming/convention pass on local diff. Cosmetic.
+- `/ds:work-on` Step 3.5 — mechanical convention pass on the freshly written code, before the commit.
 - `/ds:review` — opinionated six-dimension substantive audit. Fixed output shape.
 - `/ds:analyze-pr` (this command) — answers *the user's* questions about a PR. Open-ended shape driven by the questions.
 
