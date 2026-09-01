@@ -232,22 +232,42 @@ b. **Assess Comment & Propose Fix**
    - Explain what changes will be made and why.
    - If you disagree, still propose what you would do if asked, but communicate the disagreement.
 
-c. **Get User Approval** — use `AskUserQuestion`:
+c. **Get User Decision** — use `AskUserQuestion`. The tool caps explicit options at **4**,
+   then appends its own "Other" as the free-text slot, so present exactly these four:
    - **"Approve fix"** — proceed with this specific fix
-   - **"Approve all similar"** — if a pattern is detected, batch similar fixes
-   - **"Modify approach"** — user changes the proposed fix
+   - **"Discuss"** — ask a question or push back; no decision recorded yet
    - **"Skip this comment"** — don't address now (deal with later)
    - **"Dismiss comment"** — agree with your assessment that no change is warranted
-   - Wait for the decision before the next comment.
 
-d. **Handle Skipped Comments** — if "Skip", ask for rationale via `AskUserQuestion`
+   The automatic **"Other"** is **Modify approach**: the user types the change they want
+   instead. Treat that text as the new intent, restate the revised fix, and re-ask this
+   comment's decision.
+
+   Wait for a terminal decision — Approve, Modify-via-Other, Skip or Dismiss — before moving
+   to the next comment.
+
+d. **Handle "Approve fix"** — if a repeating pattern is detected across the remaining
+   comments, follow up with a second `AskUserQuestion` naming the N similar comments:
+   "Yes — apply to all N" / "No — just this one". Each batched fix is still its own commit.
+   With no pattern, record the approval and move on.
+
+e. **Handle "Discuss"** — record **no** decision for this comment:
+   - Answer the question, or engage with the pushback, in plain chat. Stay **read-only** —
+     this is still the Plan Phase, so no edits and no commits.
+   - Revise the Part 2 proposed fix if the discussion changed it.
+   - Re-ask this same comment's decision with the same four options, and repeat until it
+     reaches a terminal decision.
+   - **Never advance to the next comment on a "Discuss".**
+
+f. **Handle Skipped Comments** — if "Skip", ask for rationale via `AskUserQuestion`
    ("Not applicable" / "Will address later" / "Disagree with suggestion" / "Custom
    explanation"). Record the skipped comment + rationale for the reply phase.
 
-e. **Handle Dismissed Comments** — if "Dismiss", use your thinking-buddy assessment as the
+g. **Handle Dismissed Comments** — if "Dismiss", use your thinking-buddy assessment as the
    rationale automatically (no extra prompt). Record it for the reply phase.
 
-**Output of this phase** (carry into implementation):
+**Output of this phase** (carry into implementation) — every in-scope comment ends in exactly
+one of these three states; a "Discuss" round produces no output of its own:
 - **Approved fixes** — an ordered list; each entry records its **thread ID**, target file(s),
   and the intended change.
 - **Skipped** comments (+ rationale).
@@ -334,9 +354,9 @@ For **each** approved fix:
 4. Capture the commit SHA: `git -C "{WT}" rev-parse HEAD` → record `WT_SHA[thread]` for this fix.
 5. **Do NOT reply. Do NOT push.**
 
-Keep the ordered mapping `thread → WT_SHA` (and the commit order) for fold-back. For an
-"Approve all similar" batch, each fix is still its own commit (so each thread maps to its own
-SHA). Mark the todo `completed` when all fixes are committed.
+Keep the ordered mapping `thread → WT_SHA` (and the commit order) for fold-back. In a
+pattern batch approved in one go, each fix is still its own commit (so each thread maps to its
+own SHA). Mark the todo `completed` when all fixes are committed.
 
 ### Step 8: Fold-Back onto the Feature Branch
 
@@ -526,8 +546,14 @@ Remind the user to **manually resolve** the conversations after reviewing the ch
 - **Two-Phase Approach**: complete the Plan Phase (approval for ALL comments) before any
   implementation.
 - **One-by-One Planning**: process each comment individually, getting approval before the next.
-- **Batch Approval**: offer "Approve all similar" when a pattern is detected (still one commit
-  per fix).
+- **Four Options Max**: `AskUserQuestion` accepts at most 4 explicit options and appends its own
+  "Other". Step 5's menu spends those four on Approve / Discuss / Skip / Dismiss, and "Other"
+  carries **Modify approach** — the free text is where a modification has to be typed anyway.
+- **Discuss Doesn't Advance**: "Discuss" records no decision. Answer in chat, revise the
+  proposal if the discussion changed it, and re-ask the *same* comment — a comment is only done
+  once it reaches a terminal decision.
+- **Batch Approval**: when a repeating pattern is detected, follow an "Approve fix" with a
+  yes/no question offering to apply it to the N similar comments (still one commit per fix).
 - **No Auto-Implementation**: NEVER implement fixes without explicit approval via AskUserQuestion.
 - **Thread IDs vs Comment IDs**: reply with the **thread ID** (`PRRT_*`), NOT the comment ID
   (`PRRC_*`). The REST `/pulls/comments/{id}/replies` endpoint 404s — use the GraphQL
