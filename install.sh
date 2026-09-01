@@ -115,7 +115,7 @@ create_link() {
     mkdir -p "$target_dir"
 
     if backup_if_needed "$target" "$source"; then
-        ln -s "$source" "$target"
+        ln -sT "$source" "$target"
         echo "  Linked: $target -> $source"
     else
         echo "  Skip (already linked): $target"
@@ -124,24 +124,12 @@ create_link() {
 
 # Install Claude files
 echo "Installing Claude configuration..."
-mkdir -p "$TARGET_HOME/.claude/commands"
+mkdir -p "$TARGET_HOME/.claude"
 
-# Claude commands
-for cmd in "$DOTFILES_DIR"/claude/commands/*.md; do
-    [ -e "$cmd" ] || continue
-    create_link "$cmd" "$TARGET_HOME/.claude/commands/$(basename "$cmd")"
-done
-
-# Claude command subdirectories (e.g., ds/)
-for subdir in "$DOTFILES_DIR"/claude/commands/*/; do
-    [ -d "$subdir" ] || continue
-    dirname=$(basename "$subdir")
-    mkdir -p "$TARGET_HOME/.claude/commands/$dirname"
-    for cmd in "$subdir"*.md; do
-        [ -e "$cmd" ] || continue
-        create_link "$cmd" "$TARGET_HOME/.claude/commands/$dirname/$(basename "$cmd")"
-    done
-done
+# Claude commands: link the directory itself, so a command added to or deleted from
+# the repo reaches every home immediately and no home can drift out of date.
+# Every .md under it becomes a slash command — keep non-commands out of that tree.
+create_link "$DOTFILES_DIR/claude/commands" "$TARGET_HOME/.claude/commands"
 
 # Claude config files
 [ -e "$DOTFILES_DIR/claude/settings.json" ] && \
@@ -175,16 +163,14 @@ if [ -d "$DOTFILES_DIR/claude/scripts" ]; then
     done
 fi
 
-# Claude overlays (repo-keyed personal steering)
+# Claude overlays (repo-keyed personal steering): directory link, as with commands.
 if [ -d "$DOTFILES_DIR/claude/overlays" ]; then
-    mkdir -p "$TARGET_HOME/.claude/overlays"
-    for overlay in "$DOTFILES_DIR"/claude/overlays/*.md; do
-        [ -e "$overlay" ] || continue
-        create_link "$overlay" "$TARGET_HOME/.claude/overlays/$(basename "$overlay")"
-    done
+    create_link "$DOTFILES_DIR/claude/overlays" "$TARGET_HOME/.claude/overlays"
 fi
 
-# Claude skills (each skill is a directory: SKILL.md plus any bundled files)
+# Claude skills (each skill is a directory: SKILL.md plus any bundled files).
+# Linked per skill, not as one directory: ~/.claude/skills also holds skills
+# installed from elsewhere (~/.agents/skills), which a directory link would hide.
 if [ -d "$DOTFILES_DIR/claude/skills" ]; then
     mkdir -p "$TARGET_HOME/.claude/skills"
     for skill in "$DOTFILES_DIR"/claude/skills/*/; do
@@ -221,6 +207,8 @@ echo ""
 echo "Installing bash.d configuration..."
 mkdir -p "$TARGET_HOME/.bash.d"
 
+# Linked per file, not as one directory: ~/.bash.d also holds functions sourced
+# from other repos, which a directory link would hide.
 for bashfile in "$DOTFILES_DIR"/bash.d/*.sh; do
     [ -e "$bashfile" ] || continue
     create_link "$bashfile" "$TARGET_HOME/.bash.d/$(basename "$bashfile")"
