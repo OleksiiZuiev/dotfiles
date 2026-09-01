@@ -30,9 +30,11 @@ try {
 
     # Toggled by a marker file rather than an env var, because hooks inherit the
     # Claude Code process environment and so an env gate can only be set at startup.
-    if (Test-Path -LiteralPath "$env:USERPROFILE\.claude\hooks\toast-debug.on") {
+    # Both files sit in ~/.claude itself: ~/.claude/hooks is a symlink into the
+    # dotfiles repo, and runtime output must not be written there.
+    if (Test-Path -LiteralPath "$env:USERPROFILE\.claude\toast-debug.on") {
         $decision = if ($running -gt 0) { "suppress(running=$running)" } else { 'toast' }
-        Add-Content -LiteralPath "$env:USERPROFILE\.claude\hooks\toast-debug.log" `
+        Add-Content -LiteralPath "$env:USERPROFILE\.claude\toast-debug.log" `
             -Value "$((Get-Date).ToString('s'))`tEvent=$EventName`tdecision=$decision`traw=$raw" `
             -Encoding utf8
     }

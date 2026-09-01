@@ -5,7 +5,23 @@ file (symlinked to `~/.claude/CLAUDE.md`) — it carries rules that apply in eve
 
 # Symlink Management
 
-Files in this repo are symlinked to `~/.claude/` and `~/.bash.d/` by the install script. After creating new files that need to be symlinked, the install script must be re-run.
+`install.sh` links whole directories, not individual files: `~/.claude/commands`, `~/.claude/hooks`,
+`~/.claude/scripts`, `~/.claude/skills`, `~/.claude/overlays` and `~/.bash.d` are each one symlink
+into this repo. A directory symlink resolves at access time, so **adding, renaming or deleting a file
+here needs no install run** — every home sees the change at once. Only the four single-file targets
+(`claude/settings.json`, `claude/CLAUDE.md`, `claude/statusline.sh`, `vscode/settings.json`) are
+linked one by one.
+
+Re-run the install script only to set up a new home, or after adding a new top-level target to
+`install.sh` itself. Each home is separate: Windows and WSL need their own run.
+
+Because those directories *are* the repo when read through the link, nothing may write runtime state
+into them — it would land in git.
+
+Content that isn't ours lives outside the linked directories: machine-specific and other-repo bash
+functions in `~/.bash.d.local/` (sourced by `~/.bashrc` alongside `~/.bash.d`), and skills installed
+by the `skills` CLI inside `claude/skills/`, excluded per clone via `.git/info/exclude`. `install.sh`
+relocates both automatically on first run.
 
 On Windows without Developer Mode, use `install-admin.ps1` in the repo root — it self-elevates to admin (UAC prompt) and runs `install.sh --home`.
 

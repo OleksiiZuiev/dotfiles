@@ -122,14 +122,68 @@ create_link() {
     fi
 }
 
+# Hide a machine-local entry from git without committing anything: .git/info/exclude
+# is per-clone and never leaves this machine.
+git_exclude_add() {
+    local pattern="$1"
+    local exclude_file="$DOTFILES_DIR/.git/info/exclude"
+
+    [ -d "$DOTFILES_DIR/.git" ] || return 0
+
+    if grep -qxF "$pattern" "$exclude_file" 2>/dev/null; then
+        return 0
+    fi
+
+    echo "$pattern" >> "$exclude_file"
+    echo "  Git-excluded (machine-local): $pattern"
+}
+
+# Move entries a directory link would otherwise hide. Runs on a real directory in
+# the home just before it is replaced by a link to its repo counterpart: anything
+# that does not already point into this repo is relocated to $destination. Entries
+# that do point into the repo are left for backup_if_needed, because the link
+# supersedes them — dangling ones included.
+rescue_foreign_entries() {
+    local dir="$1"
+    local destination="$2"
+
+    [ -d "$dir" ] || return 0
+    if [ -L "$dir" ]; then
+        return 0
+    fi
+
+    local entry
+    for entry in "$dir"/*; do
+        [ -e "$entry" ] || [ -L "$entry" ] || continue
+
+        case "$(readlink "$entry" 2>/dev/null || true)" in
+            "$DOTFILES_DIR"/*) continue ;;
+        esac
+
+        mkdir -p "$destination"
+        mv "$entry" "$destination/"
+        echo "  Rescued: $entry -> $destination/"
+
+        case "$destination" in
+            "$DOTFILES_DIR"/*)
+                git_exclude_add "${destination#$DOTFILES_DIR/}/$(basename "$entry")"
+                ;;
+        esac
+    done
+}
+
 # Install Claude files
 echo "Installing Claude configuration..."
 mkdir -p "$TARGET_HOME/.claude"
 
-# Claude commands: link the directory itself, so a command added to or deleted from
-# the repo reaches every home immediately and no home can drift out of date.
-# Every .md under it becomes a slash command — keep non-commands out of that tree.
+# Every directory below is linked as a directory rather than file by file, so a file
+# added to or deleted from the repo reaches every home immediately and no home can
+# drift out of date. Two consequences worth knowing:
+#   - Every .md anywhere under commands/ is a slash command, at any nesting depth.
+#   - Nothing may write runtime state into these directories; it would land in git.
 create_link "$DOTFILES_DIR/claude/commands" "$TARGET_HOME/.claude/commands"
+create_link "$DOTFILES_DIR/claude/hooks" "$TARGET_HOME/.claude/hooks"
+create_link "$DOTFILES_DIR/claude/scripts" "$TARGET_HOME/.claude/scripts"
 
 # Claude config files
 [ -e "$DOTFILES_DIR/claude/settings.json" ] && \
@@ -139,54 +193,19 @@ create_link "$DOTFILES_DIR/claude/commands" "$TARGET_HOME/.claude/commands"
 [ -e "$DOTFILES_DIR/claude/statusline.sh" ] && \
     create_link "$DOTFILES_DIR/claude/statusline.sh" "$TARGET_HOME/.claude/statusline.sh"
 
-# Claude hooks
-if [ -d "$DOTFILES_DIR/claude/hooks" ]; then
-    mkdir -p "$TARGET_HOME/.claude/hooks"
-    for hook in "$DOTFILES_DIR"/claude/hooks/*.sh; do
-        [ -e "$hook" ] || continue
-        create_link "$hook" "$TARGET_HOME/.claude/hooks/$(basename "$hook")"
-    done
-    for hook in "$DOTFILES_DIR"/claude/hooks/*.ps1; do
-        [ -e "$hook" ] || continue
-        create_link "$hook" "$TARGET_HOME/.claude/hooks/$(basename "$hook")"
-    done
-fi
-
-# Claude scripts
-if [ -d "$DOTFILES_DIR/claude/scripts" ]; then
-    mkdir -p "$TARGET_HOME/.claude/scripts"
-    for ext in sh py ps1; do
-        for script in "$DOTFILES_DIR"/claude/scripts/*."$ext"; do
-            [ -e "$script" ] || continue
-            create_link "$script" "$TARGET_HOME/.claude/scripts/$(basename "$script")"
-        done
-    done
-fi
-
-# Claude overlays (repo-keyed personal steering): directory link, as with commands.
+# Claude overlays (repo-keyed personal steering)
 if [ -d "$DOTFILES_DIR/claude/overlays" ]; then
     create_link "$DOTFILES_DIR/claude/overlays" "$TARGET_HOME/.claude/overlays"
 fi
 
 # Claude skills (each skill is a directory: SKILL.md plus any bundled files).
-# Linked per skill, not as one directory: ~/.claude/skills also holds skills
-# installed from elsewhere (~/.agents/skills), which a directory link would hide.
+# Claude Code reads skills from ~/.claude/skills and nowhere else, so skills
+# installed from outside this repo — the `skills` CLI bridges ~/.agents/skills in
+# here — have to sit alongside ours. They are moved into the repo directory and
+# excluded from git per clone, so one link can cover both.
 if [ -d "$DOTFILES_DIR/claude/skills" ]; then
-    mkdir -p "$TARGET_HOME/.claude/skills"
-    for skill in "$DOTFILES_DIR"/claude/skills/*/; do
-        [ -d "$skill" ] || continue
-        skill="${skill%/}"
-        create_link "$skill" "$TARGET_HOME/.claude/skills/$(basename "$skill")"
-    done
-fi
-
-# Claude rules (scoped by `paths:` frontmatter; always-on without it)
-if [ -d "$DOTFILES_DIR/claude/rules" ]; then
-    mkdir -p "$TARGET_HOME/.claude/rules"
-    for rule in "$DOTFILES_DIR"/claude/rules/*.md; do
-        [ -e "$rule" ] || continue
-        create_link "$rule" "$TARGET_HOME/.claude/rules/$(basename "$rule")"
-    done
+    rescue_foreign_entries "$TARGET_HOME/.claude/skills" "$DOTFILES_DIR/claude/skills"
+    create_link "$DOTFILES_DIR/claude/skills" "$TARGET_HOME/.claude/skills"
 fi
 
 # Install VS Code settings
@@ -205,14 +224,13 @@ fi
 # Install bash.d files
 echo ""
 echo "Installing bash.d configuration..."
-mkdir -p "$TARGET_HOME/.bash.d"
 
-# Linked per file, not as one directory: ~/.bash.d also holds functions sourced
-# from other repos, which a directory link would hide.
-for bashfile in "$DOTFILES_DIR"/bash.d/*.sh; do
-    [ -e "$bashfile" ] || continue
-    create_link "$bashfile" "$TARGET_HOME/.bash.d/$(basename "$bashfile")"
-done
+# Functions sourced from other repos, and this machine's own local.sh, live in the
+# sibling ~/.bash.d.local so one link can cover ~/.bash.d entirely. ~/.bashrc
+# sources both.
+mkdir -p "$TARGET_HOME/.bash.d.local"
+rescue_foreign_entries "$TARGET_HOME/.bash.d" "$TARGET_HOME/.bash.d.local"
+create_link "$DOTFILES_DIR/bash.d" "$TARGET_HOME/.bash.d"
 
 echo ""
 echo "Installation complete!"
@@ -226,6 +244,6 @@ echo ""
 echo "Note: Add the following to your ~/.bashrc if not already present:"
 echo ""
 echo '  # Load modular bash configurations'
-echo '  for file in ~/.bash.d/*.sh; do'
+echo '  for file in ~/.bash.d/*.sh ~/.bash.d.local/*.sh; do'
 echo '      [ -r "$file" ] && source "$file"'
 echo '  done'

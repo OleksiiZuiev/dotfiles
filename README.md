@@ -41,8 +41,9 @@ cd /c/work/github/OleksiiZuiev/dotfiles
 ```
 
 The script will:
-1. Create `~/.claude/commands/` and `~/.bash.d/` directories
-2. Back up any existing files to `~/.dotfiles-backup-<timestamp>/`
+1. Back up anything already at a target to `~/.dotfiles-backup-<timestamp>/`
+2. Move content that isn't ours out of the way — other-repo bash functions to `~/.bash.d.local/`,
+   skills installed by the `skills` CLI into `claude/skills/` (excluded per clone)
 3. Create symlinks from your home directory to the repo
 
 ### Manual Bashrc Update
@@ -51,31 +52,33 @@ Add this to your `~/.bashrc` if not already present:
 
 ```bash
 # Load modular bash configurations
-for file in ~/.bash.d/*.sh; do
+for file in ~/.bash.d/*.sh ~/.bash.d.local/*.sh; do
     [ -r "$file" ] && source "$file"
 done
 ```
 
 ## Adding New Configurations
 
-### New Claude Command
+Commands, hooks, scripts, skills, overlays and bash modules are reached through **one symlink per
+directory**, which resolves at access time. Create the file in the repo and every home has it —
+no install run, no reload beyond `source ~/.bashrc` for a new bash module.
 
-1. Create the command file in `claude/commands/your-command.md`
-2. Run `./install.sh` to create the symlink
+Re-run `./install.sh` only to set up a new home, or after adding a new top-level target to the script
+itself. Windows and WSL are separate homes and each needs its own run.
 
-### New Bash Module
-
-1. Create the script in `bash.d/your-module.sh`
-2. Run `./install.sh` to create the symlink
-3. Reload your shell or `source ~/.bashrc`
+Because a linked directory *is* the repo when read through the link, nothing may write runtime state
+into one — it would land in git. Machine-specific bash functions belong in `~/.bash.d.local/`.
 
 ## Machine-Specific Configuration
 
 For settings that shouldn't be version controlled (machine-specific paths, secrets):
 
-1. Copy `local/bash.d.example/local.sh.example` to `~/.bash.d/local.sh`
+1. Copy `local/bash.d.example/local.sh.example` to `~/.bash.d.local/local.sh`
 2. Edit with your machine-specific settings
 3. The file will be loaded automatically but won't be in git
+
+`~/.bash.d.local/` is the home for anything `~/.bash.d` can't hold: `~/.bash.d` is a symlink into this
+repo, so a file placed there would be a file placed in git.
 
 ## Windows Terminal
 
@@ -127,25 +130,44 @@ dotfiles/
 
 ## Symlink Targets
 
-| Source | Target |
-|--------|--------|
-| `claude/commands/*.md` | `~/.claude/commands/` |
-| `claude/settings.json` | `~/.claude/settings.json` |
-| `claude/CLAUDE.md` | `~/.claude/CLAUDE.md` |
-| `claude/statusline.ps1` | `~/.claude/statusline.ps1` |
-| `bash.d/*.sh` | `~/.bash.d/` |
+One symlink per row. The directory rows are a single link on the directory itself, so their contents
+follow the repo with no install run.
+
+| Source | Target | Kind |
+|--------|--------|------|
+| `claude/commands` | `~/.claude/commands` | directory |
+| `claude/hooks` | `~/.claude/hooks` | directory |
+| `claude/scripts` | `~/.claude/scripts` | directory |
+| `claude/skills` | `~/.claude/skills` | directory |
+| `claude/overlays` | `~/.claude/overlays` | directory |
+| `bash.d` | `~/.bash.d` | directory |
+| `claude/settings.json` | `~/.claude/settings.json` | file |
+| `claude/CLAUDE.md` | `~/.claude/CLAUDE.md` | file |
+| `claude/statusline.sh` | `~/.claude/statusline.sh` | file |
+| `vscode/settings.json` | `%APPDATA%/Code/User/settings.json` | file |
 
 ## Windows Notes
 
-On Windows with Git Bash, true symlinks require either:
-1. Running Git Bash as Administrator, or
-2. Enabling Developer Mode in Windows Settings
+On Windows, creating a symlink is a privileged operation unless Developer Mode is on. The install
+script needs one of:
 
-Without these, the install script creates copies instead of symlinks (default Git Bash behavior). This works but requires re-running `./install.sh` after making changes to the dotfiles repo.
+1. **Developer Mode enabled** — no elevation, plain `./install.sh`
+2. **Git Bash running as Administrator** — a UAC prompt every run
 
-To enable native symlinks in Git Bash:
-1. Enable Developer Mode: Settings > Privacy & Security > For developers > Developer Mode
-2. Or set `MSYS=winsymlinks:nativestrict` environment variable
+`install.sh` exports `MSYS=winsymlinks:nativestrict`, so Git Bash makes real symlinks or fails
+loudly; it never silently falls back to copying. The script tests this up front and stops with
+instructions if symlinks can't be created.
+
+### Enabling Developer Mode (recommended)
+
+1. Open **Settings > Privacy & Security > For developers**
+2. Turn **Developer Mode** on, and confirm the prompt
+3. Restart Git Bash so the new privilege is picked up
+4. Check it took: `MSYS=winsymlinks:nativestrict ln -s /tmp /tmp/link-probe` succeeds, then
+   `rm /tmp/link-probe`
+
+With Developer Mode on, `./install.sh` runs unelevated and `install-admin.ps1` is no longer needed.
+Corporate policy can disable the toggle; if it's greyed out, use the admin route below.
 
 ### Corporate Windows (no Developer Mode)
 
