@@ -112,13 +112,13 @@ bash ~/.claude/scripts/record-repo.sh "{worktree-path}"
 
 Open a new Windows Terminal tab pointing to the worktree, running `/ds:work-on +auto-plan`.
 
-Run this as a **single Bash command** — inline `$(...)` subshells resolve paths without needing separate lookup steps. Only substitute `{TICKET_ID}` and `{worktree-path}` (the Unix-style worktree path from Step 5):
+Run this as a **single Bash command**, substituting `{TICKET_ID}` and `{worktree-path}` (the Unix-style worktree path from Step 5):
 
 ```bash
-wt.exe -w 0 new-tab --profile "Git Bash" --title "{TICKET_ID}" --suppressApplicationTitle --startingDirectory "$(cygpath -w {worktree-path})" "$(cygpath -w /usr/bin/bash)" -c "$HOME/.local/bin/claude.exe '/ds:work-on +auto-plan'"
+bash ~/.claude/scripts/claude-tab.sh "{TICKET_ID}" "{worktree-path}" "/ds:work-on +auto-plan"
 ```
 
-**Important**: `/ds:work-on +auto-plan` is wrapped in single quotes so it is passed as **one argument** to the claude CLI. Without this quoting, `+auto-plan` becomes a separate argument and the auto-plan flag is silently lost.
+**Important**: keep `/ds:work-on +auto-plan` inside one set of quotes so it reaches claude as **one argument** — split, `+auto-plan` becomes a separate argument and the auto-plan flag is silently lost. The script drops the parent session's environment, which this Bash call carries, so the new tab keeps its own transcript.
 
 ### Step 7: Summary
 
