@@ -1,6 +1,6 @@
 ---
 description: Seven-dimension review of the current PR — code quality plus reliability, operability, configuration and efficacy, with every finding tiered by user impact.
-allowed-tools: Bash(git *), Bash(gh *), Bash(ls *), Bash(find *), Read, Write, Edit, Grep, Glob, Task, TodoWrite, AskUserQuestion, mcp__linear-server__get_issue
+allowed-tools: Bash(git *), Bash(gh *), Bash(ls *), Bash(find *), Read, Write, Edit, Grep, Glob, Task, TodoWrite, AskUserQuestion, mcp__claude_ai_Linear__get_issue
 argument-hint: [+comment] [<pr-number>] [--to <file>] [--bar low|medium|high]
 ---
 
@@ -132,7 +132,7 @@ These become the **brief** that the analysis sub-agents receive, so they all sta
 
 3. **Linear ticket** (only if `TICKET_ID` is set):
    ```
-   mcp__linear-server__get_issue with id=TICKET_ID, includeRelations=true
+   mcp__claude_ai_Linear__get_issue with id=TICKET_ID, includeRelations=true
    ```
    Capture title, description, acceptance criteria, status. **Keep the acceptance criteria verbatim** — the Efficacy reviewer walks them one at a time, so a paraphrase costs it the check.
 
@@ -423,6 +423,8 @@ A finding the bar held back is never drafted — it was never printed, so it is 
 **Problem:** <one sentence>
 **Suggestion:** <the concrete change>
 **Alternatives:** <the other viable option(s)>      ← smells only; omit for confident findings
+
+_(auto-review by Claude)_                           ← `POST_COMMENTS=on` only; always the last line
 ```
 
 The labels are not decoration: the author must be able to read the defect and the proposed change without inferring either from prose.
@@ -435,7 +437,7 @@ The labels are not decoration: the author must be able to read the defect and th
 - **Suggestion** is actionable, not a vague concern.
 - 1–3 sentences per label. No restating of severity (that's reviewer mental model, not author-facing).
 - Avoid hedging adjectives ("maybe", "perhaps could possibly"); stay direct but collaborative.
-- Do NOT add an attribution footer to an individual comment — it appears once in the review body.
+- **When `POST_COMMENTS=on`, close every comment body with `_(auto-review by Claude)_`** on its own line, preceded by a blank line and placed after any ` ```suggestion ` block — it is always the last line. GitHub shows an inline comment on its own, away from the review body, so the comment has to say for itself that a machine wrote it. When `POST_COMMENTS=off` the footer is omitted: you paste those drafts in under your own name.
 - **Confident findings** — assertion voice. **Problem** states the defect. Follow the labelled block with a fenced ` ```suggestion ` block **only** when the change is a single small edit GitHub can apply directly; never for a structural change. No `**Alternatives:**` line.
 - **Smell findings** — question voice, because a smell is by definition a live trade-off. **Problem** states the concern *as a question* the author is better placed to answer; **Suggestion** names the option you lean toward; **Alternatives** names the other viable option(s), and is required — it is what makes this a smell rather than a defect. Never a ` ```suggestion ` block: there is more than one viable answer, and GitHub's one-click apply would misrepresent that. Where `Proposed change:` is `(needs unpacking)`, **Suggestion** says what would settle the question — the check to run, the source to read, the person to ask — instead of proposing a fix you cannot justify.
 
@@ -545,8 +547,8 @@ Mark `🚀 Preview & post review to PR` as `in_progress`.
 **a. Assemble the review body.** In order:
 1. One line naming the source — "Automated seven-dimension review via `/ds:review2`."
 2. `Posted: <U> user-facing, <E> efficacy, <M> maintenance.`
-3. `### Findings outside the diff` — every `BODY` finding as `` `file:line` `` followed by its Problem/Suggestion (and Alternatives) block. Omit this heading entirely when there are none.
-4. `🤖 Generated with [Claude Code](https://claude.ai/claude-code)` — **once, here only.** Never on an individual comment.
+3. `### Findings outside the diff` — every `BODY` finding as `` `file:line` `` followed by its Problem/Suggestion (and Alternatives) block, each closing with its own `_(auto-review by Claude)_` line. Omit this heading entirely when there are none.
+4. `🤖 Generated with [Claude Code](https://claude.ai/claude-code)` — **once, here only.** This link line never appears on an individual comment; the per-comment marker is the `_(auto-review by Claude)_` footer drafted in Step 4.
 
 **b. Preview.** Print the payload exactly as it will appear on GitHub: the review body, then each inline comment under a `path:line (side)` header. Order by impact tier — `user-facing`, then `efficacy`, then `maintenance` — and within a tier by `path` then ascending `line`, so the author reads what blocks a merge first. Close with the counts:
 
@@ -655,7 +657,7 @@ Mark `✅ Final summary` as `completed`.
 - **The ladder must stay nested**: shown-at-`high` ⊆ shown-at-`medium` ⊆ shown-at-`low`. The tier exemption is what guarantees it, and it is why the exemption applies at *every* rung rather than only at `high` — exempting `user-facing` at `high` alone would let a raised bar *reveal* a `user-facing` · `low` finding that `medium` had hidden, and every "re-run with `--bar low` to see them" line in this command assumes the opposite. Do not narrow the exemption to the top rung.
 - **`--bar` runs the opposite way to `/code-review`'s `level`**: in the built-in `/code-review` skill, a *higher* level means *broader* coverage and *more* findings. Here a *higher* bar means *fewer*. That is why this flag is called a bar and not a level: the word would import the wrong direction from the neighbouring command. Do not "fix" the direction to match.
 - **`event` is always `COMMENT`**: `APPROVE` and `REQUEST_CHANGES` are rejected by GitHub on your own PR, and this command is not a merge gate on anyone else's. It posts observations, never a verdict.
-- **Attribution once**: the `🤖 Generated with Claude Code` line goes in the review body only. Repeating it on twelve inline comments is noise.
+- **Two attribution levels, one occurrence each**: the `🤖 Generated with Claude Code` link line goes in the review body only — repeating it on twelve inline comments is noise. Every posted comment instead closes with a plain `_(auto-review by Claude)_` line, because an inline comment is read on its own, away from the body that would otherwise disclose it. Neither line ever appears twice in the same body, and the footer is posted-comments-only: a copy-paste draft you hand-post carries neither.
 - **Lane discipline between neighbours**: Performance owns data structures and query patterns; Reliability & Operability owns concurrency stalls, event-loop blocking, and whether a failure is visible. Configuration owns the value of a knob; Efficacy owns whether the change it belongs to achieves its stated purpose. Each addendum names the boundary so two reviewers don't file the same finding twice. Within a merged lane the same rule applies inward: answer both questions on one traversal and file the finding once.
 - **The mechanical lane belongs to `/ds:work-on` Step 3.5**, not to this command. When the ticket context records that check ran against this diff, the Consistency reviewer skips the mechanical rules and spends its budget on structural compliance. When it doesn't, they are in scope.
 - **Fewer high-signal findings**: every sub-agent prompt instructs to skip borderline issues, and that applies to the merged lanes exactly as it did to the ten they replace. Seven reviewers is not a licence for a longer report — a run that returns twenty mediocre findings is a worse outcome than one that returns five good ones.
