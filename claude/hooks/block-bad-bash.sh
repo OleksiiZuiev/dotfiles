@@ -2,8 +2,11 @@
 # Guard hook for Bash tool calls (PreToolUse):
 #  - auto-approves the known-safe throwaway-worktree teardown so it doesn't trip the
 #    destructive-command prompt that fires even under auto permission mode;
-#  - blocks genuinely dangerous patterns (force push, cloud delete/destroy).
-# Style rules (no chaining, no cd) are enforced by CLAUDE.md, not here.
+#  - blocks genuinely dangerous patterns (force push, cloud delete/destroy);
+#  - blocks `cd`, which CLAUDE.md also forbids. A cd compound leaves the working directory
+#    unresolvable to the permission checker, so a search it would otherwise auto-approve turns
+#    into a manual prompt -- and unlike CLAUDE.md, this reaches subagents.
+# The remaining style rule (no chaining) is enforced by CLAUDE.md, not here.
 
 INPUT=$(cat)
 
@@ -18,7 +21,7 @@ extract_cmd() {
 CMD=""
 if [[ "$INPUT" == *rm* || "$INPUT" == *force* || "$INPUT" == *push* || "$INPUT" == *delete* \
    || "$INPUT" == *purge* || "$INPUT" == *destroy* || "$INPUT" == *teardown* \
-   || "$INPUT" == *GIT_DIR* || "$INPUT" == *GIT_WORK_TREE* ]]; then
+   || "$INPUT" == *GIT_DIR* || "$INPUT" == *GIT_WORK_TREE* || "$INPUT" == *"cd "* ]]; then
   CMD=$(extract_cmd)
 fi
 
@@ -55,6 +58,10 @@ CMD_NOSTR=$(printf '%s' "$CMD" | sed -n '1p' | sed "s/\"[^\"]*\"//g; s/'[^']*'//
 
 if [[ "$CMD_NOSTR" =~ ^[[:space:]]*(GIT_DIR|GIT_WORK_TREE)= ]]; then
   echo "BLOCKED: Use 'git -C <path>' instead of GIT_DIR/GIT_WORK_TREE env vars." >&2
+  exit 2
+fi
+if echo "$CMD_NOSTR" | grep -qE '(^|[;&|][[:space:]]*)cd[[:space:]]'; then
+  echo "BLOCKED: No 'cd'. Use 'git -C <path>' or absolute paths, one command per Bash call. A cd compound also hides the search root from the permission checker, which turns an auto-approved read into a manual prompt." >&2
   exit 2
 fi
 if echo "$CMD_NOSTR" | grep -qE 'git[[:space:]]+push[[:space:]].*--(force|force-with-lease)'; then

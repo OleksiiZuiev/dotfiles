@@ -30,6 +30,8 @@
   - Good: `git -C C:/work/github/myrepo status`
 - For non-git commands in a different directory, use absolute paths
 - This allows granular permission control per command
+- NEVER root a recursive Bash read (`grep -r`, `rg`, `cp -r`) at a repo root or `.` — pass explicit paths (`grep -rn "pattern" src docs package.json`), or use the `Grep` tool, which does not prompt.
+- Why: org-pushed deny rules cover `.env`, `.env.*`, `secrets/**`, `*.pem` and `id_rsa`; since Claude Code 2.1.259 a recursive Bash command over a directory holding any denied file needs manual approval — even when `--include` filters mean it would never open one.
 
 # Local GitHub Repos
 
