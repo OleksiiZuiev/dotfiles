@@ -1,6 +1,6 @@
 ---
 description: Address findings from a local findings file — assess each on merit, implement approved fixes, write resolutions back to the file. Off-PR counterpart to /ds:polish-pr.
-allowed-tools: Bash(git *), Read, Write, Edit, Grep, Glob, TodoWrite, Task, TaskCreate, TaskUpdate
+allowed-tools: Bash(git *), Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskGet, TaskList, TaskUpdate
 argument-hint: <file>
 ---
 
@@ -69,7 +69,7 @@ This command is the owner of the shared findings format; `/ds:review` and `/ds:a
 
 ### Step 0.5: Pre-seed the progress checklist
 
-Use your tracking tool — prefer `TodoWrite`; if unavailable, use the `Task*` family (`TaskCreate`/`TaskUpdate`); otherwise track inline. Seed:
+When the `Task*` tools (`TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate`) are available, mirror the checklist into them so it stays visible to the user; otherwise keep it in your own messages. Never narrate which tracking tools this build has. Seed:
 
 1. `🔎 Plan: assess each actionable finding`
 2. `🛠️ Implement approved fixes (commit per fix)`

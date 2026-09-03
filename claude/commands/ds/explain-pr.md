@@ -1,6 +1,6 @@
 ---
 description: Generate a reviewer-onboarding document for a PR — the problem, a high-level story, a component walkthrough in reading order, decisions with confidence, and obvious smells. Writes the document to a file.
-allowed-tools: Bash(git *), Bash(gh *), Bash(test *), Bash(mkdir *), Read, Write, Grep, Glob, Task, TodoWrite, mcp__claude_ai_Linear__get_issue
+allowed-tools: Bash(git *), Bash(gh *), Bash(test *), Bash(mkdir *), Read, Write, Grep, Glob, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, mcp__claude_ai_Linear__get_issue
 argument-hint: [<output-file-or-dir>]
 ---
 
@@ -56,9 +56,9 @@ This is **not** a review. It explains; it does not audit. Obvious smells get a q
    > /ds:explain-pr — PR #<N> "<title>" — ticket=<ID or "none"> — output=<OUTPUT>
    ```
 
-### Step 0.5: Seed Todo Items
+### Step 0.5: Seed the Checklist
 
-Use TodoWrite to seed the flow so it survives a long session:
+Pre-seed the flow so it survives a long session. When the `Task*` tools (`TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate`) are available, mirror the checklist into them so it stays visible to the user; otherwise keep it in your own messages. Never narrate which tracking tools this build has. Seed:
 
 1. `📥 Load shared context (CLAUDE.md, ticket, ticket-context)`
 2. `🔬 Generate onboarding document (opus agent)`

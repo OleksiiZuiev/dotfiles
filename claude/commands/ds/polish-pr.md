@@ -1,6 +1,6 @@
 ---
 description: Address review comments on a PR — merit-assessed one-by-one, one commit per fix, replies deferred until the SHAs settle. Flags: +temp-worktree (isolate in a throwaway worktree and fold back)
-allowed-tools: Bash, Read, Write, Edit, Grep, Glob, TodoWrite, AskUserQuestion
+allowed-tools: Bash, Read, Write, Edit, Grep, Glob, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion
 argument-hint: [+temp-worktree] [<pr-number>]
 ---
 
@@ -80,9 +80,14 @@ The flow is split into three zones:
 
 ### Step 0: Pre-Seed Progress Checklist
 
-**Before doing anything else**, pre-seed this fixed checklist using whatever progress-tracking
-tool this build exposes — `TodoWrite` if available, otherwise track it inline in your messages.
-Either way these steps are mandatory and run in order; the tool is only for visibility.
+**Before doing anything else**, pre-seed this fixed checklist. When the `Task*` tools
+(`TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate`) are available, mirror the checklist into
+them so it stays visible to the user; otherwise keep it in your own messages. The checklist is
+mandatory and runs in order either way — the tools only make it visible.
+
+> Throughout this command, "mark X as `in_progress`/`completed`" means: update the checklist
+> wherever you are keeping it. Never skip a step because a tool is missing, and never narrate
+> which tracking tools this build has — just track the checklist and carry on.
 
 Create these items (all `pending`). Items 4, 6 and 7 are **temp-worktree mode only — omit them
 entirely in default mode**:
@@ -276,7 +281,7 @@ one of these three states; a "Discuss" round produces no output of its own:
 **Zero-fix guard:** if there are **no approved code fixes** (everything was skipped/dismissed),
 skip Steps 6–10 entirely (nothing to implement, fold back or push) and jump straight to
 **Step 11** to post the skip/dismiss replies, then Step 13. Mark whichever of the
-implementation/worktree/fold-back/push todos you created as not applicable.
+implementation/worktree/fold-back/push items you created as not applicable.
 
 ### Step 6: Establish the Working Location
 
@@ -285,8 +290,8 @@ Do this AFTER all approvals and BEFORE any file changes.
 **Default mode (no `+temp-worktree`):** run `pwd` and store the result as `WT` — you work in the
 current checkout. Confirm you are still on the feature branch `F`. A **dirty working tree is
 fine** here (there is no fold-back to protect); Step 7 already stages only each fix's own files,
-so keep it that way and leave pre-existing modifications untouched. There is no todo for this —
-go straight to Step 7.
+so keep it that way and leave pre-existing modifications untouched. There is no checklist
+item for this — go straight to Step 7.
 
 **Everything below is temp-worktree mode only.**
 
@@ -313,7 +318,7 @@ Mark `🌳 Create isolated worktree` as `in_progress`.
      plumbing removed in Step 9.
 5. If creation fails, inform the user and exit.
 
-Remember `F`, `T`, and `WT` for the rest of the session. Mark the todo `completed`.
+Remember `F`, `T`, and `WT` for the rest of the session. Mark the item `completed`.
 
 ### Step 7: Implement Approved Fixes (one commit per fix)
 
@@ -356,7 +361,7 @@ For **each** approved fix:
 
 Keep the ordered mapping `thread → WT_SHA` (and the commit order) for fold-back. In a
 pattern batch approved in one go, each fix is still its own commit (so each thread maps to its
-own SHA). Mark the todo `completed` when all fixes are committed.
+own SHA). Mark the item `completed` when all fixes are committed.
 
 ### Step 8: Fold-Back onto the Feature Branch
 
@@ -395,7 +400,7 @@ For each fix-commit (in order):
      Skip Steps 9–12; go to Step 13 and report the partial outcome. **No replies are posted**
      (the commits are not integrated).
 
-Mark the todo `completed` once all fix-commits are on `F`.
+Mark the item `completed` once all fix-commits are on `F`.
 
 ### Step 9: Remove the Throwaway Worktree
 
@@ -415,7 +420,7 @@ order, because git refuses to delete a branch still registered to a worktree. It
 (which fires even under auto permission mode) never sees an `rm`, and teardown runs
 unattended.
 
-Mark the todo `completed`.
+Mark the item `completed`.
 
 ### Step 10: Push (and settle the final SHAs)
 
@@ -457,7 +462,7 @@ integrate the remote.
      `FINAL_SHA[thread]`. (A clean `git push` is a fast-forward and does not change SHAs, so
      these are final.)
 
-Mark the todo `completed`.
+Mark the item `completed`.
 
 ### Step 11: Post All Replies
 
@@ -481,7 +486,7 @@ b. **Skipped comments** — "Won't address in this PR. **Reason:** <rationale fr
 
 c. **Dismissed comments** — "Won't be changing this. **Reason:** <rationale>" + attribution.
 
-Mark the todo `completed`. (Skipped entirely if fold-back was blocked.)
+Mark the item `completed`. (Skipped entirely if fold-back was blocked.)
 
 ### Step 12: Update PR Description
 
@@ -508,7 +513,7 @@ Mark `📄 Update PR description` as `in_progress`.
   )"
   ```
 
-Mark the todo `completed`.
+Mark the item `completed`.
 
 ### Step 13: Final Summary
 
@@ -530,7 +535,7 @@ PR description: updated / skipped / n-a (not pushed)
 ```
 
 Remind the user to **manually resolve** the conversations after reviewing the changes
-(threads are not auto-resolved). Mark the todo `completed`.
+(threads are not auto-resolved). Mark the item `completed`.
 
 ### Important Notes
 

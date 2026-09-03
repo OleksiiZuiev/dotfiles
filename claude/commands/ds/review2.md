@@ -1,6 +1,6 @@
 ---
 description: Seven-dimension review of the current PR — code quality plus reliability, operability, configuration and efficacy, with every finding tiered by user impact.
-allowed-tools: Bash(git *), Bash(gh *), Bash(ls *), Bash(find *), Read, Write, Edit, Grep, Glob, Task, TodoWrite, AskUserQuestion, mcp__claude_ai_Linear__get_issue
+allowed-tools: Bash(git *), Bash(gh *), Bash(ls *), Bash(find *), Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion, mcp__claude_ai_Linear__get_issue
 argument-hint: [+comment] [<pr-number>] [--to <file>] [--bar low|medium|high]
 ---
 
@@ -87,9 +87,9 @@ The command never touches the working tree — no edits, no commits, no pushes. 
    If the diff is empty, stop:
    > No changes on this PR. Nothing to review.
 
-### Step 0.5: Pre-Seed Todo Items
+### Step 0.5: Pre-Seed the Checklist
 
-Before doing anything else, use TodoWrite to create the checklist. The seed list mirrors what will actually run so the multi-step flow survives a long session — same pattern as `/ds:work-on` Step 0.5.
+Before doing anything else, create the checklist. The seed list mirrors what will actually run so the multi-step flow survives a long session — same pattern as the pre-seed step in `/ds:work-on` (Step 0.5). When the `Task*` tools (`TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate`) are available, mirror the checklist into them so it stays visible to the user; otherwise keep it in your own messages. Never narrate which tracking tools this build has.
 
 1. `🔬 Analysis: launch review sub-agents`
 2. `📋 Findings report`
@@ -489,7 +489,7 @@ GitHub accepts an inline review comment only on a line inside a diff hunk, and t
    If it differs from `HEAD_SHA`, the local diff's line numbers do not describe the PR — every anchor would be wrong, or worse, land on unrelated code. Stop here:
    > Local HEAD (`<sha>`) differs from the PR head (`<HEAD_SHA>`). Push first, then re-run with `+comment` — comment anchors are computed against the pushed diff.
 
-   The report above and any `--to <file>` output are already written and stay valid. Skip Steps 5–7, mark their todos not applicable, and continue to the mode branch.
+   The report above and any `--to <file>` output are already written and stay valid. Skip Steps 5–7, mark their items not applicable, and continue to the mode branch.
 
 3. **Build the commentable-line set** from the PR's own diff — `gh pr diff <pr-number>`, **not** the local `git diff`, so both modes anchor against exactly what GitHub will accept. For each file, parse the hunk headers `@@ -a,b +c,d @@`; the RIGHT-side lines `c` through `c+d-1` are commentable (added and context lines both count).
 

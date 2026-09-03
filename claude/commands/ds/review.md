@@ -1,6 +1,6 @@
 ---
 description: Multi-dimensional review of the current PR — surfaces confident findings and smells across simplicity, performance, consistency, readability, extraction, test coverage.
-allowed-tools: Bash(git *), Bash(gh *), Read, Write, Edit, Grep, Glob, Task, TodoWrite, mcp__claude_ai_Linear__get_issue
+allowed-tools: Bash(git *), Bash(gh *), Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, mcp__claude_ai_Linear__get_issue
 argument-hint: [<pr-number>] [--to <file>]
 ---
 
@@ -72,9 +72,9 @@ The command does not apply changes, commit, or push. It surfaces findings in cha
    If the diff is empty, stop:
    > No changes on this PR. Nothing to review.
 
-### Step 0.5: Pre-Seed Post-Implementation Todo Items
+### Step 0.5: Pre-Seed the Post-Implementation Checklist
 
-Before doing anything else, use TodoWrite to create the per-mode checklist. The seed list mirrors what will actually run so the multi-step flow survives a long session — same pattern as `/ds:work-on` Step 0.5.
+Before doing anything else, create the per-mode checklist. The seed list mirrors what will actually run so the multi-step flow survives a long session — same pattern as the pre-seed step in `/ds:work-on` (Step 0.5). When the `Task*` tools (`TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate`) are available, mirror the checklist into them so it stays visible to the user; otherwise keep it in your own messages. Never narrate which tracking tools this build has.
 
 **If `MODE=own`:**
 

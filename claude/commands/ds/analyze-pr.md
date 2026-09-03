@@ -1,6 +1,6 @@
 ---
 description: PR-scoped Q&A. Pass a question for one-shot analysis, or a file path containing bulleted questions for thorough grouped+parallelised analysis appended back into the file.
-allowed-tools: Bash(git *), Bash(gh *), Bash(test *), Read, Write, Edit, Grep, Glob, Task, TodoWrite, mcp__claude_ai_Linear__get_issue
+allowed-tools: Bash(git *), Bash(gh *), Bash(test *), Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, mcp__claude_ai_Linear__get_issue
 argument-hint: <question | file-path>
 ---
 
@@ -60,9 +60,9 @@ The command has two modes, auto-detected from `$ARGUMENTS`:
    > /ds:analyze-pr — PR #<N> "<title>" — MODE=<file|prompt> — ticket=<ID or "none">
    ```
 
-### Step 0.5: Pre-Seed Post-Analysis Todo Items
+### Step 0.5: Pre-Seed the Post-Analysis Checklist
 
-Use TodoWrite to seed the per-mode checklist so the multi-step flow survives a long session.
+Pre-seed the per-mode checklist so the multi-step flow survives a long session. When the `Task*` tools (`TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate`) are available, mirror the checklist into them so it stays visible to the user; otherwise keep it in your own messages. Never narrate which tracking tools this build has.
 
 **If `MODE=prompt`:**
 

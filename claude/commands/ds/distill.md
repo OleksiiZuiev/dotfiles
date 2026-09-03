@@ -1,6 +1,6 @@
 ---
 description: Distill steering corrections from a branch's artifacts into reusable rules — routed to global CLAUDE.md or the repo-keyed overlay. Human-gated triage, nothing auto-applied.
-allowed-tools: Bash(git *), Bash(gh *), Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskUpdate, TaskList, AskUserQuestion, TodoWrite, mcp__claude_ai_Linear__get_issue
+allowed-tools: Bash(git *), Bash(gh *), Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion, mcp__claude_ai_Linear__get_issue
 argument-hint: [PR-number | ticket-id]   (default: current branch)
 ---
 
@@ -92,8 +92,9 @@ ledger needs an entry).
 
 ### Step 0.5: Pre-seed the progress checklist
 
-Use your tracking tool — prefer `TodoWrite`; if unavailable use the `Task*` family
-(`TaskCreate`/`TaskUpdate`); otherwise track inline. Seed:
+When the `Task*` tools (`TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate`) are available,
+mirror the checklist into them so it stays visible to the user; otherwise keep it in your
+own messages. Never narrate which tracking tools this build has. Seed:
 1. `📥 Gather corrections (commits + PR comments + ticket context)`
 2. `⚗️ Distill candidate rules (opus sub-agent)`
 3. `⚖️ Triage one-by-one`
