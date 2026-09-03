@@ -1,6 +1,6 @@
 ---
 description: PR-scoped Q&A. Pass a question for one-shot analysis, or a file path containing bulleted questions for thorough grouped+parallelised analysis appended back into the file.
-allowed-tools: Bash(git *), Bash(gh *), Bash(test *), Read, Write, Edit, Grep, Glob, Task, TodoWrite, mcp__linear-server__get_issue
+allowed-tools: Bash(git *), Bash(gh *), Bash(test *), Read, Write, Edit, Grep, Glob, Task, TodoWrite, mcp__claude_ai_Linear__get_issue
 argument-hint: <question | file-path>
 ---
 
@@ -85,7 +85,7 @@ Read into context — this becomes the **shared brief** prepended to every sub-a
 1. **Repo `CLAUDE.md`** at the repo root.
 2. **Linear ticket** (only if `TICKET_ID` is set):
    ```
-   mcp__linear-server__get_issue with id=TICKET_ID, includeRelations=true
+   mcp__claude_ai_Linear__get_issue with id=TICKET_ID, includeRelations=true
    ```
    Capture title, description, acceptance criteria, status.
 3. **Ticket context file:** `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/<TICKET_ID>.md` — read if it exists. Summarise previous-session decisions so the analyser doesn't re-litigate settled questions.

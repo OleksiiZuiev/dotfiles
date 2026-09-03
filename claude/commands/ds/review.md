@@ -1,6 +1,6 @@
 ---
 description: Multi-dimensional review of the current PR — surfaces confident findings and smells across simplicity, performance, consistency, readability, extraction, test coverage.
-allowed-tools: Bash(git *), Bash(gh *), Read, Write, Edit, Grep, Glob, Task, TodoWrite, mcp__linear-server__get_issue
+allowed-tools: Bash(git *), Bash(gh *), Read, Write, Edit, Grep, Glob, Task, TodoWrite, mcp__claude_ai_Linear__get_issue
 argument-hint: [<pr-number>] [--to <file>]
 ---
 
@@ -114,7 +114,7 @@ Read the following into your context. These become the **shared brief** that eve
    - In `MODE=draft-comments` the files are read from your current checkout — a fine proxy, since conventions rarely differ from the PR head. If the PR itself adds or edits a conventions file, account for that from the diff.
 2. **Linear ticket** (only if `TICKET_ID` is set):
    ```
-   mcp__linear-server__get_issue with id=TICKET_ID, includeRelations=true
+   mcp__claude_ai_Linear__get_issue with id=TICKET_ID, includeRelations=true
    ```
    Capture title, description, acceptance criteria, status.
 3. **Ticket context file**: `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET_ID}.md` — read if it exists. Summarize previous-session decisions so the reviewers don't re-litigate settled questions.

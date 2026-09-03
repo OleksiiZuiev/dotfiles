@@ -14,9 +14,9 @@
       "WebSearch",
       "Skill(git-commit)",
       "Skill(ds:*)",
-      "mcp__notion__notion-fetch",
-      "mcp__notion__notion-update-page",
-      "mcp__linear-server__*"
+      "mcp__claude_ai_Notion__notion-fetch",
+      "mcp__claude_ai_Notion__notion-update-page",
+      "mcp__claude_ai_Linear__*"
     ],
     "defaultMode": "auto"
   },

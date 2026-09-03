@@ -1,6 +1,6 @@
 ---
 description: Distill steering corrections from a branch's artifacts into reusable rules — routed to global CLAUDE.md or the repo-keyed overlay. Human-gated triage, nothing auto-applied.
-allowed-tools: Bash(git *), Bash(gh *), Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskUpdate, TaskList, AskUserQuestion, TodoWrite, mcp__linear-server__get_issue
+allowed-tools: Bash(git *), Bash(gh *), Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskUpdate, TaskList, AskUserQuestion, TodoWrite, mcp__claude_ai_Linear__get_issue
 argument-hint: [PR-number | ticket-id]   (default: current branch)
 ---
 

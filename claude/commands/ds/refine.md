@@ -1,6 +1,6 @@
 ---
 description: Refine a Linear ticket by challenging assumptions, resolving ambiguities, and capturing answers as acceptance criteria
-allowed-tools: AskUserQuestion, mcp__linear-server__get_issue, mcp__linear-server__save_issue, mcp__linear-server__create_comment
+allowed-tools: AskUserQuestion, mcp__claude_ai_Linear__get_issue, mcp__claude_ai_Linear__save_issue, mcp__claude_ai_Linear__save_comment
 argument-hint: <ticket-id> [focus-prompt]
 ---
 
@@ -22,7 +22,7 @@ Refine Linear ticket: **{{$1}}**
 
 #### 1. Fetch the Ticket
 
-Use `mcp__linear-server__get_issue` with ticket ID `{{$1}}` and `includeRelations: true`.
+Use `mcp__claude_ai_Linear__get_issue` with ticket ID `{{$1}}` and `includeRelations: true`.
 
 Extract:
 - Title
@@ -33,7 +33,7 @@ Extract:
 - Current state/status
 - Parent issue (if exists) — title, description, acceptance criteria
 
-If the ticket has a parent issue, fetch it using `mcp__linear-server__get_issue` with the parent ID.
+If the ticket has a parent issue, fetch it using `mcp__claude_ai_Linear__get_issue` with the parent ID.
 
 Display a brief summary of the ticket to the user:
 ```
@@ -207,11 +207,11 @@ Format the refined requirements as acceptance criteria:
 - Preserve any existing A/C that's still valid
 - Place A/C section after the description, before any "Notes" or similar sections
 
-Use `mcp__linear-server__save_issue` to update the description field with the new/updated A/C section. Update directly without separate approval.
+Use `mcp__claude_ai_Linear__save_issue` to update the description field with the new/updated A/C section. Update directly without separate approval.
 
 #### 6. Add Audit Comment
 
-Use `mcp__linear-server__create_comment` to document the refinement:
+Use `mcp__claude_ai_Linear__save_comment` to document the refinement:
 
 ```markdown
 ## Ticket Refined via /refine
@@ -246,7 +246,7 @@ View ticket: [link to Linear ticket]
 #### 8. Transition to Ready
 
 If refinement completed successfully (ticket was updated with acceptance criteria in Step 5):
-- Use `mcp__linear-server__save_issue` with `id: "<ticket-id>"` and `state: "Ready"` to move the ticket forward
+- Use `mcp__claude_ai_Linear__save_issue` with `id: "<ticket-id>"` and `state: "Ready"` to move the ticket forward
 - Mention the transition in the summary: `Status: Moved to Ready`
 
 If refinement was cancelled or only partially completed (user chose "No, ticket is ready" without changes, or exited early), do NOT transition the status.

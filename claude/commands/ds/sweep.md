@@ -1,6 +1,6 @@
 ---
 description: Query Linear for eligible tickets and launch parallel /ds:refine sessions in Windows Terminal tabs
-allowed-tools: mcp__linear-server__list_issues, mcp__linear-server__list_issue_statuses, mcp__linear-server__list_teams, mcp__linear-server__get_user, AskUserQuestion, Bash
+allowed-tools: mcp__claude_ai_Linear__list_issues, mcp__claude_ai_Linear__list_issue_statuses, mcp__claude_ai_Linear__list_teams, mcp__claude_ai_Linear__get_user, AskUserQuestion, Bash
 ---
 
 You are dispatching parallel `/ds:refine` sessions for Linear tickets that are ready for refinement.
@@ -9,15 +9,15 @@ You are dispatching parallel `/ds:refine` sessions for Linear tickets that are r
 
 ### Step 1. Find Your User ID
 
-Use `mcp__linear-server__get_user` with `id: "me"` to get your Linear user ID.
+Use `mcp__claude_ai_Linear__get_user` with `id: "me"` to get your Linear user ID.
 
 ### Step 2. Find the "Backlog" State ID
 
-Use `mcp__linear-server__list_issue_statuses` to find the state ID for "Backlog" status. You'll need this for the query.
+Use `mcp__claude_ai_Linear__list_issue_statuses` to find the state ID for "Backlog" status. You'll need this for the query.
 
 ### Step 3. Query Linear for Eligible Tickets
 
-Use `mcp__linear-server__list_issues` with:
+Use `mcp__claude_ai_Linear__list_issues` with:
 - `labelName: "oleksii-ai-flow"`
 - `stateId: <backlog-state-id>`
 - `assigneeId: <your-user-id>`

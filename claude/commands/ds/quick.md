@@ -1,6 +1,6 @@
 ---
 description: Lightweight command for trivial changes — intake, Linear ticket, worktree, auto-implementation in new tab
-allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion, mcp__linear-server__save_issue, mcp__linear-server__get_issue, mcp__linear-server__list_projects
+allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion, mcp__claude_ai_Linear__save_issue, mcp__claude_ai_Linear__get_issue, mcp__claude_ai_Linear__list_projects
 argument-hint: [linear-project-or-parent-task] [description]
 ---
 
@@ -66,7 +66,7 @@ By the end of this step you must have:
 
 ### Step 4: Create Linear Ticket
 
-Use `mcp__linear-server__save_issue` to create the ticket:
+Use `mcp__claude_ai_Linear__save_issue` to create the ticket:
 - `title`: concise title derived from intake
 - `team`: "INT"
 - `description`: brief description with acceptance criteria from the intake

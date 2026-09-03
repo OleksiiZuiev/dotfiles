@@ -1,6 +1,6 @@
 ---
 description: Create PR for ticket — stacked on its parent branch when the current branch is stacked
-allowed-tools: Bash, mcp__linear-server__get_issue
+allowed-tools: Bash, mcp__claude_ai_Linear__get_issue
 argument-hint: [--ready]
 ---
 
@@ -19,7 +19,7 @@ You are creating a pull request for an implemented ticket.
      > Could not extract ticket ID from branch name. Expected format: `{type}/{prefix-number}-{slug}` (e.g., `feature/eng-123-add-auth`).
 
 2. **Load Context**
-   - Fetch ticket details from Linear using `mcp__linear-server__get_issue` with the extracted ticket ID
+   - Fetch ticket details from Linear using `mcp__claude_ai_Linear__get_issue` with the extracted ticket ID
      - Extract the **ticket title** and **description** (this is the goal/motivation)
      - Extract the **ticket URL** for linking in the PR body (falls back to `https://linear.app/issue/{TICKET-ID}` if not available)
    - Check for ticket context file at `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET-ID}.md`

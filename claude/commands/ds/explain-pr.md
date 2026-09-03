@@ -1,6 +1,6 @@
 ---
 description: Generate a reviewer-onboarding document for a PR — the problem, a high-level story, a component walkthrough in reading order, decisions with confidence, and obvious smells. Writes the document to a file.
-allowed-tools: Bash(git *), Bash(gh *), Bash(test *), Bash(mkdir *), Read, Write, Grep, Glob, Task, TodoWrite, mcp__linear-server__get_issue
+allowed-tools: Bash(git *), Bash(gh *), Bash(test *), Bash(mkdir *), Read, Write, Grep, Glob, Task, TodoWrite, mcp__claude_ai_Linear__get_issue
 argument-hint: [<output-file-or-dir>]
 ---
 
@@ -72,7 +72,7 @@ Mark `📥 Load shared context` as `in_progress`. Read into context — this bec
 1. **Repo `CLAUDE.md`** at the repo root (conventions, tech-stack hints).
 2. **Linear ticket** (only if `TICKET_ID` is set):
    ```
-   mcp__linear-server__get_issue with id=TICKET_ID, includeRelations=true
+   mcp__claude_ai_Linear__get_issue with id=TICKET_ID, includeRelations=true
    ```
    Capture title, description, acceptance criteria, status.
 3. **Ticket context file:** `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/<TICKET_ID>.md` — read if it exists. Summarise prior-session decisions so the generator doesn't re-litigate settled questions.
