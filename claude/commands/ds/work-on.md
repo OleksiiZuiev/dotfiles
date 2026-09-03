@@ -1,6 +1,6 @@
 ---
 description: Work on a Linear ticket — convention-checked plan, implement, one commit, push. Flags: +temp-worktree (isolate in a throwaway worktree and fold back), +auto-plan
-allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskUpdate, TaskList, AskUserQuestion, EnterPlanMode, TodoWrite
+allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion, EnterPlanMode
 argument-hint: [+temp-worktree] [+auto-plan] [+fold-timeout=<Nm>] [extra context]
 ---
 
@@ -61,15 +61,16 @@ Additional context from user: "{{$ARGUMENTS}}"
 
 ### Step 0.5: Pre-Seed Progress Checklist
 
-**Before doing anything else**, pre-seed the following fixed checklist using whatever
-progress-tracking tool this build exposes — `TodoWrite` if available, otherwise the
-`TaskCreate`/`TaskUpdate` family (recent builds ship Task* instead of TodoWrite). If
-neither is available, track the checklist inline in your messages. Either way these
-steps are mandatory and run in order; the tool is only for visibility.
+**Before doing anything else**, pre-seed the following fixed checklist. When the `Task*`
+tools (`TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate`) are available, mirror the
+checklist into them so it stays visible to the user; otherwise keep it in your own
+messages. The checklist is mandatory and runs in order either way — the tools only make
+it visible.
 
-> Throughout this command, "mark X as in_progress/completed" and "use TodoWrite to …"
-> mean: update whichever tracking tool you pre-seeded here (or your inline list). Never
-> skip a step just because a specific tool name is unavailable.
+> Throughout this command, "mark X as `in_progress`/`completed`" means: update the
+> checklist wherever you are keeping it. Never skip a step because a tool is missing, and
+> never narrate which tracking tools this build has — just track the checklist and carry
+> on.
 
 Create these items (all with status `pending`). Items 1, 5 and 6 are **temp-worktree mode
 only — omit them entirely in default mode**:
@@ -140,7 +141,7 @@ If `{context-path}/{TICKET_ID}.md` exists:
 
 #### 2A.2. Fetch Linear Ticket Details
 
-Use `mcp__linear-server__get_issue` with ticket ID `{TICKET_ID}` and `includeRelations: true`.
+Use `mcp__claude_ai_Linear__get_issue` with ticket ID `{TICKET_ID}` and `includeRelations: true`.
 
 Extract the ticket title, description, comments, and any linked resources.
 Look for Notion page links in the description or comments and fetch those automatically.
@@ -165,7 +166,7 @@ Create a detailed implementation plan covering:
 - Testing approach
 - Any risks or considerations
 
-Do NOT include worktree or post-implementation steps in the plan — those are already pre-seeded in the todo list from Step 0.5 and will run automatically.
+Do NOT include worktree or post-implementation steps in the plan — those are already pre-seeded in the checklist from Step 0.5 and will run automatically.
 
 Before finalizing, apply the **Convention-Aware Plan Self-Check (Step 2.7)** to revise the plan so it names how it complies with the repo's design-level conventions.
 
@@ -187,7 +188,7 @@ Display the summary so the user can confirm the starting point.
 
 #### 2B.2. Fetch Linear Ticket
 
-Use `mcp__linear-server__get_issue` with ticket ID `{TICKET_ID}` and `includeRelations: true`.
+Use `mcp__claude_ai_Linear__get_issue` with ticket ID `{TICKET_ID}` and `includeRelations: true`.
 
 Extract and display:
 - Title and current status
@@ -212,7 +213,7 @@ Plan the follow-up change. The plan should:
 - Include files to be created/modified
 - Include testing approach
 
-Do NOT include worktree or post-implementation steps in the plan — those are already pre-seeded in the todo list from Step 0.5.
+Do NOT include worktree or post-implementation steps in the plan — those are already pre-seeded in the checklist from Step 0.5.
 
 Before finalizing, apply the **Convention-Aware Plan Self-Check (Step 2.7)** to revise the plan so it names how it complies with the repo's design-level conventions.
 
@@ -245,11 +246,11 @@ Do this AFTER plan approval and BEFORE any file changes.
 **Default mode (no `+temp-worktree`):** run `pwd` and store the result as `WT` — you work in the
 current checkout. Confirm you are still on the feature branch `F`. A **dirty working tree is
 fine** here (there is no fold-back to protect); just be careful to commit only your own changes
-in Step 4. There is no todo for this — go straight to Step 3.
+in Step 4. There is no checklist item for this — go straight to Step 3.
 
 **Everything below is temp-worktree mode only.**
 
-Mark `🌳 Create isolated worktree` as `in_progress` via your tracking tool.
+Mark `🌳 Create isolated worktree` as `in_progress`.
 
 **Pre-flight (in the current directory — the feature branch's worktree):**
 - Confirm you are on the feature branch `F` (it must match `{type}/{ticket}-{slug}`).
@@ -265,11 +266,11 @@ Mark `🌳 Create isolated worktree` as `in_progress` via your tracking tool.
    - Do **not** record this worktree in the cd-repo / lclaude picker — it is transparent plumbing that will be removed in Step 6.
 5. If creation fails, inform the user and exit.
 
-Remember `F`, `T`, and `WT` for the rest of the session. Mark the todo `completed`.
+Remember `F`, `T`, and `WT` for the rest of the session. Mark the item `completed`.
 
 ### Step 3: Implement the Plan (in `WT`)
 
-Using your tracking tool, replace the `🔧 Implementation` placeholder with specific implementation tasks from the plan. Each task should be a separate item.
+In the checklist, replace the `🔧 Implementation` placeholder with the plan's implementation steps — one item each.
 
 Implement the plan directly (no sub-agent — you have full context from planning), **entirely inside `WT`**:
 - File edits: absolute paths under `WT`.
@@ -294,16 +295,16 @@ Implement the plan directly (no sub-agent — you have full context from plannin
 
 1. Execute each implementation task sequentially
 2. Run tests and verify as you go (against `WT`)
-3. Using your tracking tool, mark each implementation task as `completed` as you go
+3. Mark each implementation item `completed` as you go
 4. **Then continue to the post-implementation steps.** Do NOT stop after implementation.
 
 ## Post-Implementation Steps
 
-Work through these in order — using your tracking tool, mark each `in_progress` when starting and `completed` when done. All commit and git operations target `WT`.
+Work through these in order, marking each `in_progress` when starting and `completed` when done. All commit and git operations target `WT`.
 
 ### Step 3.5: Convention Compliance Check (Sonnet sub-agent)
 
-Mark `🔎 Convention check (Sonnet sub-agent)` as `in_progress` via your tracking tool. This runs after implementation and **before** the commit, so its fixes land in the single Step 4 commit.
+Mark `🔎 Convention check (Sonnet sub-agent)` as `in_progress`. This runs after implementation and **before** the commit, so its fixes land in the single Step 4 commit.
 
 Launch a `Task` sub-agent with `model: "sonnet"` to check the freshly written code against **your own conventions** and auto-apply the safe subset of fixes. The rules are **not hardcoded here** — they are read from two sources: the conventions that already apply to the changed files, **plus** your repo-keyed steering overlay's `## Enforced` rules (`~/.claude/overlays/{repo-key}.md`, maintained by `/ds:distill`). The overlay carries the recurring, already-stated-but-ignored mechanical rules that most need a hard check. Kept deliberately narrower than `/ds:review`: it enforces mechanical, locally-fixable rules only, never a full audit.
 
@@ -321,11 +322,11 @@ Launch a `Task` sub-agent with `model: "sonnet"` to check the freshly written co
 
 **Sub-agent allowed tools:** `Read, Edit, Grep, Glob, Bash(git *)`
 
-Record the sub-agent's summary (count of fixes, or "clean") for the final summary, then mark the todo `completed`.
+Record the sub-agent's summary (count of fixes, or "clean") for the final summary, then mark the item `completed`.
 
 ### Step 4: Commit (exactly one commit)
 
-Mark `💾 Commit (exactly one commit)` as `in_progress` via your tracking tool.
+Mark `💾 Commit (exactly one commit)` as `in_progress`.
 
 Make **exactly one** commit in `WT`, then capture its SHA:
 
@@ -347,7 +348,7 @@ Make **exactly one** commit in `WT`, then capture its SHA:
 5. Capture the full SHA: `git -C "{WT}" rev-parse HEAD`. Store it as `SHA`.
 6. Do NOT push.
 
-Mark the todo `completed`.
+Mark the item `completed`.
 
 ### Step 5: Fold-Back onto the Feature Branch
 
@@ -355,7 +356,7 @@ Mark the todo `completed`.
 nothing to fold back. Skip to Step 7. (`SHA` is then the commit on `F`; only a Step 8 rebase
 can still rewrite it, which is why Step 8 captures `PUSHED_SHA` separately.)
 
-Mark `🔀 Fold-back onto feature branch` as `in_progress` via your tracking tool.
+Mark `🔀 Fold-back onto feature branch` as `in_progress`.
 
 This runs in the **current directory** (the feature branch `F`). It cherry-picks `SHA` onto
 the *live* feature tip, so if another session committed since this session started, you land
@@ -444,13 +445,13 @@ run in the current directory (the feature branch worktree).
 > same concurrency exposure to an in-progress sequencer operation. Consider applying the
 > readiness check from Step 5.1 there as well if needed.
 
-Mark the todo `completed` once the commit is on `F`.
+Mark the item `completed` once the commit is on `F`.
 
 ### Step 6: Remove the Throwaway Worktree
 
 **Temp-worktree mode only.** In default mode there is no worktree to remove — skip to Step 7.
 
-Mark `🧹 Remove throwaway worktree` as `in_progress` via your tracking tool. Only run this after a successful fold-back.
+Mark `🧹 Remove throwaway worktree` as `in_progress`. Only run this after a successful fold-back.
 
 Tear down the worktree in one call:
 
@@ -464,11 +465,11 @@ order, because git refuses to delete a branch still registered to a worktree. It
 (which fires even under auto permission mode) never sees an `rm`, and teardown runs
 unattended.
 
-Mark the todo `completed`.
+Mark the item `completed`.
 
 ### Step 7: Update Ticket Context
 
-Mark `📝 Update ticket context: launch sub-agent` as `in_progress` via your tracking tool.
+Mark `📝 Update ticket context: launch sub-agent` as `in_progress`.
 
 Use the Task tool with a subagent (`model: "haiku"`) to update the ticket context document. Pass the subagent all session details:
 - Ticket ID: `{TICKET_ID}`
@@ -482,11 +483,11 @@ Use the Task tool with a subagent (`model: "haiku"`) to update the ticket contex
 
 The subagent should record the convention-check line under the session's `#### Accomplished` bullets, and otherwise append a new session entry following the existing document format — or, when the context file does not exist yet, create it from the template in the `ticket-context` skill (`~/.claude/skills/ticket-context/SKILL.md`). Record each decision in the template's `#### Key Decisions` → `- {decision}: {rationale}` form. When no rationale was supplied for a decision, record just the decision without a fabricated reason.
 
-Mark the todo `completed`.
+Mark the item `completed`.
 
 ### Step 8: Push & Create/Update PR
 
-Mark `🚀 Push & PR` as `in_progress` via your tracking tool.
+Mark `🚀 Push & PR` as `in_progress`.
 
 Your commit is on the *local* feature tip (put there by Step 5's fold-back in temp-worktree
 mode, or directly by Step 4 in default mode), but another session may have **pushed** to the
@@ -517,7 +518,7 @@ remote `{F}` in the meantime. Integrate the remote before pushing:
 > Create a draft PR for the current branch, automatically detecting whether it is stacked on another feature branch.
 >
 > 1. Get the ticket ID from the branch name: strip everything before the first `/`, take the first two hyphen-separated segments, uppercase them (e.g., `feature/eng-123-foo` → `ENG-123`)
-> 2. Fetch the Linear ticket using `mcp__linear-server__get_issue` with the ticket ID and `includeRelations: true`
+> 2. Fetch the Linear ticket using `mcp__claude_ai_Linear__get_issue` with the ticket ID and `includeRelations: true`
 > 3. Read the ticket context file at `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET_ID}.md` if it exists
 > 4. Run `git log --oneline origin/main..HEAD` and `git diff origin/main...HEAD --stat` to understand all changes
 > 4b. Detect the base branch by running `stack-parent` (a `bash.d` helper; `stack-parent --help` states the rule).
@@ -545,7 +546,7 @@ remote `{F}` in the meantime. Integrate the remote before pushing:
 >    Capture and report the output (it confirms stack registration).
 > 6. Return the PR URL and number (and the `gh stack link` result if this was a stacked PR)
 
-**Sub-agent allowed tools:** `Bash, mcp__linear-server__get_issue, Read, Glob`
+**Sub-agent allowed tools:** `Bash, mcp__claude_ai_Linear__get_issue, Read, Glob`
 (`Bash` unrestricted: `stack-parent` and the `GH_REPO=… gh …` prefix in 5d match no narrower
 `Bash(...)` pattern.)
 
@@ -555,11 +556,11 @@ remote `{F}` in the meantime. Integrate the remote before pushing:
 
 Store the results (PR URL and number, plus `PUSHED_SHA` and `COMMIT_URL`) for the final summary.
 
-Mark the todo `completed`.
+Mark the item `completed`.
 
 ### Step 9: Final Summary
 
-Mark `✅ Final summary` as `in_progress` via your tracking tool.
+Mark `✅ Final summary` as `in_progress`.
 
 Show what was implemented:
 ```
@@ -577,7 +578,7 @@ PR: created #N <url> (draft) / pushed to existing #N <url> / not pushed (fold-ba
 Stack: based on {parent} #N — linked / link failed: {error}      [omit this line when based on main]
 ```
 
-Mark the todo `completed`.
+Mark the item `completed`.
 
 Suggest next steps:
 - `/ds:work-on <next change>` if more work needed
