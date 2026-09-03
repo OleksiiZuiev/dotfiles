@@ -15,6 +15,17 @@
     "claudeCode.respectGitIgnore": false,
     "claudeCode.useTerminal": true,
     "claudeCode.selectedModel": "opus",
-    "claudeCode.preferredLocation": "panel",
-    "editor.minimap.enabled": false
+    "claudeCode.preferredLocation": "sidebar",
+    "editor.minimap.enabled": false,
+    "chat.disableAIFeatures": true,
+    "json.schemaDownload.trustedDomains": {
+        "https://schemastore.azurewebsites.net/": true,
+        "https://raw.githubusercontent.com/microsoft/vscode/": true,
+        "https://raw.githubusercontent.com/devcontainers/spec/": true,
+        "https://www.schemastore.org/": true,
+        "https://json.schemastore.org/": true,
+        "https://json-schema.org/": true,
+        "https://developer.microsoft.com/json-schemas/": true,
+        "https://biomejs.dev": true
+    }
 }
