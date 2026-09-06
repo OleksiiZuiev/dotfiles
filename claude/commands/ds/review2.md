@@ -18,7 +18,7 @@ The command never touches the working tree — no edits, no commits, no pushes. 
 **`--bar low|medium|high`** (default `medium`) sets the **reporting bar** — how high a finding has to clear to be shown. Full semantics in Step 3.2; the short version is that a higher bar means fewer findings, and it only ever filters the `maintenance` tier.
 
 **Distinction from siblings:**
-- `/ds:work-on` Step 3.5 — the mechanical convention check on the freshly written code, before the commit. Auto-applies; owns the mechanical lane.
+- `/ds:work-on` Step 3.5 — the mechanical convention check on the freshly written code, before the commit. Auto-applies; owns the mechanical lane, but only on runs that passed `+checks`. Without it the lane falls to this command's Consistency reviewer.
 - `/ds:polish-pr` — addresses *human* reviewer comments already posted on the PR.
 - `/ds:review` — the six-dimension v1. Still the daily driver; this command is its trial successor.
 - `/ds:review2` (this command) — v1's dimensions plus the reliability & operations cluster, impact tiering, two reach fixes (the installed source of a changed dependency is in scope, and unchanged sibling files are inventoried so a file that *should* have changed can be found), and `+comment` to post the findings to the PR instead of leaving you to copy-paste them.
@@ -138,7 +138,7 @@ These become the **brief** that the analysis sub-agents receive, so they all sta
 
 4. **Ticket context file**: `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET_ID}.md` — read if it exists. Summarize previous-session decisions so the reviewers don't re-litigate settled questions. Two things to extract specifically:
    - The decisions themselves, for the brief's "prior decisions" block.
-   - **Whether a session entry for this branch records a `Convention check:` line** (written by `/ds:work-on` Step 7). If it does, the mechanical conventions were already enforced against this diff before the commit — set `MECHANICAL_ENFORCED` to that line's value (`N fixes applied` / `clean`) and surface it in the brief. If no such line exists, leave it unset: nobody checked, and the Consistency reviewer must.
+   - **Whether a session entry for this branch records a `Convention check:` line** (written by `/ds:work-on` Step 7). Only the values `N fixes applied` and `clean` mean the mechanical conventions were already enforced against this diff before the commit — set `MECHANICAL_ENFORCED` to that value and surface it in the brief. Leave it unset when the line reads `skipped` (that run opted out of `/ds:work-on`'s `+checks`) or when no such line exists at all: either way nobody checked, and the Consistency reviewer must.
 
 5. **Dependency source paths** — where the installed source of a dependency the diff relies on can actually be read. Several of the highest-value findings a reviewer makes turn on what a library *does*, not on what the calling code assumes about it; without a path, a sub-agent can only guess.
    - Scope it to dependencies the diff touches: a version bump in `pyproject.toml` / `package.json` / `*.csproj`, or an import the diff adds.
