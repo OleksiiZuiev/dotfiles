@@ -8,7 +8,7 @@ You are helping the user work on a Linear ticket. The command auto-detects wheth
 fresh or continue previous work, plans interactively, always runs a convention-aware plan
 self-check, and ends in exactly one commit that gets pushed. The post-implementation
 convention check is **opt-in via `+checks`** — without it the mechanical lane is left to a
-later `/ds:review2` round.
+later `/ds:review` round.
 
 By default the work happens **in the current checkout**. The `+temp-worktree` flag switches
 on an isolation lifecycle: the implementation runs in a **private throwaway worktree** off
@@ -52,7 +52,7 @@ If the text "{{$ARGUMENTS}}" contains `+checks`, then **checks mode is active**.
 
 **Unless that flag is present, checks mode is OFF — this is the default.** Step 3.5 is skipped
 entirely: no sub-agent runs, no checklist item exists for it, and the outcome recorded in Steps 7
-and 9 is `skipped`. The mechanical conventions then stay in scope for a later `/ds:review2`, which
+and 9 is `skipped`. The mechanical conventions then stay in scope for a later `/ds:review`, which
 reads that outcome and keeps its Consistency reviewer on the mechanical rules.
 
 ## Your Task
@@ -252,7 +252,7 @@ The goal: make the plan demonstrably comply with the conventions of the repo you
    - Name the methods/functions you'll add and keep their scope tight — avoid one long method where the conventions favor small ones.
    - State **where** new code lands — prefer a component specific to this change over bloating a large shared component, and say which.
    - Call out any other structural convention the change has to honor.
-5. The mechanical rules (comment style, naming, dead-history comments) are **not** the focus here — they are enforced against the finished diff, by the Step 3.5 convention check in checks mode and by a later `/ds:review2` round otherwise. Keep this step about structure and design.
+5. The mechanical rules (comment style, naming, dead-history comments) are **not** the focus here — they are enforced against the finished diff, by the Step 3.5 convention check in checks mode and by a later `/ds:review` round otherwise. Keep this step about structure and design.
 
 Then continue with the auto-plan / `EnterPlanMode` finalization in the calling step.
 
@@ -498,7 +498,7 @@ Use the Task tool with a subagent (`model: "haiku"`) to update the ticket contex
 - What was accomplished
 - Key decisions made — for each, include the **rationale (the *why*)** when it is clear from the session: the option chosen, the main alternative rejected, and the reason. Where the rationale isn't clear, pass the decision alone — do **not** invent one.
 - Files changed
-- The Step 3.5 outcome, as a line of its own: `Convention check: N fixes applied`, `Convention check: clean`, or `Convention check: skipped` when checks mode was off. A later `/ds:review2` reads this line: the first two tell it the mechanical conventions were already enforced against this diff, so it narrows its Consistency reviewer to structural compliance instead of re-checking the same rules; `skipped` tells it nothing checked them, so they stay in that reviewer's scope.
+- The Step 3.5 outcome, as a line of its own: `Convention check: N fixes applied`, `Convention check: clean`, or `Convention check: skipped` when checks mode was off. A later `/ds:review` reads this line: the first two tell it the mechanical conventions were already enforced against this diff, so it narrows its Consistency reviewer to structural compliance instead of re-checking the same rules; `skipped` tells it nothing checked them, so they stay in that reviewer's scope.
 
 The subagent should record the convention-check line under the session's `#### Accomplished` bullets, and otherwise append a new session entry following the existing document format — or, when the context file does not exist yet, create it from the template in the `ticket-context` skill (`~/.claude/skills/ticket-context/SKILL.md`). Record each decision in the template's `#### Key Decisions` → `- {decision}: {rationale}` form. When no rationale was supplied for a decision, record just the decision without a fabricated reason.
 
@@ -611,4 +611,4 @@ Suggest next steps:
 - Context documents persist across worktrees, enabling continuity when switching branches
 - Either mode leaves the feature branch `F` with exactly one new commit and no leftover plumbing — in temp-worktree mode the isolation is invisible once it's done
 - Reach for `+temp-worktree` when another session is (or may be) working the same feature branch; for a solo session the default in-place mode does the same work without the worktree setup, dependency sync, file re-reads and fold-back
-- Reach for `+checks` when this commit will **not** get a `/ds:review2` round, or when the repo has a `/ds:distill` overlay whose `## Enforced` rules you want applied *before* the commit rather than reported after it — `/ds:review2` covers the mechanical conventions but never reads that overlay. Running both is the case the flag exists to avoid
+- Reach for `+checks` when this commit will **not** get a `/ds:review` round, or when the repo has a `/ds:distill` overlay whose `## Enforced` rules you want applied *before* the commit rather than reported after it — `/ds:review` covers the mechanical conventions but never reads that overlay. Running both is the case the flag exists to avoid

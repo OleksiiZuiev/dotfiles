@@ -4,7 +4,7 @@ allowed-tools: Bash(git *), Bash(gh *), Bash(test *), Read, Write, Edit, Grep, G
 argument-hint: <question | file-path>
 ---
 
-You are answering question(s) about a pull request — your own or a teammate's — by grounding the analysis in the diff, the Linear ticket, and the repo's conventions. The posture is **thinking buddy**, not reviewer: explain what the code does, why it's wired that way, whether it's compatible with X, what the trade-offs are. This is the counterpart to `/ds:review` (six-dimension audit) for situations where you arrive with a specific question list instead of an opinion request.
+You are answering question(s) about a pull request — your own or a teammate's — by grounding the analysis in the diff, the Linear ticket, and the repo's conventions. The posture is **thinking buddy**, not reviewer: explain what the code does, why it's wired that way, whether it's compatible with X, what the trade-offs are. This is the counterpart to `/ds:review` (seven-dimension audit) for situations where you arrive with a specific question list instead of an opinion request.
 
 The command has two modes, auto-detected from `$ARGUMENTS`:
 
@@ -13,7 +13,7 @@ The command has two modes, auto-detected from `$ARGUMENTS`:
 
 **Distinction from siblings:**
 - `/ds:work-on` Step 3.5 — mechanical convention pass on the freshly written code, before the commit.
-- `/ds:review` — opinionated six-dimension substantive audit. Fixed output shape.
+- `/ds:review` — opinionated seven-dimension substantive audit. Fixed output shape.
 - `/ds:analyze-pr` (this command) — answers *the user's* questions about a PR. Open-ended shape driven by the questions.
 
 ## Your Task
@@ -259,4 +259,4 @@ Mark `completed`. Done.
 - **Parallel sub-agents:** in MODE=file, all section Task calls go in a single tool-use turn so they run concurrently. Do not chain them.
 - **Sub-agents are read-only:** none of the analysis sub-agents has `Edit`/`Write`. The main agent does all file writes in B.5.
 - **Hybrid output (file mode).** Below the `---`, the narrative answers stay the primary output; alongside them a `## Action items — /ds:analyze-pr — DATE` section emits shared-format item blocks for the *actionable* subset (`confident`/`smell`/`question`), so `/ds:polish <file>` can triage and apply them. The narrative is preserved in full — the items are an addition, not a replacement. Ids continue from the file's max `F<n>` so review + analyze-pr blocks coexist.
-- **Still not `/ds:review`.** This command answers the questions the user brought; it does not run the six-dimension audit or draft PR comments. The item blocks it emits are just its actionable conclusions rendered in the shared format.
+- **Still not `/ds:review`.** This command answers the questions the user brought; it does not run the seven-dimension audit or draft PR comments. The item blocks it emits are just its actionable conclusions rendered in the shared format.
