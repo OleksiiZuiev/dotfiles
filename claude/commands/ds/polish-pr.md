@@ -504,8 +504,9 @@ Mark `📄 Update PR description` as `in_progress`.
 - **Present findings** — show stale vs current, then `AskUserQuestion`:
   - **"Update description"** — revise to match current state
   - **"Skip"** — keep as-is
-- **If approved, revise in-place** — keep the existing structure (Summary, Verification, Closes
-  link), update Summary and Verification, preserve the `Closes <ticket>` link, then:
+- **If approved, revise to the `pr-descriptions` skill's shape** — the skill owns the sections, the
+  title form and the budget, so a revision converges on them rather than preserving whatever is
+  there. Carry over the stacked-PR notice as the body's first line and the Linear ticket link, then:
   ```bash
   gh pr edit {PR_NUMBER} --body "$(cat <<'EOF'
   <updated PR body>

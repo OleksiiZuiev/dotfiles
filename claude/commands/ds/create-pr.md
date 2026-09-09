@@ -49,36 +49,23 @@ You are creating a pull request for an implemented ticket.
      re-run to link the stack." Target `--base <parent>` anyway (basing on main would drag the
      parent's commits into your diff), but skip the linking and the stacked-PR notice
 
-6. **Create PR Description**
-   - Title: `[TICKET-ID] <brief summary from ticket>`
-   - Body structure:
-     - **Stacked-PR notice** (stacked PRs only — first line of the body):
-       `> ⚡ Stacked on #PARENT_PR_NUM (\`<parent>\`) — will retarget to main when that branch merges.`
-     - **Goal**: the motivation/why from the Linear ticket description (keep concise — 1-3 sentences)
-     - **Summary**: what was accomplished (from commits + ticket context accomplishments)
-     - **Key Decisions** (optional): from ticket context key decisions, only if any exist — omit this section entirely if there are none
-     - Linear ticket link at the bottom: `[TICKET-ID](<linear-url>)`
-   - Keep it focused and scannable
+6. **Write the Title and Description**
+   - The `pr-descriptions` skill owns both. Follow it for the title form, the section shape, the cut
+     test that decides each sentence, and the budget.
+   - The Linear ticket and the ticket context document are **input, not content**. They tell you what
+     now works and what the change deliberately leaves out; they are not sections to transcribe.
+   - For a stacked PR, the notice is the body's first line, where the skill's shape expects it:
+     `> ⚡ Stacked on #PARENT_PR_NUM (\`<parent>\`) — will retarget to main when that branch merges.`
 
 7. **Push and Create PR**
    - Push branch to remote with `-u` flag if needed: `git push -u origin <branch>`
    - Create PR using `gh` CLI with HEREDOC format:
      ```bash
-     gh pr create --title "[TICKET-ID] <title>" --draft --body "$(cat <<'EOF'
-     ## Goal
-     <motivation from Linear ticket description>
-
-     ## Summary
-     <what was accomplished>
-
-     ## Key Decisions
-     - <decision>: <rationale>
-
-     [TICKET-ID](<linear-url>)
+     gh pr create --title "<type>: <summary> #<ticket-id>" --draft --body "$(cat <<'EOF'
+     <body per the pr-descriptions skill>
      EOF
      )"
      ```
-   - Omit the `## Key Decisions` section entirely if no decisions were captured
    - For a **stacked PR**, add `--base "$BASE_BRANCH"` to the `gh pr create` call, then register the
      stack with GitHub's native stacked-PR system:
      ```bash
@@ -104,7 +91,8 @@ You are creating a pull request for an implemented ticket.
 
 ### Important Notes
 
-- The PR description should be concise and user-facing
+- The description is written for the reviewer, not as a changelog — the `pr-descriptions` skill
+  states the target and the budget
 - Ensure all commits are pushed before creating the PR
 - If `gh` CLI is not authenticated, guide the user to run `gh auth login`
 {{#if (contains $ARGUMENTS "--ready")}}

@@ -1,0 +1,143 @@
+---
+name: pr-descriptions
+description: How to write a pull request description — the reviewer already has the diff, so the body carries only what the diff cannot tell them: what now works, where to start reading, the constraints that fail silently, and what is deliberately left out. Covers the cut test that decides each sentence, the signatures of a body that has become a changelog, the section shape and its budget, the title form, and what to do with a repo PR template. Use whenever writing or revising a PR title or body — including any `gh pr create --body` or `gh pr edit --body` call, and the description steps of `/ds:create-pr` and `/ds:polish-pr`.
+---
+
+# Writing pull request descriptions
+
+## The reviewer already has the diff
+
+It is one tab away, it is authoritative, and it is complete. A body that enumerates the change makes
+the reviewer read the same thing twice, and goes stale the moment another commit lands.
+
+Four things the diff cannot tell them. The body carries these and little else:
+
+- **What now works, or stopped breaking** — in the terms of whoever is affected, not the mechanism
+  that delivers it.
+- **Where to start reading**, and in what order.
+- **A constraint a consumer would otherwise discover by having the flow fail silently.**
+- **What is deliberately not here** — the follow-up, the other repo's half, the thing that looks
+  missing.
+
+## The cut test
+
+For each sentence you are about to write, ask: **is this in the diff?**
+
+- **No** → keep. Behaviour, motivation, reading order, an exclusion, a consumer constraint.
+- **Yes, and a reviewer opening that file draws the same conclusion** → cut.
+- **Yes, but a reviewer opening that file alone draws the _wrong_ conclusion** → keep, as one
+  sentence in the reading order, stating the correction only — never the argument for it.
+
+Apply it sentence by sentence, not section by section. A body does not become a changelog a section
+at a time; it accretes one sentence per thing the writer noticed while writing.
+
+## Signatures of a body that has become a changelog
+
+Any of these means the diff is being retold. Cut or collapse.
+
+- **A section per touched area** — `## Documentation`, `## Tests`, `## Refactoring`, `## Changes`.
+  The diff already groups by path, and better.
+- **A bullet per changed file.** A reading order names the three to six files that carry the change.
+  Coverage is the diff's job.
+- **A paragraph on a mechanical change** — an extraction, a rename, a moved section, a bumped
+  version. One clause inside another bullet, or one sentence collapsing all of them.
+- **The argument for a decision, recounted.** State what holds now. The reviewer who wants the
+  argument has the ticket, the commit messages, and you.
+- **Prose that restates a file's diff** — "renamed A to B, added C, removed D".
+- **Symmetry-filling** — writing about a mode, case or file only because its sibling got a mention.
+  A case with nothing to admit, configure or change is a case with nothing to say.
+- **A rejected alternative nobody proposed.** Defending the shape against options the reviewer was
+  not considering spends their attention to no end.
+- **A `## Test plan` that lists what CI runs.** The run is on the PR, green or red.
+
+## The shape
+
+In this order. Only `## Summary` is unconditional.
+
+1. **Stacked-PR notice**, when the branch targets another feature branch — the body's first line,
+   before the summary:
+   `> ⚡ Stacked on #<parent-pr> (\`<parent-branch>\`) — will retarget to main when that branch merges.`
+2. **`## Summary`** — one to three sentences on what now works, and the reason for the shape where a
+   reviewer would guess wrong. Then, when a caller must change, one bolded line on its own:
+   `**Breaking:** <what they must now pass, and why the old value was wrong>`.
+3. **`## Where to start`** — the reading order, once the change spans more than about three files.
+   One bullet per file: the path, then the one fact you would get wrong by reading that file alone.
+   Three to six bullets, one to two sentences each.
+4. **A contract section, named for the contract** — `## Host contract`, `## Consumer contract`. Only
+   for constraints a consumer cannot infer and would meet as a silent failure. Skip it otherwise;
+   most PRs have none.
+5. **`## Not in this PR`** — the follow-up, the other repo's half, the deliberate omission. This is
+   the one heading for the concept; `## Scope`, `## Follow-ups` and `## Before merge, not done here`
+   are the same section under other names, and inviting "scope" invites restating what *is* in
+   scope, which is the summary's job.
+6. **`## Test plan`** — only a check CI does not perform: a manual verification, a device, a
+   deployed environment. Omit the section when CI covers it.
+7. **`## Linear ticket`** — the bare URL on its own line.
+8. **The attribution footer**, per the session's attribution rule.
+
+A section with one obligatory sentence in it is not a section. Fold it into the summary.
+
+## The budget
+
+Pull request #386 in `datasnipper-enterprise/integrations-importer-app` — a change spanning source,
+environment files and docs — is five sections and about 380 words. **That is the top of the range,
+not the middle.** A one-file fix is a summary and a ticket link.
+
+The body grows with the diff far more slowly than the diff does: a change twice the size needs one
+or two more bullets in the reading order, not twice the prose. It fits one screen.
+
+## The title
+
+`<type>: <imperative lowercase summary> #<ticket-id>`, where `<type>` is `feat`, `fix` or `chore`
+and the ticket ID is lowercase.
+
+The summary names the behaviour, not the mechanism:
+
+- `fix: stop the mounted tree touching the host's URL #int-732` — not "add an `ownsDocumentUrl`
+  trait".
+- `feat: let the host scope the picker to one entity type #int-788` — not "add an `entityType` prop".
+- `feat: read the region from both claim names #int-784`.
+
+## A repo PR template
+
+A template's confirm-checkboxes — "Work item is referenced", "Changes are tested" — are not content
+a reviewer acts on. Drop them and use the shape above. Keep a template section only when it asks for
+something the shape does not already cover.
+
+## Worked example
+
+Pull request #386 was written long and then compacted. Both cuts below came out of one rule.
+
+**A four-sentence paragraph became one bullet**, and the third case vanished with it:
+
+> `VITE_TRUSTED_OPENER_ORIGINS` admits UpLink's origins on the importer deployment each one opens,
+> rather than one origin per lifecycle file: `.env.staging` takes `app-dev` and `app-staging`,
+> because UpLink's dev lifecycle has no importer of its own and opens the staging popup;
+> `.env.production` takes `app` only; `.env.development` takes neither […]
+
+became
+
+> - `.env.*` — `VITE_TRUSTED_OPENER_ORIGINS` now lists the UpLink origins that open *that*
+>   deployment's popup: staging admits `app-dev`, `app-staging` and `localhost:5173` (UpLink's dev
+>   lifecycle has no importer of its own); production admits `app` alone, with no localhost entry.
+
+The per-file enumeration is in the diff. What is not: that the list is keyed to the deployment the
+opener drives, and that production carries no localhost entry on purpose. `.env.development` admits
+nothing, so it is symmetry-filling.
+
+**A whole `## Documentation` section — four paragraphs on a retitling, a moved subsection and a
+corrected rationale — became one sentence:**
+
+> The remaining doc changes correct the stated reason for the popup — it is the callback URL above,
+> not an identity provider refusing to render embedded — and move the host-mode internals out of the
+> download section.
+
+The two host constraints from that section survived in full, in a `## Host contract` section, because
+a host meets them as a successful OAuth round trip that produces no connection. Everything else in
+it was prose about prose.
+
+## Related
+
+`linear-tickets` owns the ticket text — what to build, and where its rationale goes. This skill owns
+the PR text. A body that reads like a ticket has usually imported the ticket's rationale; link the
+ticket instead.
