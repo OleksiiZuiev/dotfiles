@@ -25,7 +25,9 @@ You are creating a pull request for an implemented ticket.
    - Check for ticket context file at `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET-ID}.md`
    - If the context file exists, read it to gather:
      - **Accomplishments** from session history — these become the PR summary
-     - **Key decisions** — include in PR description if any exist
+     - **Key decisions** — candidates for the `pr-descriptions` skill's `## Decisions` gate, not
+       lines to transcribe: a decision earns a bullet only when a reviewer reading the diff would
+       call the shape a mistake
    - Combine Linear ticket context + ticket context document for the most informative PR description
 
 3. **Verify Git State**
