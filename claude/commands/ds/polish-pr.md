@@ -6,8 +6,8 @@ argument-hint: [+temp-worktree] [<pr-number>]
 
 You are addressing human review comments on a pull request: fetch the comments, assess each on
 merit (thinking-buddy posture), implement the approved fixes, reply to the threads, push, and
-optionally update the PR description — with the replies deferred to the end so they always cite
-the SHA that actually landed.
+update the PR description when the diff has outrun it — with the replies deferred to the end so
+they always cite the SHA that actually landed.
 
 By default the fixes are made **in the current checkout**. The `+temp-worktree` flag switches on
 an isolation lifecycle: the implementation (file edits + commits) happens in a **private
@@ -501,12 +501,28 @@ Mark `📄 Update PR description` as `in_progress`.
   - New files not mentioned? Files removed / significantly changed? Tests added/removed (stale
     counts)? Docs (README, CLAUDE.md) added/updated? Approach changed from the summary? New
     dependencies/helpers introduced?
-- **Present findings** — show stale vs current, then `AskUserQuestion`:
-  - **"Update description"** — revise to match current state
-  - **"Skip"** — keep as-is
-- **If approved, revise to the `pr-descriptions` skill's shape** — the skill owns the sections, the
+- **The verdict is the staleness check — there is no prompt on either branch.**
+  - **No signal hit** → skip the revision, say the body still matches the diff, and record
+    "skipped (not stale)" in the summary.
+  - **Any signal hit** → revise, unprompted. The bar is the reviewer: the body is stale when
+    someone reading it alongside the diff would be misled about what the PR now contains — the
+    same reviewer bar the `pr-descriptions` skill's `## Decisions` gate uses.
+- **Draft the revision to the `pr-descriptions` skill's shape** — the skill owns the sections, the
   title form and the budget, so a revision converges on them rather than preserving whatever is
-  there. Carry over the stacked-PR notice as the body's first line and the Linear ticket link, then:
+  there. Carry over the stacked-PR notice as the body's first line and the Linear ticket link.
+- **Print both bodies, then edit** — nobody is confirming this revision, so this print is the only
+  copy of what was overwritten (GitHub exposes no readable history of PR-body edits):
+  ```
+  Stale because:
+    - <signal that hit>
+    - <signal that hit>
+
+  ── previous description ──
+  <current body, verbatim>
+
+  ── new description ──
+  <revised body>
+  ```
   ```bash
   gh pr edit {PR_NUMBER} --body "$(cat <<'EOF'
   <updated PR body>
@@ -532,7 +548,7 @@ Deferred to next round: <list with effort> — run /ds:polish-pr again
 Worktree: {WT} → removed / kept (fold-back blocked)   [omit this line in default mode]
 Fold-back: clean / conflict resolved / blocked        [omit this line in default mode]
 Pushed: yes ({F}) / no (deferred) / no (fold-back blocked)
-PR description: updated / skipped / n-a (not pushed)
+PR description: updated (<signals that hit>) / skipped (not stale) / n-a (not pushed)
 ```
 
 Remind the user to **manually resolve** the conversations after reviewing the changes
@@ -568,8 +584,10 @@ Remind the user to **manually resolve** the conversations after reviewing the ch
 - **Skipped vs Dismissed**: "Skip" = "deal with later"; "Dismiss" = "considered and chose not
   to change". Use the matching reply template.
 - **Manual Resolution**: conversations are NOT auto-resolved — humans resolve them after review.
-- **PR Description Updates**: always run the check (unless nothing was pushed); present what's
-  stale and let the user decide.
+- **PR Description Updates**: the staleness check always runs (unless nothing was pushed) and its
+  verdict is final — a stale body is revised **unprompted**, an up-to-date one is left alone, and
+  neither branch asks. The previous body is printed before the edit because, with nobody
+  confirming, that print is the only copy of what was overwritten.
 - **Deferred replies**: replies are posted only in Step 11, against `FINAL_SHA` — never a
   pre-push SHA — because a push-time rebase (and, in temp-worktree mode, the cherry-pick)
   rewrites SHAs.
