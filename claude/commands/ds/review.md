@@ -1,7 +1,7 @@
 ---
 description: Seven-dimension review of the current PR — code quality plus reliability, operability, configuration and efficacy, with every finding tiered by user impact.
 allowed-tools: Bash(git *), Bash(gh *), Bash(ls *), Bash(find *), Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion, mcp__claude_ai_Linear__get_issue
-argument-hint: [+comment] [<pr-number>] [--to <file>] [--bar low|medium|high]
+argument-hint: [+comment] [+ask] [<pr-number>] [--to <file>] [--bar low|medium|high]
 ---
 
 You are performing a substantive review of a pull request. The goal is to absorb the mechanical reviewer effort on bigger PRs by surfacing the issues a thoughtful human reviewer would actually raise across seven dimensions: **simplicity & readability, performance, consistency/conventions/duplication, test coverage, reliability & operability, configuration & capacity, and efficacy & claims**.
@@ -13,7 +13,9 @@ The command never touches the working tree — no edits, no commits, no pushes. 
 - **`MODE=own`** (PR author == you): print the categorized report and write an audit entry to ticket context.
 - **`MODE=draft-comments`** (PR author ≠ you): print the categorized report and additionally render copy-paste-ready `Draft comment:` blocks for **confident findings only**. Smells appear in the report for your private read but are not drafted as PR comments. No ticket-context writes.
 
-**`+comment`** (either mode) posts the findings to the PR as one inline review instead of leaving you to copy-paste. The confident/smell split is the confidence signal: confident findings post behind a single batch confirmation, and each smell is triaged one-by-one with `AskUserQuestion` — the same in-the-loop posture `/ds:polish-pr` uses. So with the flag on, a smell *can* reach the PR; without it, the no-post default above still holds.
+**`+comment`** (either mode) posts the findings to the PR as one inline review instead of leaving you to copy-paste. Every shown finding posts, confident and smell alike, and **nothing is confirmed first** — the payload is previewed so the transcript records what went out, then submitted. `--bar` is the only filter on what reaches the PR. So with the flag on, a smell *can* reach the PR; without it, the no-post default above still holds.
+
+**`+ask`** puts the human back in the loop, and does nothing on its own: with `+comment` it restores the two gates — each smell triaged one-by-one with `AskUserQuestion` (Step 6), then one confirmation on the whole payload (Step 7c), the same in-the-loop posture `/ds:polish-pr` uses. The confident/smell split still decides the *voice* of every draft — assertion for a confident finding, question for a smell — on both paths; under `+ask` it additionally decides which findings need a per-item decision.
 
 **`--bar low|medium|high`** (default `medium`) sets the **reporting bar** — how high a finding has to clear to be shown. Full semantics in Step 3.2; the short version is that a higher bar means fewer findings, and it only ever filters the `maintenance` tier.
 
@@ -26,14 +28,19 @@ The command never touches the working tree — no edits, no commits, no pushes. 
 
 ### Step 0: Detect PR & Gather Inputs
 
-0. **Parse arguments.** `$ARGUMENTS` may contain an optional `+comment` flag, an optional PR number, an optional `--to <file>` flag and an optional `--bar <level>` flag, in any order:
-   - `POST_COMMENTS` = `on` if the text contains `+comment`, else `off`. **Strip the `+comment` token before parsing anything else** — otherwise it is mistaken for the PR number. (The `+` prefix, as in `/ds:polish-pr`'s `+temp-worktree`, stops the Claude CLI consuming it as a CLI flag.)
+0. **Parse arguments.** `$ARGUMENTS` may contain an optional `+comment` flag, an optional `+ask` flag, an optional PR number, an optional `--to <file>` flag and an optional `--bar <level>` flag, in any order:
+   - `POST_COMMENTS` = `on` if the text contains `+comment`, else `off`.
+   - `ASK` = `on` if the text contains `+ask`, else `off`.
+   - **Strip the `+comment` and `+ask` tokens before parsing anything else** — otherwise either is mistaken for the PR number. (The `+` prefix, as in `/ds:polish-pr`'s `+temp-worktree`, stops the Claude CLI consuming them as CLI flags.)
    - `OUT_FILE` = the token following `--to` (the findings file to write findings into), else empty. When set, Step 3.6 appends the findings to it as shared-format item blocks.
    - `BAR` = the token following `--bar`, else `medium`. Accepts `low`, `medium`, `high`. Anything else is not fatal — print `> Unknown bar '<value>' — using medium.` and continue with `medium`.
    - `PR_ARG` = the first bare token that is **not** `--to` or `--bar`, and not the value of either, else empty. **Both flag values must be excluded**, or `/ds:review --bar high` reads `high` as the PR number.
 
+   `ASK=on` with `POST_COMMENTS=off` is not fatal — print `> +ask has no effect without +comment — nothing is posted, so there is nothing to confirm.` and continue.
+
    When `POST_COMMENTS=on`, print the flag line so the posting behaviour is visible before any analysis runs:
-   > `+comment: on — confident findings post after one confirmation; smells are triaged one-by-one. Nothing reaches GitHub unconfirmed.`
+   - `ASK=off`: `> +comment: on — every shown finding posts to the PR as one review, unprompted. The payload is previewed first; --bar is the only filter. Add +ask to triage each smell and confirm before posting.`
+   - `ASK=on`: `> +comment +ask: on — confident findings post after one confirmation; smells are triaged one-by-one. Nothing reaches GitHub unconfirmed.`
 
    When `BAR` is not `low`, print the bar line too, so the filter is visible before any analysis runs rather than discovered in the report:
    > `--bar medium — low-severity maintenance findings are held back, smells and confident alike. user-facing and efficacy findings always show.`
@@ -95,7 +102,7 @@ Before doing anything else, create the checklist. The seed list mirrors what wil
 3. `📄 Write findings to <OUT_FILE>` — *only when `OUT_FILE` is set*
 4. `🗒️ Draft PR comments` — *only when `MODE=draft-comments` or `POST_COMMENTS=on`*
 5. `🎯 Anchor findings to diff lines` — *`POST_COMMENTS=on` only*
-6. `🙋 Triage smells (in-the-loop)` — *`POST_COMMENTS=on` only*
+6. `🙋 Triage smells (in-the-loop)` — *`POST_COMMENTS=on` **and** `ASK=on` only*
 7. `🚀 Preview & post review to PR` — *`POST_COMMENTS=on` only*
 8. `📝 Update ticket context` — *`MODE=own` only*
 9. `✅ Final summary`
@@ -412,7 +419,7 @@ You draft these yourself, from the findings you already hold — each carries `W
 
 **Which findings get a draft:**
 - `POST_COMMENTS=off` (draft-comments mode alone): **shown confident findings only**. Smells stay reviewer-only.
-- `POST_COMMENTS=on`: **every shown finding**, confident and smell. A smell's draft is written in question form and is not posted until approved one-by-one in Step 6.
+- `POST_COMMENTS=on`: **every shown finding**, confident and smell. A smell's draft is written in question form either way; under `ASK=on` it is not posted until approved one-by-one in Step 6, and under `ASK=off` it enters the Step 7 payload as drafted.
 
 A finding the bar held back is never drafted — it was never printed, so it is not yours to hand the author.
 
@@ -507,13 +514,15 @@ GitHub accepts an inline review comment only on a line inside a diff hunk, and t
 
 Mark `🎯 Anchor findings to diff lines` as `completed`.
 
-### Step 6: Triage Smells In-the-Loop (`POST_COMMENTS=on` only)
+### Step 6: Triage Smells In-the-Loop (`POST_COMMENTS=on` **and** `ASK=on` only)
+
+**When `ASK=off`, skip this step entirely**: every shown smell enters the Step 7 payload as drafted, in question voice. Print `> Smells: <N> posted as drafted (no +ask — not triaged).` and continue to Step 7. Mark the item not applicable.
 
 Mark `🙋 Triage smells (in-the-loop)` as `in_progress`.
 
 A confident finding has a concrete fix and a trivial counter-argument, so it needs no per-item decision — it goes straight to the Step 7 preview. A smell is the opposite: a live trade-off, or a problem with no obvious fix. Those get your judgement one at a time, on the same pattern as `/ds:polish-pr` Step 5.
 
-Only the **shown** findings reach the PR at all. A smell held back by the bar is never triaged, and a held-back confident finding never enters the Step 7 payload — posting a comment the user did not read would be worse than the noise the bar exists to remove.
+Only the **shown** findings reach the PR at all — on both paths. A smell held back by the bar is never triaged or posted, and a held-back confident finding never enters the Step 7 payload — posting a comment the user did not read would be worse than the noise the bar exists to remove. This is the whole of the filter under `ASK=off`, which is why the bar is named in the `+comment` banner.
 
 If there are no smells, print `> No smells to triage.` and continue.
 
@@ -539,7 +548,7 @@ Wait for each decision before showing the next smell. Confident findings never e
 
 Mark `🙋 Triage smells (in-the-loop)` as `completed`.
 
-### Step 7: Preview, Confirm, Post (`POST_COMMENTS=on` only)
+### Step 7: Preview & Post (`POST_COMMENTS=on` only; confirmation under `+ask`)
 
 Mark `🚀 Preview & post review to PR` as `in_progress`.
 
@@ -549,13 +558,15 @@ Mark `🚀 Preview & post review to PR` as `in_progress`.
 3. `### Findings outside the diff` — every `BODY` finding as `` `file:line` `` followed by its Problem/Suggestion (and Alternatives) block, each closing with its own `_(auto-review by Claude)_` line. Omit this heading entirely when there are none.
 4. `🤖 Generated with [Claude Code](https://claude.ai/claude-code)` — **once, here only.** This link line never appears on an individual comment; the per-comment marker is the `_(auto-review by Claude)_` footer drafted in Step 4.
 
-**b. Preview.** Print the payload exactly as it will appear on GitHub: the review body, then each inline comment under a `path:line (side)` header. Order by impact tier — `user-facing`, then `efficacy`, then `maintenance` — and within a tier by `path` then ascending `line`, so the author reads what blocks a merge first. Close with the counts:
+**b. Preview.** Runs on both paths — under `ASK=off` nobody confirms the payload, so printing it is the only record of what reached GitHub, and you need that record to go delete something. Print the payload exactly as it will appear on GitHub: the review body, then each inline comment under a `path:line (side)` header. Order by impact tier — `user-facing`, then `efficacy`, then `maintenance` — and within a tier by `path` then ascending `line`, so the author reads what blocks a merge first. Close with the counts:
 
 ```
-<C> confident inline, <S> approved smells inline, <B> in review body.
+<C> confident inline, <S> smells inline, <B> in review body.
 ```
 
-**c. Gate.** One `AskUserQuestion`:
+**c. Confirm (`ASK=on` only).** When `ASK=off`, print `> Posting — no confirmation gate (+ask not set).` and go straight to sub-step d.
+
+Under `ASK=on`, one `AskUserQuestion`:
 - **Post review** — post everything previewed
 - **Post inline only** — drop the `Findings outside the diff` section, keep the inline comments
 - **Cancel** — post nothing
@@ -609,7 +620,7 @@ Otherwise, launch a `general-purpose` sub-agent (`model: "haiku"`) to append a n
 - **Session title:** `Review via /ds:review` (or `Review passed (no findings)` when nothing was captured at all)
 - **Branch name** (from `git branch --show-current`)
 - **Repository name** (from `git remote get-url origin` or `gh repo view --json name`)
-- **Accomplished:** one line — `<T> findings surfaced — <C> confident, <S> smells across <L> lanes; <U> user-facing, <E> efficacy.` When nothing was captured: `Review passed — no substantive findings across <L> lanes.` Name any skipped lane and why. When `+comment` posted, append `; <P> posted to the PR (<C2> confident, <S2> approved smells)` — the next session needs to know which findings are already public.
+- **Accomplished:** one line — `<T> findings surfaced — <C> confident, <S> smells across <L> lanes; <U> user-facing, <E> efficacy.` When nothing was captured: `Review passed — no substantive findings across <L> lanes.` Name any skipped lane and why. When `+comment` posted, append `; <P> posted to the PR (<C2> confident, <S2> smells)` — the next session needs to know which findings are already public. Append ` — unprompted` when `ASK=off`, so a later session can tell a review a human approved item-by-item from one that posted itself.
 - **Bar:** when `HELD` > 0, append `; reviewed at bar <BAR>, held back <HELD_S> smells and <HELD_C> confident findings` to the `Accomplished:` line. This is the **only** place a held-back finding is recorded, so a later session reading the audit trail is not misled into treating the review as exhaustive. Name the two counts separately: `HELD_C` > 0 means concrete fixes exist that nobody has read, which is a different debt from an unread trade-off.
 - **Key decisions:** the findings worth carrying into the next session — take every `user-facing` and `efficacy` finding first (those change what merges), then fill up to 3–5 bullets with the most significant `maintenance` smells. Each bullet `<file:line> — <one-line summary>`. Omit the section entirely if nothing qualifies. Held-back findings are not eligible; the count on the `Accomplished:` line is all that records them.
 - **Files changed:** omit. This command does not modify the working tree.
@@ -636,21 +647,21 @@ Posted to PR: <P> comments (<I> inline, <B> in review body) — <review-url>    
 Ticket context updated: yes / no — <reason if no>     [MODE=own only]
 ```
 
-Include the `Lanes skipped:` line only when a lane was skipped, and the `Bar:` line only when `HELD` > 0. When `POST_COMMENTS=on` but nothing was posted, say why in place of the counts: `none (cancelled)`, `none (nothing eligible)`, or `none (local HEAD differs from PR head — push and re-run)`. In `MODE=draft-comments` close with `No changes were made to the branch, PR, or ticket context.` — or, when comments were posted, `No changes were made to the branch or ticket context.`, because the first claim is then false.
+Include the `Lanes skipped:` line only when a lane was skipped, and the `Bar:` line only when `HELD` > 0. When `POST_COMMENTS=on` but nothing was posted, say why in place of the counts: `none (nothing eligible)`, `none (local HEAD differs from PR head — push and re-run)`, or — reachable only under `ASK=on`, the one path with a gate to cancel at — `none (cancelled)`. In `MODE=draft-comments` close with `No changes were made to the branch, PR, or ticket context.` — or, when comments were posted, `No changes were made to the branch or ticket context.`, because the first claim is then false.
 
 Suggest next steps:
 - Address the user-facing and efficacy findings before asking for human review — those are the two tiers a reviewer blocks on. *(draft-comments: copy the drafts above into the PR review, user-facing tier first; or, with `+comment`, check the review URL renders as intended.)*
 - Re-run at `--bar low` to read the <HELD> held-back findings — <HELD_C> of them are concrete fixes. *(Only when `HELD` > 0; drop the trailing clause when `HELD_C` is 0.)*
 - Engage with individual findings in chat (reference by `#N`) to discuss, dismiss, or act on them.
 - Re-run `/ds:review` after addressing the major findings if more rounds are needed. With `+comment`, the dedup guard means a re-run adds only what is new.
-- Re-run with `+comment` to post the findings you want on the record for your reviewers. *(Skip when `POST_COMMENTS=on` already ran.)*
+- Re-run with `+comment` to post the findings you want on the record for your reviewers — add `+ask` to read each smell and confirm the payload before any of it lands. *(Skip when `POST_COMMENTS=on` already ran.)*
 - Proceed to human review (mark PR ready with `gh pr ready` if it's a draft). *(`MODE=own` only.)*
 
 Mark `✅ Final summary` as `completed`.
 
 ## Important Notes
 
-- **Never touches the working tree**: this command does not edit files, commit, or push, in any mode, with or without `+comment`. The single outward write it can make is posting comments to the PR, and only under `+comment`, and only past the Step 7 gate.
+- **Never touches the working tree**: this command does not edit files, commit, or push, in any mode, with or without `+comment`. The single outward write it can make is posting comments to the PR, and only under `+comment` — unprompted by default, or behind the Step 6 triage and the Step 7c confirmation when `+ask` is set. What still holds on both paths: only shown findings post, a stale local head refuses to post at all, and the dedup guard drops what is already on the PR.
 - **Sub-agents are read-only and drafting is not their job**: analysis sub-agents have no `Edit`/`Write`. They also do not write PR comments — Step 4 drafts from the findings they return, because a draft written in a sub-agent has to be ingested and reprinted anyway, and most drafts are never posted.
 - **The ladder must stay nested**: shown-at-`high` ⊆ shown-at-`medium` ⊆ shown-at-`low`. The tier exemption is what guarantees it, and it is why the exemption applies at *every* rung rather than only at `high` — exempting `user-facing` at `high` alone would let a raised bar *reveal* a `user-facing` · `low` finding that `medium` had hidden, and every "re-run with `--bar low` to see them" line in this command assumes the opposite. Do not narrow the exemption to the top rung.
 - **`--bar` runs the opposite way to `/code-review`'s `level`**: in the built-in `/code-review` skill, a *higher* level means *broader* coverage and *more* findings. Here a *higher* bar means *fewer*. That is why this flag is called a bar and not a level: the word would import the wrong direction from the neighbouring command. Do not "fix" the direction to match.
