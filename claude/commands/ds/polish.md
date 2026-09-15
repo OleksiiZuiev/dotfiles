@@ -102,9 +102,10 @@ b. **Read current code state** at `Location` (if present) so the assessment refl
 
 c. **Thinking-buddy assessment:**
    - **Evaluate merit** — does the finding identify a real improvement, or is it a style preference / already-handled / not worth it? A `smell` may have no clean fix; a `question` may need no code change at all.
+   - **Price the fix** — name what it adds (a concept, a cache, a memo, an indirection, a new invariant someone has to keep) set against what it removes. A fix that strictly removes code or work is free: say so and move on. A fix that adds a concept has to buy something you can size, so if `Detail` offers a multiplier ("once per row", "N times per render") rather than a cost, that is not a size — work out what the operation already costs before you agree. Check too that every branch of the proposed fix can actually execute; a fallback that can never run is complexity bought for nothing.
    - **Flag disagreement** with reasoning if you think the finding is wrong or the current code is already correct.
    - **Propose a concrete fix** (may differ from the finding's `Proposed change` if you have a better one). For a `question` with no implied action, say so and propose marking it `answered`.
-   - **Categorize your stance:** "strong agree" / "agree with modifications" / "minor/style preference" / "disagree — here's why".
+   - **Categorize your stance:** "strong agree" / "agree with modifications" / "minor/style preference" / "not worth it — the problem is real, the fix costs more than it buys" / "disagree — here's why".
 
 d. **Get user decision** via `AskUserQuestion`:
    - **Approve fix** — implement as proposed

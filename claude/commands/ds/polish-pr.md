@@ -226,10 +226,18 @@ b. **Assess Comment & Propose Fix**
    **Part 1 — Thinking Buddy Assessment:**
    - **Evaluate merit**: does the suggestion actually improve the code? Valid concern or style
      preference? Real problem?
+   - **Price the fix**: name what it adds — a concept, a cache, a memo, an indirection, a new
+     invariant someone has to keep — set against what it removes. A fix that strictly removes code
+     or work is free: say so and move on. A fix that adds a concept has to buy something you can
+     size, so if the comment offers a multiplier ("once per row", "N times per render") rather than
+     a cost, that is not a size — work out what the operation already costs before you agree.
+     Check too that every branch of the proposed fix can actually execute; a fallback that can
+     never run is complexity bought for nothing.
    - **Flag disagreements**: if the suggested approach has downsides or the existing code was
      correct, say so with reasoning.
    - **Suggest alternatives**: if there's a better way to address the underlying concern, propose it.
-   - **Categorize**: "strong agree", "agree with modifications", "minor/style preference", or
+   - **Categorize**: "strong agree", "agree with modifications", "minor/style preference",
+     "not worth it — the problem is real, the fix costs more than it buys", or
      "disagree — here's why".
 
    **Part 2 — Proposed Fix:**
