@@ -531,47 +531,31 @@ remote `{F}` in the meantime. Integrate the remote before pushing:
    areas). CI on the PR is the backstop for the integrated tip; optionally re-run the
    targeted tests if the rebase touched the same area you changed.
 5. Check if a PR already exists: `gh pr view --json url,number,baseRefName` (exit code 0 = exists).
-6. **If no PR exists**: launch a Task sub-agent (`model: "sonnet"`) to create a draft PR.
+6. **If no PR exists**: launch a sub-agent (`model: "sonnet"`) to create a draft PR by invoking
+   `/ds:create-pr`. That command owns every part of PR creation — the ticket lookup, the stacked-base
+   detection, the description, the push, the `gh` calls and the stack registration — so nothing about
+   it is restated here.
 
 **Sub-agent prompt:**
-> Create a draft PR for the current branch, automatically detecting whether it is stacked on another feature branch.
+> Create a draft PR for the current branch by invoking the `/ds:create-pr` command with no arguments.
+> It extracts the ticket from the branch name, detects whether the branch is stacked on another
+> feature branch, writes the title and description, pushes, opens the draft PR and registers the
+> stack.
 >
-> 1. Get the ticket ID from the branch name: strip everything before the first `/`, take the first two hyphen-separated segments, uppercase them (e.g., `feature/eng-123-foo` → `ENG-123`)
-> 2. Fetch the Linear ticket using `mcp__claude_ai_Linear__get_issue` with the ticket ID and `includeRelations: true`
-> 3. Read the ticket context file at `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET_ID}.md` if it exists
-> 4. Run `git log --oneline origin/main..HEAD` and `git diff origin/main...HEAD --stat` to understand all changes
-> 4b. Detect the base branch by running `stack-parent` (a `bash.d` helper; `stack-parent --help` states the rule).
->    It prints `<parent-branch> <pr-number>` when the branch is stacked, `<parent-branch> -` when that
->    parent has no open PR, and nothing (exit 1) when the branch is based on main.
->    - **Nothing** → `BASE_BRANCH=main`; go to step 5.
->    - **`<parent> <num>`** → `BASE_BRANCH=<parent>`, `PARENT_PR_NUM=<num>`; go to steps 5b–5d.
->    - **`<parent> -`** → warn: "Parent branch `<parent>` has no open PR — create one first, then re-run to link the stack." Then do step 5 with `--base <parent>` added (no stacked-PR notice, there is no parent PR to reference) and skip 5b–5d.
-> 5. **Base is main** — create a standard draft PR:
->    `gh pr create --draft` with title (short summary from ticket title and changes) and body with sections: Summary, Linear ticket link, Test plan. Use HEREDOC for the body.
-> 5b. **Stacked PR flow** — ensure the `gh-stack` extension is installed:
->    `gh extension list | grep -q gh-stack || gh extension install github/gh-stack`
-> 5c. Create the PR targeting the parent branch:
->    `gh pr create --draft --base "$BASE_BRANCH"` with title and body. Open the body with the stacked-PR notice:
->    `> ⚡ Stacked on #PARENT_PR_NUM (\`$BASE_BRANCH\`) — will retarget to main when that branch merges.`
->    Followed by the standard sections: Summary, Linear ticket link, Test plan. Use HEREDOC for the body.
->    Create the PR here rather than leaving it to `gh stack link` in 5d: left to itself the extension opens the PR with its own generated title and not as a draft.
-> 5d. Register the stack with the GitHub native stacked-PR system:
->    ```bash
->    GH_REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)" gh stack link "$BASE_BRANCH" "$(git branch --show-current)"
->    ```
->    `GH_REPO` is required, not decorative: the extension parses `origin` itself and rejects an SSH host alias (`git@github-work:owner/repo.git`) that `gh` core resolves fine, dying with "none of the git remotes … point to a known GitHub host".
->    Linking also pushes every branch in the stack to `origin`. That is harmless here because Step 8.3 already pushed this branch and the parent has an open PR, so both are on the remote already.
->    **A link failure is not fatal** — the PR exists and already targets the right base. Report the error and carry on.
->    Capture and report the output (it confirms stack registration).
-> 6. Return the PR URL and number (and the `gh stack link` result if this was a stacked PR)
+> Return the PR URL and number, and the `gh stack link` result when the branch was stacked.
 
 **Sub-agent allowed tools:** `Bash, mcp__claude_ai_Linear__get_issue, Read, Glob`
-(`Bash` unrestricted: `stack-parent` and the `GH_REPO=… gh …` prefix in 5d match no narrower
-`Bash(...)` pattern.)
+(`Bash` unrestricted: `stack-parent` and the `GH_REPO=… gh …` prefix that `/ds:create-pr` runs match
+no narrower `Bash(...)` pattern.)
 
-7. **If PR already exists**: note the PR URL and number from the `gh pr view` output. If its
-   `baseRefName` is not `main` and `stack-parent` names a parent, run step 5d's `gh stack link` as
-   well, so a re-run on a stacked branch converges instead of leaving the stack unregistered.
+7. **If PR already exists**: note the PR URL and number from the `gh pr view` output. `/ds:create-pr`
+   is not the entry point here — it opens a PR, and this branch has one — so register the stack
+   directly when `baseRefName` is not `main` and `stack-parent` names a parent, which makes a re-run
+   on a stacked branch converge instead of leaving the stack unregistered:
+   ```bash
+   GH_REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)" gh stack link "$(stack-parent | cut -d' ' -f1)" "$(git branch --show-current)"
+   ```
+   `/ds:create-pr` Step 7 states why `GH_REPO` is required and why a link failure is not fatal.
 
 Store the results (PR URL and number, plus `PUSHED_SHA` and `COMMIT_URL`) for the final summary.
 

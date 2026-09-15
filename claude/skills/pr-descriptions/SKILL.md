@@ -84,7 +84,19 @@ In this order. Only `## Summary` is unconditional.
    scope, which is the summary's job.
 7. **`## Test plan`** — only a check CI does not perform: a manual verification, a device, a
    deployed environment. Omit the section when CI covers it.
-8. **`## Linear ticket`** — the bare URL on its own line.
+8. **`## Linear`** — the ticket, and this PR's Linear review view, one labelled line each:
+
+   ```
+   ## Linear
+
+   - Ticket: <ticket URL>
+   - Review this PR: https://linear.app/review/<owner>/<repo>/pull/<number>
+   ```
+
+   The review URL is built from the PR's own path — no API key, no workspace slug — and serves a
+   reviewer without the GitHub → Linear browser extension, which puts the same link on the page for
+   everyone who has it. Use the `https://` form only: GitHub's markdown sanitizer strips the
+   `linear://` desktop-app scheme, so it renders as dead text.
 9. **The attribution footer**, per the session's attribution rule.
 
 A section with one obligatory sentence in it is not a section. Fold it into the summary.
