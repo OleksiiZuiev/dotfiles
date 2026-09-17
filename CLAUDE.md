@@ -18,6 +18,11 @@ Re-run the install script only to set up a new home, or after adding a new top-l
 Because those directories *are* the repo when read through the link, nothing may write runtime state
 into them — it would land in git.
 
+`git/shared.gitconfig` is the one target that is not a link: `install.sh` adds an `include.path`
+entry for it to each home's `~/.gitconfig`. Settings the Windows and WSL homes must agree on go in
+that file; per-machine ones stay in each home's own `~/.gitconfig`. Editing the shared file needs no
+install run.
+
 Content that isn't ours lives outside the linked directories: machine-specific and other-repo bash
 functions in `~/.bash.d.local/` (sourced by `~/.bashrc` alongside `~/.bash.d`), and skills installed
 by the `skills` CLI inside `claude/skills/`, excluded per clone via `.git/info/exclude`. `install.sh`

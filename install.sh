@@ -172,6 +172,33 @@ rescue_foreign_entries() {
     done
 }
 
+# Point a home's ~/.gitconfig at the settings the homes must share, leaving the
+# per-machine ones already in that file alone. An include is used rather than a
+# link because the two homes differ legitimately (editor path, pager) and a link
+# would force them to be identical.
+ensure_git_include() {
+    local shared="$DOTFILES_DIR/git/shared.gitconfig"
+    local target="$TARGET_HOME/.gitconfig"
+
+    [ -e "$shared" ] || return 0
+
+    # Git for Windows resolves a drive-letter path; an MSYS-style one it may not.
+    # cygpath exists only there, which makes it the platform test.
+    local include_path="$shared"
+    if command -v cygpath >/dev/null 2>&1; then
+        include_path="$(cygpath -m "$shared")"
+    fi
+
+    if git config --file "$target" --get-all include.path 2>/dev/null \
+        | grep -qxF "$include_path"; then
+        echo "  Skip (already included): $target"
+        return 0
+    fi
+
+    git config --file "$target" --add include.path "$include_path"
+    echo "  Git include added: $target -> $include_path"
+}
+
 # Install Claude files
 echo "Installing Claude configuration..."
 mkdir -p "$TARGET_HOME/.claude"
@@ -220,6 +247,11 @@ if [ -d "$VSCODE_APPDATA/Code" ]; then
 else
     echo "  Skipped: VS Code not found at $VSCODE_APPDATA/Code"
 fi
+
+# Install git configuration
+echo ""
+echo "Installing git configuration..."
+ensure_git_include
 
 # Install bash.d files
 echo ""

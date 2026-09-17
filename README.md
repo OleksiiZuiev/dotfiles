@@ -123,6 +123,8 @@ dotfiles/
 │   ├── cd-repo.sh
 │   ├── git-helpers.sh
 │   └── lclaude.sh
+├── git/
+│   └── shared.gitconfig
 └── local/
     └── bash.d.example/
         └── local.sh.example
@@ -145,6 +147,19 @@ follow the repo with no install run.
 | `claude/CLAUDE.md` | `~/.claude/CLAUDE.md` | file |
 | `claude/statusline.sh` | `~/.claude/statusline.sh` | file |
 | `vscode/settings.json` | `%APPDATA%/Code/User/settings.json` | file |
+
+## Shared Git Config
+
+`git/shared.gitconfig` is not linked. `install.sh` adds an `include.path` entry for it to each
+home's `~/.gitconfig`, so the settings the homes must agree on live in one tracked file while each
+home keeps its per-machine ones — editor path, pager, credential helper — in its own file.
+
+It carries `core.autocrlf = input`. The homes disagreeing here is what makes the same checkout show
+every CRLF file as modified from whichever side does not convert, and lets a commit from that side
+rewrite whole files to CRLF.
+
+Adding a setting to that file needs no install run, since the include already points at it. Adding
+the include to a **new** home does.
 
 ## Windows Notes
 

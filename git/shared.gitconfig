@@ -1,0 +1,11 @@
+# Git settings the Windows and WSL homes must agree on. Each home's ~/.gitconfig
+# includes this file (install.sh adds the include) and keeps only what is
+# genuinely per-machine: editor path, pager, credential helper.
+
+[core]
+	# Both homes have to set this identically. With one side converting and the
+	# other not, the same checkout shows every CRLF file as modified from the side
+	# that does not convert, and a commit from there rewrites whole files. `input`
+	# converts nothing on checkout and normalises CRLF to LF on commit, so the two
+	# sides agree on an existing tree and no CRLF reaches a repo from either.
+	autocrlf = input
