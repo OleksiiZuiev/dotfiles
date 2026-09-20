@@ -1,5 +1,5 @@
 ---
-description: Generate a reviewer-onboarding document for a PR — the problem, a high-level story, a component walkthrough in reading order, decisions with confidence, and obvious smells. Writes the document to a file.
+description: Generate a reviewer-onboarding document for a PR — the problem, a high-level story, a mermaid component map, a component walkthrough in reading order, decisions with confidence, and obvious smells. Writes the document to a file.
 allowed-tools: Bash(git *), Bash(gh *), Bash(test *), Bash(mkdir *), Read, Write, Grep, Glob, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, mcp__claude_ai_Linear__get_issue
 argument-hint: [<output-file-or-dir>]
 ---
@@ -14,7 +14,7 @@ This is **not** a review. It explains; it does not audit. Obvious smells get a q
 - `/ds:review` — opinionated seven-dimension substantive audit (fixed output shape).
 - `/ds:analyze-pr` — answers *the user's* specific questions about a PR.
 - `/ds:polish-pr` — addresses human reviewer comments already posted on the PR.
-- `/ds:explain-pr` (this command) — onboards a reviewer to a PR: coherent story + reading-order walkthrough + decisions/confidence + obvious smells.
+- `/ds:explain-pr` (this command) — onboards a reviewer to a PR: coherent story + component map + reading-order walkthrough + decisions/confidence + obvious smells.
 
 ## Your Task
 
@@ -124,7 +124,7 @@ Prompt = the **shared brief** below, then the **document spec**, then the **rule
 
 > Produce ONE markdown document with these sections, in order:
 >
-> ```
+> ````
 > # PR Onboarding — PR #<N>: <title>
 >
 > > Branch `<branch>` → `<base>` · Ticket: <ID or none> · Generated <YYYY-MM-DD>
@@ -138,6 +138,31 @@ Prompt = the **shared brief** below, then the **document spec**, then the **rule
 >
 > ## How This Area Works Today
 > <OPTIONAL — include only when the change lands in non-trivial pre-existing structure a reviewer who doesn't know the codebase would need oriented to. Briefly describe the baseline: what the touched modules/area already do and the conventions the change follows, so the walkthrough's delta makes sense against it. Omit this section entirely for small or self-evident PRs.>
+>
+> ## Component Map
+> <OPTIONAL — include when a picture beats prose: the change has several parts that interact, or its shape is a flow between them. Omit when the change is small or linear. Placed here deliberately — after the baseline, before the walkthrough — so the reader meets the whole change at once and then reads it part by part.>
+>
+> <One short paragraph first: what the picture covers, and what the arrow styles mean — e.g. "A solid arrow is *renders* or *calls*; a dashed arrow is *gates* or *reads*.">
+>
+> ```mermaid
+> flowchart TD
+>     <nodes, each tagged with its change kind; grouped in subgraphs by role>
+>     <edges, each labelled with the relationship>
+>     classDef added fill:#dcfce7,stroke:#16a34a,color:#14532d
+>     classDef moved fill:#e0e7ff,stroke:#4f46e5,color:#1e1b4b
+>     classDef updated fill:#fef9c3,stroke:#ca8a04,color:#713f12
+>     class <ids> added
+>     class <ids> moved
+>     class <ids> updated
+> ```
+>
+> Green is new, blue is moved, amber is edited in place.
+>
+> | Component | Change | Responsible for |
+> |---|---|---|
+> | `path/or/name` | new / moved / updated / repointed | <one or two sentences: what it is for, plus the one non-obvious detail that matters> |
+>
+> Not in the diagram: <anything the PR touches that was deliberately left out — docs, specs, test-only files — and why>. <Omit this line when everything touched is in the picture.>
 >
 > ## Component Walkthrough
 > <Ordered for comprehension, not compilation. Across components: introduce a prerequisite concept (a new type, or a primitive several others depend on) before its consumers. Within a single component: go top-down — lead with the entry point / orchestrator and its end-to-end flow, then its private helpers explained by the role they serve. Number in reading order.>
@@ -163,7 +188,7 @@ Prompt = the **shared brief** below, then the **document spec**, then the **rule
 >
 > ## Suggested Review Path
 > <Short: the order to read the changed files and where to spend attention, by risk/complexity. Follow the same purpose-before-mechanism order as the walkthrough rather than re-deriving a bottom-up one.>
-> ```
+> ````
 
 #### Rules of engagement (append to the prompt)
 
@@ -171,6 +196,19 @@ Prompt = the **shared brief** below, then the **document spec**, then the **rule
 > - **Order for comprehension, not compilation.** A compiler needs dependencies first; a reviewer needs purpose first. Distinguish two kinds of dependency: a **prerequisite concept** (a new type, or a primitive used by *several* consumers) is worth understanding on its own, so introduce it before its consumers; an **implementation helper** (a private function serving *one* caller) is meaningless in isolation, so introduce it top-down — *after* its caller's purpose and flow are on the table, never before. Applying dependency-first ordering to one orchestrator's private helpers strands the reader in mechanism with no purpose; don't.
 > - **Lead any multi-helper component with a "flow at a glance"** — one or two sentences tracing the orchestrator's end-to-end pipeline (step → step → step) — then describe the parts.
 > - **Cross-reference every helper to its caller** (e.g. "used by `manage_x` to …") so that even an imperfect order never leaves the reader without an anchor.
+> - **Draw the change when a picture beats prose.** A reviewer facing paragraphs finishes them knowing each part and still missing the shape of the whole, which is the thing they need before reviewing. So ask, before writing the walkthrough, whether a diagram would build that big picture faster. Include the Component Map when the change has parts that interact — a flow, a fan-in, a shared engine with several callers; skip it when the change is one file, or a straight line with nothing to trace. A diagram that restates a list is worse than none: it costs a context switch and returns nothing.
+> - **One flowchart, at most one supporting diagram.** `flowchart TD` — or `LR` where the flow is naturally horizontal — is the component map. Add a second diagram only when it shows what a flowchart structurally cannot: a `sequenceDiagram` when the *order* of an exchange across boundaries is the point (a request/response round trip, an async handoff), or a `stateDiagram-v2` for a genuine state machine the change introduces or alters. Never a third. A wall of diagrams just replaces one comprehension problem with another.
+> - **Tag every node with its change kind and colour it.** Each label carries the component's name, a few words of role, and its change kind — `(new)`, `(moved)`, `(updated)`, `(repointed)` — split across lines with `<br/>`. Colour with the three `classDef` lines from the spec and close the diagram with the one-line legend. Include an unchanged node only where the change is unreadable without it, and leave it unclassed so it stays visually quiet.
+> - **Group by role, not by folder.** A `subgraph` names a role the reader already thinks in — the entry points, the confirm handlers, the re-send arms — with a short gloss in the title. Never title one after a directory.
+> - **Mermaid that actually renders.** The document is read in Obsidian and on GitHub; a diagram that fails to parse is worse than no diagram at all. Before returning, re-read every diagram against these:
+>   - Quote every node label: `ID["text"]`. An unquoted label breaks on `(`, `)`, `:`, `,`, `/`, `{`, `}`.
+>   - Never put a double quote inside a label — reword it. Use `<br/>` for a line break, never a real newline.
+>   - Node IDs are short bare identifiers: no dots, slashes or spaces. `end` is reserved — never use it as an ID.
+>   - Quote edge labels too: `A -->|"renders"| B`.
+>   - `subgraph ID["Title"]`, closed by its own `end`.
+>   - Every `classDef` sets `fill`, `stroke` and `color` together, so the diagram reads in both light and dark themes.
+>   - Around 15 nodes is the ceiling. Past that, cut to what the reviewer must trace.
+> - **The table is the diagram's caption, not a second walkthrough.** One row per node, one or two sentences each — what it is for, plus the single non-obvious detail. The full account belongs to the walkthrough below; don't write it twice.
 > - When the reviewer likely lacks the tech-stack context, briefly expand an essential concept in plain language — just enough to follow the change.
 > - **Confidence must be honest.** Reserve the ⚠️ "confirm with the author" flag for decisions that are BOTH high-impact AND genuinely uncertain (the "nuclear" ones). Don't flag everything.
 > - **Obvious smells only.** Do not enumerate style nits and do not run a multi-dimension categorized audit (that's `/ds:review`). A handful of cheap, clearly-suspicious catches at most.
@@ -197,8 +235,14 @@ Mark `📋 Print summary` as `in_progress`. Print as a regular text message (use
 
 Then inline the **The Problem** and **High-Level Overview** sections from the document so the gist is visible without opening the file.
 
+When the document contains a **Component Map**, add a line saying so — the terminal cannot render mermaid, so the diagram is itself a reason to open the file:
+
+```
+> Includes a component map (<N> nodes) — open the file to see it rendered.
+```
+
 Suggest next steps:
-- Open `<OUTPUT>` for the full component walkthrough.
+- Open `<OUTPUT>` for the component map and the full walkthrough.
 - Run `/ds:review` for a substantive audit, or `/ds:analyze-pr <question>` for targeted questions.
 
 Mark `completed`. Done.
@@ -207,6 +251,7 @@ Mark `completed`. Done.
 
 - **Reviewer onboarding, not a review.** Obvious smells only; the thorough audit is `/ds:review`. Do not categorize findings or draft PR comments.
 - **Single opus agent → coherent narrative.** One generator sees the whole diff, so the story and the ordering stay unified. The sub-agent is read-only; the main agent performs the only file write.
+- **A picture where a picture helps.** The Component Map draws the whole change as one mermaid flowchart — every touched component tagged new/moved/updated/repointed and coloured, grouped by role, captioned by a table — so the reader gets the shape before the prose. It is conditional: included when the parts interact, skipped when prose is enough. At most one supporting diagram (sequence or state) joins it, and only when ordering or state transitions are the point. The render-safety rules are in the prompt because a diagram that fails to parse is worse than none.
 - **Walkthrough is ordered for comprehension, not build order** — purpose before mechanism: a prerequisite concept before its consumers, but an orchestrator before its private helpers (a single-caller helper is meaningless until its caller's intent is on the table).
 - **Worktree-friendly.** Uses `gh pr diff`, so you can run it from any branch. To explain a teammate's PR, `gh pr checkout <N>` first — the PR is auto-detected from the current branch.
 - **Output path is flexible.** One optional argument: a directory (file generated inside it), a file path (written there), or omitted (default name in CWD).
