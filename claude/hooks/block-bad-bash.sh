@@ -6,7 +6,6 @@
 #  - blocks `cd`, which CLAUDE.md also forbids. A cd compound leaves the working directory
 #    unresolvable to the permission checker, so a search it would otherwise auto-approve turns
 #    into a manual prompt -- and unlike CLAUDE.md, this reaches subagents.
-# The remaining style rule (no chaining) is enforced by CLAUDE.md, not here.
 
 INPUT=$(cat)
 
@@ -51,9 +50,9 @@ fi
 # A dangerous command lives on the FIRST line of the command; commit-message prose lives in
 # heredoc bodies on later lines (or inside a -m "..." string). So scan only the first line,
 # with quoted string literals stripped, so a message that merely mentions e.g. "--force" or
-# "kubectl delete" can't false-trigger a block. (Limitation: a dangerous command buried on a
-# later line of a multi-line command isn't caught — but command chaining is avoided by
-# convention anyway, so dangerous commands are first-line.)
+# "kubectl delete" can't false-trigger a block. A `;`- or `&&`-chained command sits on that same
+# first line, so every segment of a chain is still scanned. (Limitation: a dangerous command buried
+# on a later line of a multi-line command isn't caught.)
 CMD_NOSTR=$(printf '%s' "$CMD" | sed -n '1p' | sed "s/\"[^\"]*\"//g; s/'[^']*'//g")
 
 if [[ "$CMD_NOSTR" =~ ^[[:space:]]*(GIT_DIR|GIT_WORK_TREE)= ]]; then
@@ -61,7 +60,7 @@ if [[ "$CMD_NOSTR" =~ ^[[:space:]]*(GIT_DIR|GIT_WORK_TREE)= ]]; then
   exit 2
 fi
 if echo "$CMD_NOSTR" | grep -qE '(^|[;&|][[:space:]]*)cd[[:space:]]'; then
-  echo "BLOCKED: No 'cd'. Use 'git -C <path>' or absolute paths, one command per Bash call. A cd compound also hides the search root from the permission checker, which turns an auto-approved read into a manual prompt." >&2
+  echo "BLOCKED: No 'cd'. Use 'git -C <path>' or absolute paths. A cd compound also hides the search root from the permission checker, which turns an auto-approved read into a manual prompt." >&2
   exit 2
 fi
 if echo "$CMD_NOSTR" | grep -qE 'git[[:space:]]+push[[:space:]].*--(force|force-with-lease)'; then

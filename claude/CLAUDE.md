@@ -1,11 +1,10 @@
 #Commandments communicating with a human
 - be always honest. Tell me the something I need to know even if I don't want to hear it.
 - be proactive and flag issues before they become problems.
-- Instead of proactively doing more then was asked, ask for adding extra into the scope that you think is important.
+- Instead of proactively doing more than was asked, ask for adding extra into the scope that you think is important. When the two pull against each other, flagging wins: raise it, don't act on it.
 
 #Commandments for writing style
-- One word per concept, everywhere. Once a value has a name, use that word for it in identifiers, comments, docstrings, test names and the README — never introduce a synonym for a value that already has a name, or a reader has to work out whether the two words mean the same thing.
-- Don't use the phrase "load-bearing" in anything you write — chat replies, code comments, PR and commit descriptions, docs. This is a stylistic preference, not a correctness rule: just pick plainer wording that says what you actually mean (e.g. "essential", "critical", "relied on by X", or describe the dependency directly).
+- One word per concept in text that gets maintained — identifiers, comments, docstrings, test names, the README. Once a value has a name, use that word for it, and never introduce a synonym for a value that already has a name, or a reader has to work out whether the two words mean the same thing. Chat replies are exempt: you read those once.
 - Never make the reader resolve shorthand — name the thing, then put the shorthand in parentheses. Shorthand is a number ("Skill 5.6", "step 3", "rule 2"), a section marker (`§4.2`, `#5.6`, `[3]`), a bare code (a ticket key, flag, env var, or filename dropped in with no gloss), or a positional pointer ("the second one", "as above"). Shorthand stands alone only when it is already visible where the reader is — you printed it earlier in this same reply, or it appears in the same document. Anything you picked up from a file I have not seen is opaque to me: I have to stop and ask what it means, and often it is nowhere in your output. So write "the bash commandment about not using `cd` (4th bullet)", not "bash rule 4"; "the stacked-PR parent-detection ticket (INT-739)", not "INT-739". This applies to everything you write — chat replies, code comments, PR and commit descriptions, docs. Numbers as data are fine: counts, versions, dates, measurements, `file.ts:42`.
 
 #Commandments for approaching coding
@@ -18,11 +17,9 @@
 - Comments must describe what the code does now, not what changed to get here. Especially during refactoring: never write "refactored from X", "now uses Y instead of Z", "previously did W", "moved from A". Once the refactor is in the past, these comments become noise that misleads readers. Write comments that would still make sense to someone reading the code a year from now with no knowledge of its history. The same applies to speculative or future-tense rationale ("in case a future flow needs this", "kept for when X") and references to abandoned approaches — and to test names: name a test for the behaviour it asserts, never for an intermediate approach that was dropped.
 - When you move or change a line, re-read the comment attached to it and cut the part that is no longer true there. A comment that was accurate about the old code is worse than no comment once half of it describes something the line no longer does.
 - Don't describe another module's internals, or a contract owned elsewhere (another service, another repo's payload), in a comment — it drifts stale. Point to the one authoritative definition instead.
-- Triage mutation-testing survivors on merit: for each, judge whether the mutant maps to a realistic, harmful regression, not merely whether a test can kill it. Add a test only for the plausible-harm ones, verify it fails against the injected mutant (then revert), and document the survivors you deliberately leave (equivalent, redundant, or un-killable) — don't chase a test per survivor.
 
 #Commandments for bash commands
 - NEVER use `cd` in Bash commands — not to the current directory, not to any other directory
-- NEVER chain commands with `&&` or `;` — each command must be its own separate Bash call
 - NEVER prefix commands with `GIT_DIR=` or `GIT_WORK_TREE=` environment variables
 - For git commands in a different repo, use `git -C <path>`:
   - Bad: `cd "C:\work\github\myrepo" && git status`
@@ -46,7 +43,7 @@ Repos are stored at `C:\work\github\{org}\{repo-name}`.
 2. **Partial or ambiguous name**: read `${CLAUDE_REPO_MAP:-/c/work/claude-data/repo-map.md}` for the full repo list, match by name or summary, then READ from the path in its `Path` column
 3. **Multiple matches**: show candidates and ask user to confirm
 4. **Not found locally**: only then fall back to web search or tell the user the repo isn't available locally
-5. **Before reading code**: if the resolved repo is not the current working directory, run `git pull` in that repo to ensure you're reading the latest code
+5. **Pull only when currency matters**: if the answer depends on current state — a teammate's branch, whether a fix landed, a comparison against `main` — run `git pull` in the resolved repo and say in your reply that you pulled. Otherwise read what is on disk.
 
 Example: user says "look at `unified-to/unified-csharp-sdk`" → read files from `C:\work\github\unified-to\unified-csharp-sdk\`.
 
