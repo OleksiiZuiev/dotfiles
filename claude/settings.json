@@ -65,6 +65,5 @@
         "http://localhost:9222"
       ]
     }
-  },
-  "model": "opus[1m]"
+  }
 }
