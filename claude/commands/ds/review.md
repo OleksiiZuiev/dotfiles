@@ -17,7 +17,7 @@ The command never touches the working tree — no edits, no commits, no pushes. 
 
 **`+ask`** puts the human back in the loop, and does nothing on its own: with `+comment` it restores the two gates — each smell triaged one-by-one with `AskUserQuestion` (Step 6), then one confirmation on the whole payload (Step 7c), the same in-the-loop posture `/ds:polish-pr` uses. The confident/smell split still decides the *voice* of every draft — assertion for a confident finding, question for a smell — on both paths; under `+ask` it additionally decides which findings need a per-item decision.
 
-**`--bar low|medium|high`** (default `medium`) sets the **reporting bar** — how high a finding has to clear to be shown. Full semantics in Step 3.2; the short version is that a higher bar means fewer findings, and it only ever filters the `maintenance` tier.
+**`--bar low|medium|high`** (default `medium`) sets the **reporting bar** — how high a finding has to clear to be shown. Full semantics in Step 3.2; the short version is that a higher bar means fewer findings, that a `user-facing` finding is never filtered, and that an `efficacy` finding is filtered only when its severity is `low`.
 
 **Distinction from siblings:**
 - `/ds:work-on` Step 3.5 — the mechanical convention check on the freshly written code, before the commit. Auto-applies; owns the mechanical lane, but only on runs that passed `+checks`. Without it the lane falls to this command's Consistency reviewer.
@@ -43,9 +43,9 @@ The command never touches the working tree — no edits, no commits, no pushes. 
    - `ASK=on`: `> +comment +ask: on — confident findings post after one confirmation; smells are triaged one-by-one. Nothing reaches GitHub unconfirmed.`
 
    When `BAR` is not `low`, print the bar line too, so the filter is visible before any analysis runs rather than discovered in the report:
-   > `--bar medium — low-severity maintenance findings are held back, smells and confident alike. user-facing and efficacy findings always show.`
+   > `--bar medium — low-severity findings are held back, smells and confident alike. user-facing findings always show; efficacy findings show from medium up.`
 
-   (At `--bar high`: `--bar high — low- and medium-severity maintenance findings are held back, smells and confident alike. user-facing and efficacy findings always show.`)
+   (At `--bar high`: `--bar high — low- and medium-severity findings are held back, smells and confident alike. user-facing findings always show; efficacy findings show from medium up.`)
 
 1. **Resolve the PR number.**
    - If `PR_ARG` is set, use PR **#`PR_ARG`**.
@@ -234,7 +234,12 @@ Launch the reviewers below **in a single message with one parallel `Task` tool c
 > - **efficacy** = the change may not achieve the purpose it states, or something it claims — in a docstring, a comment, the PR body, the ticket — is not true of the code as written.
 > - **maintenance** = everything else: hygiene, readability, duplication, future cost. The default when neither of the above applies. Most findings are this, and that is fine — do not inflate a finding's tier to get it read.
 >
-> **Severity on an effect-shaped finding.** Where a finding's case rests on an effect — slower, more memory, more calls, more allocations — its `Severity` follows the ratio you sized above, not the multiplier that led you to it. An effect you could not size is `low`. That is the only severity rule stated here; everywhere else, judge as a reviewer would.
+> **Severity criteria — set `Severity` per finding.** This is what `--bar` filters on, so it decides whether a reader sees your finding at all. It is independent of `Category` and of `Impact`.
+> - **high** = you would not merge without it. A correctness bug, data loss, a contract a caller depends on broken, a user-visible regression, a security hole.
+> - **medium** = a major flaw or a discrepancy — something a reviewer would call *wrong*, not something they would call *nicer*. A structural mistake the codebase will pay for, a claim the code does not support, an acceptance criterion left unmet.
+> - **low** = everything else, and that explicitly includes every nit: naming, formatting, an awkwardly phrased comment, hygiene, a refactor you would enjoy, duplication small enough to live with.
+> - **Between two rungs, take the lower one.** `low` is the default for a finding you are unsure about, not `medium` — the default bar filters `low`, so grading up is exactly how a nit reaches the author.
+> - **On an effect-shaped finding** — one whose case rests on an effect, such as slower, more memory, more calls, more allocations — `Severity` follows the ratio you sized above, not the multiplier that led you to it. An effect you could not size is `low`.
 >
 > **Rules of engagement:**
 > - Return ONLY findings a thoughtful human reviewer would actually raise. If you have to reach for a finding, skip it. Fewer high-signal findings > many low-signal findings.
@@ -294,7 +299,11 @@ Mark `📋 Findings report` as `in_progress`.
    | `medium` | findings with `low` severity |
    | `high` | findings with `low` or `medium` severity |
 
-   **Then rescue by tier: a finding whose `Impact` is `user-facing` or `efficacy` is never held back**, at any bar and any severity — those are the two tiers a merge decision turns on, so severity does not get to hide one. Only `maintenance` findings can be filtered. That exemption is what makes the ladder nested: everything shown at `high` is shown at `medium`, and everything shown at `medium` is shown at `low`.
+   **Then rescue by tier**, at every bar:
+   - A finding whose `Impact` is `user-facing` is **never held back**, at any severity — that tier is what a merge decision turns on, so severity does not get to hide one.
+   - A finding whose `Impact` is `efficacy` is rescued at `medium` or `high` severity **only**. An `efficacy` · `low` finding is filtered exactly like a `maintenance` · `low` one: a discrepancy graded `low` is a nit about wording, and the lane that found it does not earn it a bypass.
+
+   Everything else is filtered on severity alone. The rescue is what makes the ladder nested: everything shown at `high` is shown at `medium`, and everything shown at `medium` is shown at `low` — the `efficacy` floor keeps that true because an `efficacy` · `medium` finding clears the `medium` rung on its severity alone, rescue or not.
 
    The bar acts at **report time**, not in the sub-agent brief, so every run captures the same findings and a re-run at `--bar low` reveals the held-back tail without re-analysing.
 
@@ -665,7 +674,8 @@ Mark `✅ Final summary` as `completed`.
 
 - **Never touches the working tree**: this command does not edit files, commit, or push, in any mode, with or without `+comment`. The single outward write it can make is posting comments to the PR, and only under `+comment` — unprompted by default, or behind the Step 6 triage and the Step 7c confirmation when `+ask` is set. What still holds on both paths: only shown findings post, a stale local head refuses to post at all, and the dedup guard drops what is already on the PR.
 - **Sub-agents are read-only and drafting is not their job**: analysis sub-agents have no `Edit`/`Write`. They also do not write PR comments — Step 4 drafts from the findings they return, because a draft written in a sub-agent has to be ingested and reprinted anyway, and most drafts are never posted.
-- **The ladder must stay nested**: shown-at-`high` ⊆ shown-at-`medium` ⊆ shown-at-`low`. The tier exemption is what guarantees it, and it is why the exemption applies at *every* rung rather than only at `high` — exempting `user-facing` at `high` alone would let a raised bar *reveal* a `user-facing` · `low` finding that `medium` had hidden, and every "re-run with `--bar low` to see them" line in this command assumes the opposite. Do not narrow the exemption to the top rung.
+- **The ladder must stay nested**: shown-at-`high` ⊆ shown-at-`medium` ⊆ shown-at-`low`. The tier rescue is what guarantees it, and it is why the rescue applies at *every* rung rather than only at `high` — rescuing `user-facing` at `high` alone would let a raised bar *reveal* a `user-facing` · `low` finding that `medium` had hidden, and every "re-run with `--bar low` to see them" line in this command assumes the opposite. Do not restrict the rescue to the top rung.
+- **The `medium` floor on the `efficacy` rescue is deliberate**: it is the one narrowing the rescue carries, and it exists because `efficacy` covers any claim the code does not support — including a stale phrase in a docstring, which is a nit. Without the floor no bar could filter that nit, since a rescue beats every rung. The floor costs the nesting nothing: an `efficacy` · `medium` finding clears the `medium` rung on severity alone, so it shows at `medium` whether or not it is rescued. Do not lift the floor to make the two tiers symmetric — `user-facing` needs no floor because a request that got slower is sized before it can claim the tier at all.
 - **`--bar` runs the opposite way to `/code-review`'s `level`**: in the built-in `/code-review` skill, a *higher* level means *broader* coverage and *more* findings. Here a *higher* bar means *fewer*. That is why this flag is called a bar and not a level: the word would import the wrong direction from the neighbouring command. Do not "fix" the direction to match.
 - **`event` is always `COMMENT`**: `APPROVE` and `REQUEST_CHANGES` are rejected by GitHub on your own PR, and this command is not a merge gate on anyone else's. It posts observations, never a verdict.
 - **Two attribution levels, one occurrence each**: the `🤖 Generated with Claude Code` link line goes in the review body only — repeating it on twelve inline comments is noise. Every posted comment instead closes with a plain `_(auto-review by Claude)_` line, because an inline comment is read on its own, away from the body that would otherwise disclose it. Neither line ever appears twice in the same body, and the footer is posted-comments-only: a copy-paste draft you hand-post carries neither.
