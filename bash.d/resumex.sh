@@ -29,12 +29,16 @@ EOF
         return 1
     fi
 
+    # Windows node reads /c/... as C:\c\..., so hand it the native path
+    local node_index_file
+    node_index_file=$(cygpath -w "$INDEX_FILE" 2>/dev/null || echo "$INDEX_FILE")
+
     # Build display lines: "name | branch | project | age"
     # Also build parallel arrays for projectPath and sessionId
     local display_lines
     display_lines=$(node -e "
         const fs = require('fs');
-        const entries = JSON.parse(fs.readFileSync('$INDEX_FILE', 'utf8'));
+        const entries = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
         const now = Date.now();
         const ago = (ms) => {
             const m = Math.floor(ms / 60000);
@@ -52,7 +56,7 @@ EOF
                 const age = ago(now - new Date(e.namedAt).getTime());
                 console.log(e.name + ' | ' + (e.gitBranch || '-') + ' | ' + proj + ' | ' + age);
             });
-    " 2>/dev/null)
+    " "$node_index_file" 2>/dev/null)
 
     if [[ -z "$display_lines" ]]; then
         echo "No named sessions found or index is empty."
@@ -96,14 +100,14 @@ EOF
     local session_info
     session_info=$(node -e "
         const fs = require('fs');
-        const entries = JSON.parse(fs.readFileSync('$INDEX_FILE', 'utf8'));
-        const name = '$selected_name';
+        const [indexFile, name] = process.argv.slice(1);
+        const entries = JSON.parse(fs.readFileSync(indexFile, 'utf8'));
         const entry = entries.find(e => e.name === name);
         if (entry) {
             console.log(entry.projectPath);
             console.log(entry.sessionId);
         }
-    " 2>/dev/null)
+    " "$node_index_file" "$selected_name" 2>/dev/null)
 
     if [[ -z "$session_info" ]]; then
         echo "Error: could not find session '$selected_name' in index."
