@@ -33,10 +33,18 @@ chmod +x "$fake_claude"
 claude_bin() { printf '%s\n' "$fake_claude"; }
 
 # Stands in for the terminal: records the tab's arguments, then runs the tab's
-# own command line (its last argument) here instead of opening a tab.
+# command (everything after the starting directory, the bash executable first)
+# here instead of opening a tab. Double quotes are dropped from the command on
+# the way, as the real wt.exe drops them: a tab launched with
+# `bash -c "... \"What did you write\""` handed claude only `What`.
 wt.exe() {
     printf '%s\n' "$@" > "$wt_args"
-    bash -c "${!#}"
+    local args=("$@") i
+    for ((i = 0; i < ${#args[@]}; i++)); do
+        [[ "${args[i]}" == "--startingDirectory" ]] && break
+    done
+    local command=("${args[@]:i+3}")
+    bash "${command[@]//\"/}"
 }
 
 export LAUNCHED_FILE="$launched"
@@ -62,10 +70,11 @@ export TRACEPARENT=00-parenttrace-parentspan-01
 export AI_AGENT=claude-code_agent
 export CLAUDE_EFFORT=xhigh
 
-prompt="/ds:work-on +auto-plan"
+prompt='/ds:work-on +auto-plan; say "hi"'
 claude_tab "INT-1" "$test_root" "$prompt"
 
-# 1. The prompt reaches claude as a single argument (split, +auto-plan is lost)
+# 1. The prompt reaches claude as a single argument, unchanged (split,
+# +auto-plan is lost; a `;` or `"` must not reach any command line)
 mapfile -t args < <(grep '^ARG:' "$launched" | sed 's/^ARG://')
 if [[ ${#args[@]} -eq 1 && "${args[0]}" == "$prompt" ]]; then
     pass "prompt passed as one argument"
@@ -88,7 +97,17 @@ else
     fail "inherited by the launched session: ${leaked[*]}"
 fi
 
-# 3. Title and starting directory reach the terminal
+# 3. The launcher script the tab ran removes itself
+launcher_path="$(tail -n 1 "$wt_args")"
+if [[ "$launcher_path" != *claude-tab.* ]]; then
+    fail "tab command does not end in a launcher script: $launcher_path"
+elif [[ -e "$launcher_path" ]]; then
+    fail "launcher script left behind: $launcher_path"
+else
+    pass "launcher script removed after launch"
+fi
+
+# 4. Title and starting directory reach the terminal
 if grep -Fxq "INT-1" "$wt_args"; then
     pass "tab title forwarded"
 else

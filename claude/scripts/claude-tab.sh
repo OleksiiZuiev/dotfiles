@@ -39,24 +39,29 @@ claude_tab() {
         }
     fi
 
-    # `env -u`, not `unset ...;` — Windows Terminal reads a `;` in the tab's
-    # command line as its own subcommand separator
-    local strip=()
-    local var
-    for var in "${CLAUDE_TAB_INHERITED_ENV[@]}"; do
-        strip+=(-u "$var")
-    done
+    # The tab runs a launcher script rather than a `bash -c` command line:
+    # wt.exe drops the double quotes inside the command it is given, splitting a
+    # quoted prompt into words, and reads a `;` as its own subcommand separator.
+    # A file carries the prompt with no command-line parsing in between.
+    local launcher
+    launcher=$(mktemp "${TMPDIR:-/tmp}/claude-tab.XXXXXX") || return 1
+    {
+        printf 'rm -f -- "$0"\n'
+        printf 'exec env'
+        printf ' -u %q' "${CLAUDE_TAB_INHERITED_ENV[@]}"
+        printf ' %q %q\n' "$(claude_bin)" "$prompt"
+    } > "$launcher"
 
-    # Every path below is already in Windows form, and without this a prompt that
-    # looks like a lone POSIX path ("/status") is rewritten to C:/…/Git/status on
-    # the way into a native .exe
+    # Every path below is already in Windows form, and without this a title that
+    # looks like a lone POSIX path is rewritten to C:/…/Git/… on the way into a
+    # native .exe
     MSYS2_ARG_CONV_EXCL='*' \
     wt.exe -w 0 new-tab \
         --profile "Git Bash" \
         --title "$title" \
         --suppressApplicationTitle \
         --startingDirectory "$(cygpath -w "$dir")" \
-        "$(cygpath -w /usr/bin/bash)" -c "env ${strip[*]} \"$(claude_bin)\" \"$prompt\""
+        "$(cygpath -w /usr/bin/bash)" "$(cygpath -m "$launcher")"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
