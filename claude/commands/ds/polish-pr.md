@@ -101,7 +101,8 @@ entirely in default mode**:
 8. `🚀 Push (fetch → rebase → push)` — Step 10
 9. `💬 Post all replies (fixed / skipped / dismissed)` — Step 11
 10. `📄 Update PR description` — Step 12
-11. `✅ Final summary` — Step 13
+11. `📝 Update ticket context` — Step 12.5
+12. `✅ Final summary` — Step 13
 
 ### Step 0.1: Detect PR and Feature Branch
 
@@ -288,7 +289,7 @@ one of these three states; a "Discuss" round produces no output of its own:
 
 **Zero-fix guard:** if there are **no approved code fixes** (everything was skipped/dismissed),
 skip Steps 6–10 entirely (nothing to implement, fold back or push) and jump straight to
-**Step 11** to post the skip/dismiss replies, then Step 13. Mark whichever of the
+**Step 11** to post the skip/dismiss replies, then Steps 12.5 and 13. Mark whichever of the
 implementation/worktree/fold-back/push items you created as not applicable.
 
 ### Step 6: Establish the Working Location
@@ -405,8 +406,8 @@ For each fix-commit (in order):
      Worktree:    {WT}
      Resolve manually (e.g. cherry-pick the pending commits and fix), or rebase {T} onto {F}.
      ```
-     Skip Steps 9–12; go to Step 13 and report the partial outcome. **No replies are posted**
-     (the commits are not integrated).
+     Skip Steps 9–12; go to Step 12.5, then Step 13, and report the partial outcome. **No
+     replies are posted** (the commits are not integrated).
 
 Mark the item `completed` once all fix-commits are on `F`.
 
@@ -454,7 +455,7 @@ integrate the remote.
    - **Clean** → continue.
    - **Conflict** → resolve inline honoring BOTH sides (same approach as Step 8), then
      `git rebase --continue`. If unresolvable, `git rebase --abort` and STOP with a recovery
-     handle (the `FOLDED_SHA` list, branch `{F}`); skip to Step 13 and report.
+     handle (the `FOLDED_SHA` list, branch `{F}`); skip to Step 12.5, then Step 13, and report.
 3. Push: `git push -u origin "{F}"`.
    - If **rejected (non-fast-forward)** — a session pushed inside the race window — repeat
      fetch → rebase → push (up to ~3 attempts). **Never** use `--force`.
@@ -544,6 +545,42 @@ Mark `📄 Update PR description` as `in_progress`.
 
 Mark the item `completed`.
 
+### Step 12.5: Update Ticket Context
+
+Mark `📝 Update ticket context` as `in_progress`. This step runs on every path that finished the
+Plan Phase — including the zero-fix guard, a blocked fold-back and a blocked push — because the
+decisions were made whether or not anything landed. It is where the human steering from Step 5
+becomes durable: `/ds:distill` harvests `#### Key Decisions` from this file, and the Modify text
+and Discuss outcomes are recorded nowhere else.
+
+1. **Ticket ID** from `F`: strip up to the first `/`, take the first two hyphen-separated segments,
+   uppercase (`feature/int-435-foo` → `INT-435`) — the same extraction `/ds:distill` uses. If `F`
+   does not match that shape, mark the item `completed` with "no ticket ID — skipped" and go on.
+2. **Append** a session under `## Sessions` in
+   `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET_ID}.md`, or create the file from
+   the template in the `ticket-context` skill when it does not exist. Write it yourself — every
+   decision is already in this session's context.
+   - **Title:** `### {YYYY-MM-DD HH:MM} - Polish via /ds:polish-pr — PR #{PR_NUMBER}`, then the
+     template's `Branch` (`F`) and `Repository` lines.
+   - **`#### Accomplished`:** one line — `<A> addressed, <S> skipped, <D> dismissed, <R> deferred`,
+     then the push outcome (`pushed` / `not pushed — deferred` / `not pushed — fold-back blocked`
+     / `not pushed — rebase conflict`).
+   - **`#### Key Decisions`:** one bullet per comment where the human steered, as
+     `- <file:line> — {decision}: {rationale}`:
+     - **Modify** (typed into "Other"): the user's intent, close to their words.
+     - **Skip:** the user's rationale.
+     - **Dismiss:** your assessment, suffixed `(agent-proposed, user-accepted)` — distill must be
+       able to tell your reasoning from the user's.
+     - **Approve** that overrode your "disagree" or "not worth it" assessment: what the user chose
+       over your objection.
+     - **Discuss** that changed the fix: what changed and why.
+
+     Leave out plain approvals of a fix you agreed with — no steering happened there. Omit the
+     section when nothing qualifies.
+   - **`#### Files Changed`:** the files the approved fixes touched; omit on the zero-fix path.
+
+Mark the item `completed`.
+
 ### Step 13: Final Summary
 
 Mark `✅ Final summary` as `in_progress`. Show:
@@ -561,6 +598,7 @@ Worktree: {WT} → removed / kept (fold-back blocked)   [omit this line in defau
 Fold-back: clean / conflict resolved / blocked        [omit this line in default mode]
 Pushed: yes ({F}) / no (deferred) / no (fold-back blocked)
 PR description: updated (<signals that hit>) / skipped (not stale) / n-a (not pushed)
+Ticket context: updated ({TICKET_ID}) / skipped (no ticket ID)
 ```
 
 Remind the user to **manually resolve** the conversations after reviewing the changes

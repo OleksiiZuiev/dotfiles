@@ -1,6 +1,6 @@
 ---
 description: Refine a Linear ticket by challenging assumptions, resolving ambiguities, and capturing answers as acceptance criteria
-allowed-tools: AskUserQuestion, mcp__claude_ai_Linear__get_issue, mcp__claude_ai_Linear__save_issue, mcp__claude_ai_Linear__save_comment
+allowed-tools: AskUserQuestion, Read, Write, Edit, Bash(date *), mcp__claude_ai_Linear__get_issue, mcp__claude_ai_Linear__save_issue, mcp__claude_ai_Linear__save_comment
 argument-hint: <ticket-id> [focus-prompt]
 ---
 
@@ -232,13 +232,36 @@ Use `mcp__claude_ai_Linear__save_comment` to document the refinement:
 - [New A/C 2]
 ```
 
-#### 7. Summary
+#### 7. Record in Ticket Context
+
+The audit comment is for the ticket's readers; this entry is for the agents downstream.
+`/ds:work-on` loads the ticket context on a fresh start, `/ds:create-pr` and `/ds:explain-pr` read
+it, and `/ds:distill` harvests its `#### Key Decisions` — none of them read Linear comments.
+
+Append a session under `## Sessions` in `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET-ID}.md`,
+or create the file from the template in the `ticket-context` skill when it does not exist. Take
+the timestamp from `date '+%Y-%m-%d %H:%M'`.
+
+- **Title:** `### {YYYY-MM-DD HH:MM} - Refinement via /ds:refine`{{#if $2}}, suffixed ` — focus: {{$2}}`{{/if}}.
+  No `Branch`, `Repository` or `Files Changed` lines — refinement happens before any branch exists.
+- **`#### Accomplished`:** one line — `<N> questions asked; acceptance criteria updated; Q&A in the Linear audit comment.`
+- **`#### Key Decisions`:** one `- {decision}: {rationale}` bullet per answer that changed
+  direction — a challenged rationale, a scope boundary, a rejected alternative, a risk accepted.
+  Give the rationale only when the user stated one; never invent it. Do not restate the acceptance
+  criteria — they live in the ticket. Omit the section when no answer changed direction.
+
+Skip this step on the "No, ticket is ready" exit and on a cancelled refinement the user chose to
+discard. A partial refinement saved as a comment still gets an entry — its answers are steering
+too.
+
+#### 8. Summary
 
 Display a concise summary to the user:
 ```
 Ticket refined: {{$1}}
 Questions asked: [N]
 Acceptance criteria updated
+Ticket context: updated / skipped
 
 View ticket: [link to Linear ticket]
 ```

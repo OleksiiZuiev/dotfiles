@@ -49,3 +49,6 @@ Each ticket gets its own file: `{TICKET-ID}.md` containing:
 
 ---
 ```
+
+Omit a line or section the session has nothing to record for — `/ds:refine` runs before any
+branch exists, and `/ds:review` changes no files.
