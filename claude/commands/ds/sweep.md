@@ -69,5 +69,5 @@ Launched N /refine session(s):
 - TICKET-ID — Title
 - TICKET-ID — Title
 
-Switch tabs with Ctrl+Tab. Each session will run /ds:refine and transition the ticket to "Ready" when done.
+Switch tabs with Ctrl+Tab. Each session will run /ds:refine.
 ```

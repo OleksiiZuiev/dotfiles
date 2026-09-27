@@ -243,14 +243,6 @@ Acceptance criteria updated
 View ticket: [link to Linear ticket]
 ```
 
-#### 8. Transition to Ready
-
-If refinement completed successfully (ticket was updated with acceptance criteria in Step 5):
-- Use `mcp__claude_ai_Linear__save_issue` with `id: "<ticket-id>"` and `state: "Ready"` to move the ticket forward
-- Mention the transition in the summary: `Status: Moved to Ready`
-
-If refinement was cancelled or only partially completed (user chose "No, ticket is ready" without changes, or exited early), do NOT transition the status.
-
 ### Error Handling
 
 - **Ticket not found**: Display clear error with suggestion to verify the ticket ID
