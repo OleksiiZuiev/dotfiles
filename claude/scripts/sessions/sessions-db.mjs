@@ -6,6 +6,9 @@
 //     payload JSON.
 //   node sessions-db.mjs list [ticket] [--json] [--refresh] [--width <columns>] [--ticket-contexts <dir>] [--wsl-distro <name>]
 //   node sessions-db.mjs show <session-id-prefix | ticket> [--ticket-contexts <dir>] [--wsl-distro <name>]
+//   node sessions-db.mjs locate <session-id-prefix | ticket>
+//     The session `sessions resume` reopens — a ticket's latest — as four lines: session id, cwd,
+//     transcript path, ticket.
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -290,10 +293,12 @@ function printFields(record) {
 }
 
 // A session id starts with eight hex digits before its first `-`, so no ticket identifier is a prefix of one.
+const sessionByPrefix = (sessions, prefix) => sessions.find((s) => s.session_id.startsWith(prefix));
+
 function show(prefix, options) {
   if (!prefix) fail('Usage: sessions-db.mjs show <session-id-prefix | ticket>');
   const sessions = readSessions();
-  const found = sessions.find((s) => s.session_id.startsWith(prefix));
+  const found = sessionByPrefix(sessions, prefix);
   if (!found) {
     const ticket = ticketsOf(sessions, options.ticketContexts).find((t) => t.ticket === prefix.toUpperCase());
     if (!ticket) fail(`No session or ticket ${prefix}.`);
@@ -303,6 +308,15 @@ function show(prefix, options) {
   const facts = derivedFacts(found, options.wslDistro);
   printFields({ session_id: found.session_id, title: facts.title, kind: facts.kind,
     last_prompt: facts.last_prompt, ...found, ...facts });
+}
+
+// Sessions are read newest first, so a ticket's first match is its latest.
+function locate(prefix) {
+  if (!prefix) fail('Usage: sessions-db.mjs locate <session-id-prefix | ticket>');
+  const sessions = readSessions();
+  const found = sessionByPrefix(sessions, prefix) ?? sessions.find((s) => s.ticket === prefix.toUpperCase());
+  if (!found) fail(`No session or ticket ${prefix}.`);
+  console.log([found.session_id, found.cwd, found.transcript_path, found.ticket].map((v) => v ?? '').join('\n'));
 }
 
 const [command, ...args] = process.argv.slice(2);
@@ -316,6 +330,8 @@ if (command === 'start' || command === 'end') {
 } else if (command === 'show') {
   const options = parseArgs(args);
   show(options.positional[0], options);
+} else if (command === 'locate') {
+  locate(args[0]);
 } else {
   throw new Error(`unknown command: ${command}`);
 }

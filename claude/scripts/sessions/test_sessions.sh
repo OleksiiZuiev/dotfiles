@@ -150,13 +150,39 @@ check "show -> transcript path" "$(has "$out" "bbbbbbbb-1.jsonl")" yes
 check "show -> title" "$(has "$out" "polish-int-1")" yes
 check "show unknown id -> exit 1" "$(sessions show zzzz > /dev/null 2>&1; echo $?)" 1
 
+# --- sessions resume ---
+# Stand-ins for the tab and for WSL: each records its arguments, one per line.
+claude_tab() { printf '%s\n' "$@" > "$root/tab-args"; }
+wsl.exe() { printf '%s\n' "$@" > "$root/wsl-args"; }
+tab_args() { [[ -f "$root/tab-args" ]] && tr '\n' ' ' < "$root/tab-args"; rm -f "$root/tab-args"; }
+sessions resume aaaa > /dev/null; code=$?
+check "resume by id prefix -> exit 0" "$code" 0
+check "resume by id prefix -> a tab in its directory resuming it" "$(tab_args)" "INT-1 $alive --resume aaaaaaaa-1 "
+sessions resume int-2 > /dev/null
+check "resume a ticket -> its latest session" "$(tab_args)" "INT-2 $alive --resume cccccccc-1 "
+sessions resume dddd > /dev/null
+check "resume a session with no ticket -> titled by its short id" "$(tab_args)" "dddddddd $alive --resume dddddddd-1 "
+err=$(sessions resume INT-1 2>&1 > /dev/null); code=$?
+check "resume a session whose directory is gone -> exit 1" "$code" 1
+check "resume a session whose directory is gone -> says so" "$(has "$err" "no longer exists")" yes
+check "resume a session whose directory is gone -> names the transcript" "$(has "$err" "bbbbbbbb-1.jsonl")" yes
+check "resume a session whose directory is gone -> no tab" "$(tab_args)" ""
+sessions resume eeee > /dev/null
+check "resume a WSL session -> a WSL tab" "$(tab_args)" "--wsl INT-3 /home/someone/gamma --resume eeeeeeee-1 "
+check "resume a WSL session -> its directory checked in WSL" "$(tr '\n' ' ' < "$root/wsl-args")" "-e test -d /home/someone/gamma "
+check "resume unknown -> exit 1" "$(sessions resume zzzz > /dev/null 2>&1; echo $?)" 1
+check "resume unknown -> no tab" "$(tab_args)" ""
+unset -f claude_tab wsl.exe
+
 # --- The view's key handler: prints the fzf actions for a key in the current mode ---
 view() { FZF_PROMPT="$1" bash "$SCRIPT_DIR/sessions.sh" _view "${@:2}"; }
 out=$(view 'tickets> ' enter INT-1)
 check "view enter on a ticket -> loads its sessions" "$(has "$out" "list 'INT-1')")" yes
 check "view enter on a ticket -> sessions prompt" "$(has "$out" "change-prompt(INT-1 sessions> )")" yes
 check "view enter on a ticket -> hides the session id" "$(has "$out" "change-with-nth(2..)")" yes
-check "view enter on a session -> nothing" "$(view 'INT-1 sessions> ' enter bbbbbbbb)" ""
+out=$(view 'INT-1 sessions> ' enter bbbbbbbb)
+check "view enter on a session that cannot resume -> the reason in the header" \
+  "$(has "$out" "change-header:")$(has "$out" "no longer exists")" yesyes
 out=$(view 'INT-1 sessions> ' esc)
 check "view esc in sessions -> back to tickets" "$(has "$out" "change-prompt(tickets> )")" yes
 check "view esc in sessions -> shows every field" "$(has "$out" "change-with-nth(1..)")" yes

@@ -4,7 +4,7 @@ _SESSIONS_SH="${BASH_SOURCE[0]}"
 _SESSIONS_LINEAR="https://linear.app/datasnipper-test/issue"
 _SESSIONS_TICKETS_PROMPT="tickets> "
 _SESSIONS_TICKETS_HEADER="enter: sessions · ctrl-o: open in Linear · ctrl-r: refetch from Linear · esc: quit"
-_SESSIONS_SESSIONS_HEADER="ctrl-o: open the ticket in Linear · ctrl-r: refetch from Linear · esc: back to tickets"
+_SESSIONS_SESSIONS_HEADER="enter: resume in a new tab · ctrl-o: open the ticket in Linear · ctrl-r: refetch from Linear · esc: back to tickets"
 
 # Runs the sessions index script on the Windows node from either OS, as session-index.sh
 # does: the database lives on C:, and only Windows processes open it.
@@ -31,6 +31,41 @@ _sessions_db() {
         [[ -n "$width" ]] && extra+=(--width "$width")
     fi
     "$node_bin" --disable-warning=ExperimentalWarning "$script" "$@" "${extra[@]}"
+}
+
+# Reopens a session in a new tab, in its own directory, on the OS it ran on: a POSIX cwd marks a
+# WSL session. Its directory is checked on that OS before the tab opens.
+_sessions_resume() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: sessions resume <session-id | ticket>" >&2
+        return 1
+    fi
+    local located session_id cwd transcript ticket wsl=()
+    located=$(_sessions_db locate "$1") || return 1
+    { read -r session_id; read -r cwd; read -r transcript; read -r ticket; } <<< "$located"
+
+    if [[ "$cwd" == /* ]]; then
+        wsl=(--wsl)
+        if [[ -n "$WSL_DISTRO_NAME" ]]; then
+            [[ -d "$cwd" ]]
+        else
+            MSYS2_ARG_CONV_EXCL='*' wsl.exe -e test -d "$cwd"
+        fi
+    elif [[ -n "$WSL_DISTRO_NAME" ]]; then
+        echo "sessions: $session_id is a Windows session; resume it from Git Bash" >&2
+        return 1
+    else
+        [[ -n "$cwd" && -d "$(cygpath -u "$cwd")" ]]
+    fi || {
+        echo "sessions: $cwd no longer exists; transcript: $transcript" >&2
+        return 1
+    }
+
+    if ! declare -F claude_tab > /dev/null; then
+        source "$HOME/.claude/scripts/claude-tab.sh" || return 1
+    fi
+    claude_tab "${wsl[@]}" "${ticket:-${session_id:0:8}}" "$cwd" --resume "$session_id" || return 1
+    echo "Resuming $session_id in a new tab."
 }
 
 # One fzf in two modes, told apart by its prompt: the tickets, or one ticket's sessions. Every key
@@ -72,6 +107,11 @@ _sessions_view_key() {
             printf "reload(%s)+change-prompt(%s)+change-with-nth(1..)+change-header(%s)+clear-query+first" \
                 "$list" "$_SESSIONS_TICKETS_PROMPT" "$_SESSIONS_TICKETS_HEADER" ;;
         tickets:esc) printf "abort" ;;
+        sessions:enter)
+            [[ -n "$field" ]] || return 0
+            # The colon form takes the rest of the line, so a `)` in the reason cannot end the action.
+            local reason
+            reason=$(sessions resume "$field" 2>&1 > /dev/null) || printf "change-header:%s" "$reason" ;;
         tickets:open | sessions:open)
             local target="${ticket:-$field}"
             [[ -n "$target" && "$target" != "—" ]] && printf "execute-silent(explorer.exe %s/%s)" "$_SESSIONS_LINEAR" "$target" ;;
@@ -88,6 +128,7 @@ Usage: sessions                              interactive view (fzf)
        sessions list [--json] [--refresh]    tickets, newest latest session first
        sessions list <ticket> [--json]       that ticket's sessions
        sessions show <session-id | ticket>   every field of one session, or of one ticket
+       sessions resume <session-id | ticket> reopen a session, or a ticket's latest, in a new tab
 
 Every Claude Code session on this machine, Windows and WSL, as recorded by the
 SessionStart / SessionEnd hooks (session-index.sh), grouped by the
@@ -108,13 +149,21 @@ Tables fit the terminal width, cutting the longest columns with an ellipsis.
                   exists, and (?) for a WSL session listed from Windows, whose
                   directory and transcript are not read from there.
 
+  resume          Opens a Windows Terminal tab in the session's directory running
+                  claude --resume <session-id>: a Git Bash tab for a Windows
+                  session, a WSL tab for a WSL one. Refuses, naming the
+                  transcript, when the directory no longer exists. A Windows
+                  session resumes from Git Bash only.
+
 Linear titles and projects are cached in the sessions database. `list` fetches
 the tickets missing from the cache or fetched over a day ago, with the API key
 in ~/.config/linear/api-key (Windows home, from either OS); with no key, or
 Linear unreachable, it lists with what it has. --refresh refetches every listed
 ticket and says when Linear cannot be reached.
 
-The view: enter opens a ticket's sessions, esc goes back, then quits;
+The view: enter opens a ticket's sessions, and on a session resumes it in a
+new tab, the view staying open — when it cannot, the header says why;
+esc goes back, then quits;
 ctrl-o opens the ticket in Linear; ctrl-r refetches from Linear and reloads.
 The pane below shows the row under the cursor: a ticket's fields and its
 sessions, or every field of a session.
@@ -136,6 +185,7 @@ EOF
 
     case "$1" in
         list | show) _sessions_db "$@" ;;
+        resume) _sessions_resume "${@:2}" ;;
         _view) _sessions_view_key "${@:2}" ;;
         "")
             if command -v fzf > /dev/null 2>&1; then

@@ -121,6 +121,69 @@ else
     fail "expected starting directory '$expected_dir' not in tab arguments: $(tr '\n' ' ' < "$wt_args")"
 fi
 
+# 5. Every claude argument after the directory reaches claude, each as its own argument
+claude_tab "INT-2" "$test_root" --resume abc-123
+mapfile -t args < <(grep '^ARG:' "$launched" | sed 's/^ARG://')
+if [[ "${args[*]}" == "--resume abc-123" && ${#args[@]} -eq 2 ]]; then
+    pass "several claude arguments passed separately"
+else
+    fail "expected '--resume' 'abc-123', got ${#args[@]}: ${args[*]}"
+fi
+
+# --- --wsl: a tab in the WSL distro ---
+# The WSL side's claude-bin.sh, which the launcher sources inside the tab.
+wsl_home="$test_root/wsl-home"
+mkdir -p "$wsl_home/.bash.d"
+printf 'claude_bin() { printf "%%s\\n" %q; }\n' "$fake_claude" > "$wsl_home/.bash.d/claude-bin.sh"
+wsl_args="$test_root/wsl-args"
+
+# Stands in for wsl.exe: records its arguments, then runs the launcher (the last argument, a /mnt/c
+# path) here with the WSL home.
+wsl.exe() {
+    printf '%s\n' "$@" > "$wsl_args"
+    (( $# > 0 )) || return 1
+    local launcher="${*: -1}"
+    [[ "$launcher" == /mnt/c/* ]] && launcher=$(cygpath -u "C:${launcher#/mnt/c}")
+    HOME="$wsl_home" bash "$launcher"
+}
+# The terminal stand-in for a WSL tab: the tab's command starts at wsl.exe.
+wt.exe() {
+    printf '%s\n' "$@" > "$wt_args"
+    local args=("$@") i
+    for ((i = 0; i < ${#args[@]}; i++)); do
+        [[ "${args[i]}" == "wsl.exe" ]] && break
+    done
+    wsl.exe "${args[@]:i+1}"
+}
+
+: > "$launched"
+claude_tab --wsl "UP-1" /home/someone/uplink --resume abc-123
+
+# 6. The tab is a WSL tab in the session's directory
+if grep -Fxq "Ubuntu" "$wt_args" && grep -Fxq "wsl.exe" "$wt_args"; then
+    pass "--wsl opens a WSL tab"
+else
+    fail "no Ubuntu profile and wsl.exe in tab arguments: $(tr '\n' ' ' < "$wt_args")"
+fi
+if grep -A1 -Fx -- "--cd" "$wsl_args" 2>/dev/null | grep -Fxq "/home/someone/uplink"; then
+    pass "--wsl starts in the session's directory"
+else
+    fail "expected --cd /home/someone/uplink in wsl.exe arguments: $(tr '\n' ' ' < "$wsl_args" 2>/dev/null)"
+fi
+
+# 7. The launcher runs the WSL side's claude with the arguments, its environment stripped
+mapfile -t args < <(grep '^ARG:' "$launched" | sed 's/^ARG://')
+if [[ "${args[*]}" == "--resume abc-123" && ${#args[@]} -eq 2 ]]; then
+    pass "--wsl passes the claude arguments"
+else
+    fail "--wsl: expected '--resume' 'abc-123', got ${#args[@]}: ${args[*]}"
+fi
+if grep -q '^PATH=' "$launched" && ! grep -q '^CLAUDE_CODE_SESSION_ID=' "$launched"; then
+    pass "--wsl strips the parent session environment"
+else
+    fail "--wsl: environment not captured, or the parent session id leaked"
+fi
+
 echo ""
 if [[ $failures -eq 0 ]]; then
     echo "All tests passed."
