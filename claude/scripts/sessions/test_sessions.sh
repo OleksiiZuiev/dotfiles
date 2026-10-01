@@ -10,9 +10,11 @@ fails=0
 # Fixtures under $HOME so cygpath round-trips (/tmp maps elsewhere on Git Bash).
 root="$HOME/.sessions-test.$$"
 mkdir -p "$root/contexts" "$root/alive" "$root/transcripts"
-trap 'rm -rf "$root"' EXIT
+trap 'kill $linear_pid 2> /dev/null; rm -rf "$root"' EXIT
 export CLAUDE_SESSIONS_DB="$(cygpath -w "$root/sessions.db")"
 export CLAUDE_TICKET_CONTEXTS_DIR="$root/contexts"
+# No key until the Linear section, so nothing before it reaches the real Linear.
+export CLAUDE_LINEAR_KEY_FILE="$(cygpath -w "$root/no-key")"
 alive=$(cygpath -w "$root/alive")
 gone=$(cygpath -w "$root/int-1-a-long-worktree-name-that-is-gone")
 
@@ -164,6 +166,105 @@ check "view reload -> fits the list to fzf's width" "$(has "$(view 'tickets> ' r
 check "view ctrl-o on a ticket -> opens it" "$(has "$(view 'tickets> ' open INT-1)" "/issue/INT-1")" yes
 check "view ctrl-o in sessions -> opens the ticket" "$(has "$(view 'INT-1 sessions> ' open bbbbbbbb)" "/issue/INT-1")" yes
 check "view ctrl-o on no ticket -> nothing" "$(view 'tickets> ' open —)" ""
+
+# --- Linear titles and the cache ---
+# A fake Linear that answers like the real one — an unknown identifier nulls the whole `data` and is
+# named by its alias in `errors` — and logs every request body, one per line.
+cat > "$root/fake-linear.mjs" <<'EOF'
+import { createServer } from 'node:http';
+import { appendFileSync, writeFileSync } from 'node:fs';
+const [log, portFile] = process.argv.slice(2);
+const issues = {
+  'INT-1': { title: 'Linear title one', project: { name: 'Alpha project' } },
+  'INT-2': { title: 'Linear two', project: null },
+};
+const server = createServer((req, res) => {
+  let body = '';
+  req.on('data', (chunk) => (body += chunk));
+  req.on('end', () => {
+    const { query } = JSON.parse(body);
+    appendFileSync(log, `${req.headers.authorization} ${query.replace(/\s+/g, ' ')}\n`);
+    const aliases = [...query.matchAll(/(\w+): issue\(id: "([^"]+)"\)/g)];
+    const unknown = aliases.filter(([, , id]) => !issues[id]);
+    const reply = unknown.length
+      ? { data: null, errors: unknown.map(([, alias]) => ({ message: 'Entity not found: Issue', path: [alias] })) }
+      : { data: Object.fromEntries(aliases.map(([, alias, id]) => [alias, issues[id]])) };
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify(reply));
+  });
+});
+server.listen(0, '127.0.0.1', () => writeFileSync(portFile, String(server.address().port)));
+EOF
+: > "$root/linear.log"
+node "$(cygpath -w "$root/fake-linear.mjs")" "$(cygpath -w "$root/linear.log")" "$(cygpath -w "$root/linear.port")" &
+linear_pid=$!
+for _ in $(seq 50); do [[ -s "$root/linear.port" ]] && break; sleep 0.1; done
+export CLAUDE_LINEAR_API="http://127.0.0.1:$(cat "$root/linear.port")"
+requests() { wc -l < "$root/linear.log" | tr -d ' '; }
+last_request() { tail -1 "$root/linear.log"; }
+age_cache() { # $1 ticket: makes its cached row two days old
+  node --disable-warning=ExperimentalWarning -e '
+    const { DatabaseSync } = require("node:sqlite");
+    new DatabaseSync(process.argv[1]).prepare("UPDATE linear_issues SET fetched_at = ? WHERE identifier = ?")
+      .run(new Date(Date.now() - 2 * 86400000).toISOString(), process.argv[2]);
+  ' "$CLAUDE_SESSIONS_DB" "$1"
+}
+clear_cache() {
+  node --disable-warning=ExperimentalWarning -e '
+    const { DatabaseSync } = require("node:sqlite");
+    new DatabaseSync(process.argv[1]).exec("DELETE FROM linear_issues");
+  ' "$CLAUDE_SESSIONS_DB"
+}
+
+sessions list > /dev/null
+check "no key -> no request to Linear" "$(requests)" 0
+
+printf 'test-key\n' > "$root/api-key"
+export CLAUDE_LINEAR_KEY_FILE="$(cygpath -w "$root/api-key")"
+out=$(sessions list)
+check "list -> the Linear title wins over the ticket context" "$(has "$(grep '^INT-1 ' <<< "$out")" "Linear title one")" yes
+check "list -> a ticket Linear does not know keeps the branch slug" "$(has "$(grep '^INT-3 ' <<< "$out")" "wsl work")" yes
+check "list -> sends the key as the Authorization header" "$(has "$(last_request)" "test-key ")" yes
+check "list -> asks for title and project" "$(has "$(last_request)" "title project { name }")" yes
+check "list -> resends the known tickets without the unknown one" "$(has "$(last_request)" '"INT-1"')$(has "$(last_request)" "INT-3")" "yesno: $(last_request)"
+check "list --json -> the ticket's project" "$(node -e '
+  console.log(JSON.parse(process.argv[1]).find(r => r.ticket === "INT-1").project);
+' "$(sessions list --json)")" "Alpha project"
+
+before=$(requests)
+sessions list > /dev/null
+check "list within a day -> no request" "$(requests)" "$before"
+age_cache INT-1
+sessions list > /dev/null
+check "list -> refetches a ticket cached over a day ago" "$(( $(requests) - before ))" 1
+check "list -> refetches only the stale ticket" "$(has "$(last_request)" '"INT-1"')$(has "$(last_request)" "INT-2")" "yesno: $(last_request)"
+before=$(requests)
+sessions list --refresh > /dev/null
+check "list --refresh -> refetches fresh tickets" "$(has "$(last_request)" '"INT-2"')" yes
+check "list --refresh -> asks again for the unknown ticket" "$(has "$(sed -n "$((before + 1))p" "$root/linear.log")" '"INT-3"')" yes
+
+out=$(sessions show INT-1)
+check "show ticket -> its Linear title" "$(has "$out" "Linear title one")" yes
+check "show ticket -> its project" "$(has "$out" "Alpha project")" yes
+check "show ticket -> its session count" "$(has "$(grep '^sessions ' <<< "$out")" "2")" yes
+out=$(view 'tickets> ' preview INT-1)
+check "view preview on a ticket -> its project" "$(has "$out" "Alpha project")" yes
+check "view preview on a ticket -> its sessions" "$(has "$out" "aaaaaaaa")" yes
+check "view ctrl-r on tickets -> reloads with a refetch" "$(has "$(view 'tickets> ' refresh)" "list --refresh")" yes
+out=$(view 'INT-1 sessions> ' refresh)
+check "view ctrl-r in sessions -> refetches" "$(has "$out" "list --refresh")" yes
+check "view ctrl-r in sessions -> reloads that ticket's sessions" "$(has "$out" "list 'INT-1')")" yes
+
+export CLAUDE_LINEAR_API="http://127.0.0.1:1"
+err=$(sessions list 2>&1 > /dev/null); code=$?
+out=$(sessions list 2> /dev/null)
+check "Linear unreachable -> exit 0" "$code" 0
+check "Linear unreachable -> cached titles still shown" "$(has "$(grep '^INT-1 ' <<< "$out")" "Linear title one")" yes
+check "Linear unreachable -> silent without --refresh" "$err" ""
+check "Linear unreachable -> --refresh says so" "$(has "$(sessions list --refresh 2>&1 > /dev/null)" "could not reach Linear")" yes
+clear_cache
+check "Linear unreachable, nothing cached -> the ticket context title" \
+  "$(has "$(sessions list | grep '^INT-1 ')" "First thing title")" yes
 
 # --- help ---
 out=$(CLAUDE_SESSIONS_DB='C:\nonexistent\x.db' sessions --help); code=$?

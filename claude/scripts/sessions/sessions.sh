@@ -3,8 +3,8 @@
 _SESSIONS_SH="${BASH_SOURCE[0]}"
 _SESSIONS_LINEAR="https://linear.app/datasnipper-test/issue"
 _SESSIONS_TICKETS_PROMPT="tickets> "
-_SESSIONS_TICKETS_HEADER="enter: sessions · ctrl-o: open in Linear · esc: quit"
-_SESSIONS_SESSIONS_HEADER="ctrl-o: open the ticket in Linear · esc: back to tickets"
+_SESSIONS_TICKETS_HEADER="enter: sessions · ctrl-o: open in Linear · ctrl-r: refetch from Linear · esc: quit"
+_SESSIONS_SESSIONS_HEADER="ctrl-o: open the ticket in Linear · ctrl-r: refetch from Linear · esc: back to tickets"
 
 # Runs the sessions index script on the Windows node from either OS, as session-index.sh
 # does: the database lives on C:, and only Windows processes open it.
@@ -22,8 +22,8 @@ _sessions_db() {
         script=$(cygpath -w "$script")
         contexts=$(cygpath -w "$contexts" 2>/dev/null)
     fi
+    [[ "$1" == "list" || "$1" == "show" ]] && [[ -n "$contexts" ]] && extra+=(--ticket-contexts "$contexts")
     if [[ "$1" == "list" ]]; then
-        [[ -n "$contexts" ]] && extra+=(--ticket-contexts "$contexts")
         # The view sets SESSIONS_WIDTH for its list and preview: fzf exports the FZF_* sizes to every
         # command it runs, so they cannot tell the list's width from the preview's.
         local width="${SESSIONS_WIDTH:-$COLUMNS}"
@@ -44,11 +44,11 @@ _sessions_view() {
         --bind="start,resize:transform($self _view reload)" \
         --bind="enter:transform($self _view enter {1})" \
         --bind="esc:transform($self _view esc)" \
-        --bind="ctrl-o:transform($self _view open {1})" \
+        --bind="ctrl-o:transform($self _view open {1})"         --bind="ctrl-r:transform($self _view refresh)" \
         < /dev/null > /dev/null
 }
 
-# $1 key (enter, esc, open, preview, reload)  $2 the first field of the row under the cursor
+# $1 key (enter, esc, open, preview, refresh, reload)  $2 the first field of the row under the cursor
 _sessions_view_key() {
     local key="$1" field="$2" mode=tickets ticket=""
     # fzf's pointer and marker take two columns in front of every row of its list, its scrollbar one after.
@@ -61,6 +61,9 @@ _sessions_view_key() {
     case "$mode:$key" in
         tickets:reload) printf "reload(%s)" "$list" ;;
         sessions:reload) printf "reload(%s '%s')" "$list" "$ticket" ;;
+        # The list's stderr would land on fzf's screen.
+        tickets:refresh) printf "reload(%s --refresh 2> /dev/null)" "$list" ;;
+        sessions:refresh) printf "reload(%s --refresh > /dev/null 2>&1; %s '%s')" "$list" "$list" "$ticket" ;;
         tickets:enter)
             [[ -n "$field" ]] || return 0
             printf "reload(%s '%s')+change-prompt(%s sessions> )+change-with-nth(2..)+change-header(%s)+clear-query+first" \
@@ -72,7 +75,7 @@ _sessions_view_key() {
         tickets:open | sessions:open)
             local target="${ticket:-$field}"
             [[ -n "$target" && "$target" != "—" ]] && printf "execute-silent(explorer.exe %s/%s)" "$_SESSIONS_LINEAR" "$target" ;;
-        tickets:preview) [[ -n "$field" ]] && sessions list "$field" ;;
+        tickets:preview) [[ -n "$field" ]] && sessions show "$field" && echo && sessions list "$field" ;;
         sessions:preview) [[ -n "$field" ]] && sessions show "$field" ;;
     esac
     return 0
@@ -81,10 +84,10 @@ _sessions_view_key() {
 sessions() {
     if [[ "$1" == "-h" || "$1" == "--help" ]]; then
         cat <<'EOF'
-Usage: sessions                         interactive view (fzf)
-       sessions list [--json]           tickets, newest latest session first
-       sessions list <ticket> [--json]  that ticket's sessions
-       sessions show <session-id>       every recorded field of one session
+Usage: sessions                              interactive view (fzf)
+       sessions list [--json] [--refresh]    tickets, newest latest session first
+       sessions list <ticket> [--json]       that ticket's sessions
+       sessions show <session-id | ticket>   every field of one session, or of one ticket
 
 Every Claude Code session on this machine, Windows and WSL, as recorded by the
 SessionStart / SessionEnd hooks (session-index.sh), grouped by the
@@ -95,8 +98,8 @@ Tables fit the terminal width, cutting the longest columns with an ellipsis.
   list            TICKET, TITLE, REPO, SESSIONS, LAST ACTIVE, and `open` when
                   any of the ticket's sessions has no end time — still running,
                   or killed before it could record one.
-                  TITLE is the first line of the ticket context, else the
-                  branch slug.
+                  TITLE is the ticket's Linear title, else the first line of
+                  the ticket context, else the branch slug.
   list <ticket>   SESSION, LAST ACTIVE, KIND, TITLE, DIRECTORY, and `open` when the
                   session has no end time. KIND is the command the session
                   began with (/ds:work-on); TITLE is its /rename title, else
@@ -105,17 +108,27 @@ Tables fit the terminal width, cutting the longest columns with an ellipsis.
                   exists, and (?) for a WSL session listed from Windows, whose
                   directory and transcript are not read from there.
 
+Linear titles and projects are cached in the sessions database. `list` fetches
+the tickets missing from the cache or fetched over a day ago, with the API key
+in ~/.config/linear/api-key (Windows home, from either OS); with no key, or
+Linear unreachable, it lists with what it has. --refresh refetches every listed
+ticket and says when Linear cannot be reached.
+
 The view: enter opens a ticket's sessions, esc goes back, then quits;
-ctrl-o opens the ticket in Linear. The pane below shows the row under the
-cursor: a ticket's sessions, or every field of a session.
+ctrl-o opens the ticket in Linear; ctrl-r refetches from Linear and reloads.
+The pane below shows the row under the cursor: a ticket's fields and its
+sessions, or every field of a session.
 
 Environment:
   CLAUDE_SESSIONS_DB          database (default C:/work/claude-data/sessions.db)
   CLAUDE_SESSIONS_NODE        node binary that opens it (default: the Windows node)
   CLAUDE_TICKET_CONTEXTS_DIR  ticket contexts (default /c/work/ticket-contexts)
+  CLAUDE_LINEAR_KEY_FILE      Linear API key (default ~/.config/linear/api-key)
+  CLAUDE_LINEAR_API           Linear GraphQL endpoint (default https://api.linear.app/graphql)
 
 Options:
   --json        Print the rows as JSON
+  --refresh     Refetch every listed ticket from Linear
   -h, --help    Show this help and exit
 EOF
         return 0

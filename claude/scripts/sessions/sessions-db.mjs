@@ -4,11 +4,12 @@
 //     Writes one hook event. Stdin, as sent by session-index.sh: three lines of git
 //     facts gathered on the session's own OS (branch, origin URL, git common dir), then the hook
 //     payload JSON.
-//   node sessions-db.mjs list [ticket] [--json] [--width <columns>] [--ticket-contexts <dir>] [--wsl-distro <name>]
-//   node sessions-db.mjs show <session-id-prefix> [--wsl-distro <name>]
+//   node sessions-db.mjs list [ticket] [--json] [--refresh] [--width <columns>] [--ticket-contexts <dir>] [--wsl-distro <name>]
+//   node sessions-db.mjs show <session-id-prefix | ticket> [--ticket-contexts <dir>] [--wsl-distro <name>]
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { cachedIssues, refreshIssues } from './linear.mjs';
 
 const DB_PATH = process.env.CLAUDE_SESSIONS_DB ?? 'C:/work/claude-data/sessions.db';
 const NO_TICKET = '—';
@@ -85,9 +86,10 @@ function write(event) {
 }
 
 function parseArgs(args) {
-  const options = { positional: [], json: false, ticketContexts: null, wslDistro: null, width: null };
+  const options = { positional: [], json: false, refresh: false, ticketContexts: null, wslDistro: null, width: null };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--json') options.json = true;
+    else if (args[i] === '--refresh') options.refresh = true;
     else if (args[i] === '--width') options.width = Number(args[++i]) || null;
     else if (args[i] === '--ticket-contexts') options.ticketContexts = args[++i];
     else if (args[i] === '--wsl-distro') options.wslDistro = args[++i];
@@ -109,8 +111,10 @@ function readSessions() {
   return rows;
 }
 
-// The first line of the ticket context (`# INT-868: {title}`), else the slug of the latest branch.
-function titleOf(ticket, latestBranch, ticketContexts) {
+// The Linear title, else the first line of the ticket context (`# INT-868: {title}`), else the slug
+// of the latest branch.
+function titleOf(ticket, latestBranch, ticketContexts, linearTitle) {
+  if (linearTitle) return linearTitle;
   if (ticketContexts) {
     try {
       const firstLine = readFileSync(join(ticketContexts, `${ticket}.md`), 'utf8').split(/\r?\n/, 1)[0];
@@ -215,22 +219,45 @@ function printTable(header, rows, { flexible, cutFront = [] }, width) {
   }
 }
 
-function listTickets(sessions, options) {
+// One row per ticket, from sessions ordered newest first; the no-ticket group last.
+function ticketsOf(sessions, ticketContexts) {
   const groups = new Map();
   for (const s of sessions) {
     if (!groups.has(s.ticket)) groups.set(s.ticket, []);
     groups.get(s.ticket).push(s);
   }
-  const tickets = [...groups.entries()]
+  const db = openDb();
+  const issues = cachedIssues(db, [...groups.keys()].filter(Boolean));
+  db.close();
+  return [...groups.entries()]
     .sort(([a], [b]) => (a === null) - (b === null))
     .map(([ticket, rows]) => ({
       ticket,
-      title: ticket === null ? '' : titleOf(ticket, rows[0].branch, options.ticketContexts),
+      title: ticket === null ? '' : titleOf(ticket, rows[0].branch, ticketContexts, issues.get(ticket)?.title),
+      project: issues.get(ticket)?.project ?? null,
       repos: [...new Set(rows.map((r) => r.repo).filter(Boolean))].sort(),
       sessions: rows.length,
       last_active_at: rows[0].last_active_at,
       open: rows.some((r) => r.ended_at === null),
     }));
+}
+
+// Linear failing leaves the cached and fallback titles; it is reported only when a refetch was asked for.
+async function refreshTickets(sessions, force) {
+  const identifiers = [...new Set(sessions.map((s) => s.ticket).filter(Boolean))];
+  const db = openDb();
+  try {
+    await refreshIssues(db, identifiers, { force });
+  } catch (error) {
+    if (force) console.error(`sessions: could not reach Linear (${error.message})`);
+  } finally {
+    db.close();
+  }
+}
+
+async function listTickets(sessions, options) {
+  await refreshTickets(sessions, options.refresh);
+  const tickets = ticketsOf(sessions, options.ticketContexts);
 
   if (options.json) return console.log(JSON.stringify(tickets, null, 2));
   printTable(['TICKET', 'TITLE', 'REPO', 'SESSIONS', 'LAST ACTIVE', ''], tickets.map((t) => [
@@ -257,16 +284,25 @@ function derivedFacts(session, wslDistro) {
   return { directory_exists: directoryExists(session.cwd, wslDistro), ...transcriptFacts(session.transcript_path, wslDistro) };
 }
 
+function printFields(record) {
+  const width = Math.max(...Object.keys(record).map((k) => k.length));
+  for (const [key, value] of Object.entries(record)) console.log(`${key.padEnd(width)}  ${value ?? ''}`);
+}
+
+// A session id starts with eight hex digits before its first `-`, so no ticket identifier is a prefix of one.
 function show(prefix, options) {
-  if (!prefix) fail('Usage: sessions-db.mjs show <session-id-prefix>');
-  const found = readSessions().find((s) => s.session_id.startsWith(prefix));
-  if (!found) fail(`No session ${prefix}.`);
+  if (!prefix) fail('Usage: sessions-db.mjs show <session-id-prefix | ticket>');
+  const sessions = readSessions();
+  const found = sessions.find((s) => s.session_id.startsWith(prefix));
+  if (!found) {
+    const ticket = ticketsOf(sessions, options.ticketContexts).find((t) => t.ticket === prefix.toUpperCase());
+    if (!ticket) fail(`No session or ticket ${prefix}.`);
+    return printFields({ ...ticket, repos: ticket.repos.join(', '), open: ticket.open ? 'open' : '' });
+  }
   // What the session is about first: the preview pane shows only the top lines.
   const facts = derivedFacts(found, options.wslDistro);
-  const session = { session_id: found.session_id, title: facts.title, kind: facts.kind,
-    last_prompt: facts.last_prompt, ...found, ...facts };
-  const width = Math.max(...Object.keys(session).map((k) => k.length));
-  for (const [key, value] of Object.entries(session)) console.log(`${key.padEnd(width)}  ${value ?? ''}`);
+  printFields({ session_id: found.session_id, title: facts.title, kind: facts.kind,
+    last_prompt: facts.last_prompt, ...found, ...facts });
 }
 
 const [command, ...args] = process.argv.slice(2);
@@ -276,7 +312,7 @@ if (command === 'start' || command === 'end') {
   const options = parseArgs(args);
   const [ticket] = options.positional;
   if (ticket) listTicketSessions(readSessions(), ticket, options);
-  else listTickets(readSessions(), options);
+  else await listTickets(readSessions(), options);
 } else if (command === 'show') {
   const options = parseArgs(args);
   show(options.positional[0], options);
