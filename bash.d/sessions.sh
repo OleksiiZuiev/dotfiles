@@ -18,13 +18,20 @@ _sessions_db() {
         script=$(cygpath -w "$script")
         contexts=$(cygpath -w "$contexts" 2>/dev/null)
     fi
-    [[ "$1" == "list" && -n "$contexts" ]] && extra+=(--ticket-contexts "$contexts")
+    if [[ "$1" == "list" ]]; then
+        [[ -n "$contexts" ]] && extra+=(--ticket-contexts "$contexts")
+        local width="${FZF_PREVIEW_COLUMNS:-$COLUMNS}"
+        [[ -z "$width" && -t 1 ]] && width=$(tput cols 2>/dev/null)
+        [[ -n "$width" ]] && extra+=(--width "$width")
+    fi
     "$node_bin" --disable-warning=ExperimentalWarning "$script" "$@" "${extra[@]}"
 }
 
 _sessions_view() {
     local linear="https://linear.app/datasnipper-test/issue"
     local tickets ticket
+    # fzf's pointer and marker take two columns in front of every row.
+    local COLUMNS=$(( ${COLUMNS:-$(tput cols 2>/dev/null || echo 80)} - 2 ))
     tickets=$(_sessions_db list) || return 1
     while ticket=$(printf '%s\n' "$tickets" | fzf --reverse --header-lines=1 \
             --header='enter: sessions · ctrl-o: open in Linear · esc: quit' \
@@ -51,6 +58,7 @@ Every Claude Code session on this machine, Windows and WSL, as recorded by the
 SessionStart / SessionEnd hooks (claude/hooks/session-index.sh), grouped by the
 ticket parsed from its branch. Sessions with no ticket are listed last under —;
 pass — as <ticket> to list them. A session id may be given as any prefix.
+Tables fit the terminal width, cutting the longest columns with an ellipsis.
 
   list            TICKET, TITLE, REPO, SESSIONS, LAST ACTIVE, and `open` when
                   any of the ticket's sessions has no end time — still running,

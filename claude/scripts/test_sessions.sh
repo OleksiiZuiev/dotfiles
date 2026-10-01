@@ -95,6 +95,17 @@ check "list ticket --json -> directory_exists" "$(node -e '
 ' "$(sessions list INT-1 --json)")" "bbbbbbbb-1:false aaaaaaaa-1:true"
 check "list unknown ticket -> exit 1" "$(sessions list INT-404 > /dev/null 2>&1; echo $?)" 1
 
+# --- Fitting the terminal width ---
+widest() { awk '{ if (length($0) > max) max = length($0) } END { print max }'; }
+out=$(COLUMNS=60 sessions list)
+check "list -> no line wider than the terminal" "$(( $(widest <<< "$out") <= 60 ))" 1
+check "list -> narrowed rows keep the trailing columns" "$(has "$(grep '^INT-1 ' <<< "$out")" " open")" yes
+out=$(COLUMNS=70 sessions list INT-1)
+check "list ticket -> no line wider than the terminal" "$(( $(widest <<< "$out") <= 70 ))" 1
+check "list ticket -> narrowed rows keep the end column" "$(has "$(grep '^bbbbbbbb' <<< "$out")" "open")" yes
+check "list ticket -> a narrowed directory keeps its end" "$(has "$(grep '^bbbbbbbb' <<< "$out")" "… (gone)")" yes
+check "preview width wins over the terminal's" "$(( $(COLUMNS=200 FZF_PREVIEW_COLUMNS=50 sessions list | widest) <= 50 ))" 1
+
 # --- sessions show ---
 out=$(sessions show bbbb)
 check "show -> row by id prefix" "$(has "$out" "bbbbbbbb-1")" yes

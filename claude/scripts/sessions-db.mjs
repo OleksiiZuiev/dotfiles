@@ -4,7 +4,7 @@
 //     Writes one hook event. Stdin, as sent by claude/hooks/session-index.sh: three lines of git
 //     facts gathered on the session's own OS (branch, origin URL, git common dir), then the hook
 //     payload JSON.
-//   node sessions-db.mjs list [ticket] [--json] [--ticket-contexts <dir>] [--wsl-distro <name>]
+//   node sessions-db.mjs list [ticket] [--json] [--width <columns>] [--ticket-contexts <dir>] [--wsl-distro <name>]
 //   node sessions-db.mjs show <session-id-prefix>
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
@@ -85,9 +85,10 @@ function write(event) {
 }
 
 function parseArgs(args) {
-  const options = { positional: [], json: false, ticketContexts: null, wslDistro: null };
+  const options = { positional: [], json: false, ticketContexts: null, wslDistro: null, width: null };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--json') options.json = true;
+    else if (args[i] === '--width') options.width = Number(args[++i]) || null;
     else if (args[i] === '--ticket-contexts') options.ticketContexts = args[++i];
     else if (args[i] === '--wsl-distro') options.wslDistro = args[++i];
     else options.positional.push(args[i]);
@@ -145,11 +146,25 @@ function localTime(iso) {
 
 const repoName = (repo) => repo?.split('/').at(-1) ?? '';
 const truncate = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
+const truncateFront = (text, max) => (text.length > max ? `…${text.slice(text.length - max + 1)}` : text);
 
-function printTable(header, rows) {
+const GAP = 2;
+const MIN_FLEXIBLE_WIDTH = 4;
+
+// Fits the table to `width` (no limit when null) by narrowing the widest of the `flexible` columns
+// one character at a time. A cut cell ends in an ellipsis, or starts with one in a `cutFront`
+// column, where the end is the part worth keeping (a worktree directory's name).
+function printTable(header, rows, { flexible, cutFront = [] }, width) {
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
+  const total = () => widths.reduce((sum, w) => sum + w, 0) + GAP * (widths.length - 1);
+  while (width && total() > width) {
+    const widest = flexible.reduce((a, b) => (widths[b] > widths[a] ? b : a));
+    if (widths[widest] <= MIN_FLEXIBLE_WIDTH) break;
+    widths[widest]--;
+  }
   for (const row of [header, ...rows]) {
-    console.log(row.map((cell, i) => cell.padEnd(widths[i])).join('  ').trimEnd());
+    const fit = (cell, i) => (cutFront.includes(i) ? truncateFront : truncate)(cell, widths[i]);
+    console.log(row.map((cell, i) => fit(cell, i).padEnd(widths[i])).join(' '.repeat(GAP)).trimEnd());
   }
 }
 
@@ -174,7 +189,7 @@ function listTickets(sessions, options) {
   printTable(['TICKET', 'TITLE', 'REPO', 'SESSIONS', 'LAST ACTIVE', ''], tickets.map((t) => [
     t.ticket ?? NO_TICKET, truncate(t.title, 50), t.repos.map(repoName).join(', '), String(t.sessions),
     ago(t.last_active_at), t.open ? 'open' : '',
-  ]));
+  ]), { flexible: [1, 2] }, options.width);
 }
 
 function listTicketSessions(sessions, ticket, options) {
@@ -188,7 +203,7 @@ function listTicketSessions(sessions, ticket, options) {
   printTable(['SESSION', 'REPO', 'BRANCH', 'DIRECTORY', 'STARTED', 'ENDED'], rows.map((s) => [
     s.session_id.slice(0, 8), repoName(s.repo), s.branch ?? '', (s.cwd ?? '') + marker[s.directory_exists],
     localTime(s.started_at), s.ended_at ? localTime(s.ended_at) : 'open',
-  ]));
+  ]), { flexible: [1, 2, 3], cutFront: [3] }, options.width);
 }
 
 function show(prefix) {
