@@ -105,6 +105,8 @@ out=$(sessions list INT-1)
 check "list ticket -> its sessions, newest first" \
   "$(awk 'NR > 1 { printf "%s ", $1 }' <<< "$out")" "bbbbbbbb aaaaaaaa "
 row_a=$(grep '^aaaaaaaa' <<< "$out") row_b=$(grep '^bbbbbbbb' <<< "$out")
+check "list ticket -> last active, not started" "$(has "$(head -1 <<< "$out")" "LAST ACTIVE")$(has "$(head -1 <<< "$out")" "STARTED")" "yesno: $(head -1 <<< "$out")"
+check "list ticket -> last active as an age" "$(has "$row_a" " ago ")" yes
 check "list ticket -> kind from the first command" "$(has "$row_a" "/ds:work-on")" yes
 check "list ticket -> title from the latest ai title" "$(has "$row_a" "translate-picker-text")" yes
 check "list ticket -> a custom title wins over the ai title" "$(has "$row_b" "polish-int-1")" yes

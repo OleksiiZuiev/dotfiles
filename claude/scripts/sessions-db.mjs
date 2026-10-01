@@ -190,14 +190,6 @@ function ago(iso) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-// The year only when it is not the current one.
-function localTime(iso) {
-  const d = new Date(iso);
-  const pad = (n) => String(n).padStart(2, '0');
-  const year = d.getFullYear() === new Date().getFullYear() ? '' : `${d.getFullYear()}-`;
-  return `${year}${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 const repoName = (repo) => repo?.split('/').at(-1) ?? '';
 const directoryName = (cwd) => cwd?.split(/[\\/]/).filter(Boolean).at(-1) ?? '';
 const truncate = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
@@ -255,8 +247,8 @@ function listTicketSessions(sessions, ticket, options) {
 
   if (options.json) return console.log(JSON.stringify(rows, null, 2));
   const marker = { true: '', false: ' (gone)', null: ' (?)' };
-  printTable(['SESSION', 'STARTED', 'KIND', 'TITLE', 'DIRECTORY', ''], rows.map((s) => [
-    s.session_id.slice(0, 8), localTime(s.started_at), s.kind, s.title,
+  printTable(['SESSION', 'LAST ACTIVE', 'KIND', 'TITLE', 'DIRECTORY', ''], rows.map((s) => [
+    s.session_id.slice(0, 8), ago(s.last_active_at), s.kind, s.title,
     directoryName(s.cwd) + marker[s.directory_exists], s.ended_at ? '' : 'open',
   ]), { flexible: [2, 3, 4], cutFront: [4] }, options.width);
 }

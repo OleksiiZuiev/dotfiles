@@ -97,7 +97,7 @@ Tables fit the terminal width, cutting the longest columns with an ellipsis.
                   or killed before it could record one.
                   TITLE is the first line of the ticket context, else the
                   branch slug.
-  list <ticket>   SESSION, STARTED, KIND, TITLE, DIRECTORY, and `open` when the
+  list <ticket>   SESSION, LAST ACTIVE, KIND, TITLE, DIRECTORY, and `open` when the
                   session has no end time. KIND is the command the session
                   began with (/ds:work-on); TITLE is its /rename title, else
                   Claude Code's own, else its first message — both read from
