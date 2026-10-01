@@ -264,6 +264,33 @@ mkdir -p "$TARGET_HOME/.bash.d.local"
 rescue_foreign_entries "$TARGET_HOME/.bash.d" "$TARGET_HOME/.bash.d.local"
 create_link "$DOTFILES_DIR/bash.d" "$TARGET_HOME/.bash.d"
 
+# Linux homes (WSL) get the same fzf as Windows: the distro package lags far behind (Ubuntu 24.04
+# ships 0.44), and the `sessions` view needs the newer actions. Checked against the release's own
+# checksum, installed ahead of the distro's on PATH.
+FZF_VERSION=0.74.4
+FZF_SHA256=05e6813a337cc722c3ed07e54a764b75cc5d671e2e60459db0ba696ee5fa7504
+install_fzf() {
+    local bin="$TARGET_HOME/.local/bin" tarball="fzf-$FZF_VERSION-linux_amd64.tar.gz" tmp
+    if [[ "$("$bin/fzf" --version 2>/dev/null)" == "$FZF_VERSION "* ]]; then
+        echo "  fzf $FZF_VERSION already installed"
+        return 0
+    fi
+    tmp=$(mktemp -d)
+    curl -fsSL -o "$tmp/$tarball" "https://github.com/junegunn/fzf/releases/download/v$FZF_VERSION/$tarball" &&
+        echo "$FZF_SHA256  $tmp/$tarball" | sha256sum -c --quiet - &&
+        mkdir -p "$bin" &&
+        tar -xzf "$tmp/$tarball" -C "$bin" fzf &&
+        echo "  Installed fzf $FZF_VERSION to $bin"
+    local status=$?
+    rm -rf "$tmp"
+    return $status
+}
+if [[ "$(uname -s)" == "Linux" ]]; then
+    echo ""
+    echo "Installing fzf..."
+    install_fzf || echo "  Warning: fzf $FZF_VERSION was not installed"
+fi
+
 echo ""
 echo "Installation complete!"
 
