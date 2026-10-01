@@ -5,7 +5,7 @@
 //     facts gathered on the session's own OS (branch, origin URL, git common dir), then the hook
 //     payload JSON.
 //   node sessions-db.mjs list [ticket] [--json] [--width <columns>] [--ticket-contexts <dir>] [--wsl-distro <name>]
-//   node sessions-db.mjs show <session-id-prefix>
+//   node sessions-db.mjs show <session-id-prefix> [--wsl-distro <name>]
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -121,13 +121,65 @@ function titleOf(ticket, latestBranch, ticketContexts) {
   return latestBranch?.match(BRANCH_PATTERN)?.[2]?.replaceAll('-', ' ') ?? '';
 }
 
-// A POSIX cwd is a WSL session's: reachable only through the distro's share, and only checked when
-// the list runs from WSL, because touching \\wsl.localhost from Windows can start the WSL VM.
+// A POSIX path is a WSL session's: reachable only through the distro's share, and only read when the
+// list runs from WSL, because touching \\wsl.localhost from Windows can start the WSL VM. Null when
+// the path cannot be reached from here.
+function reachablePath(path, wslDistro) {
+  if (!path?.startsWith('/')) return path ?? null;
+  return wslDistro ? `\\\\wsl.localhost\\${wslDistro}${path.replaceAll('/', '\\')}` : null;
+}
+
 function directoryExists(cwd, wslDistro) {
-  if (!cwd) return null;
-  if (!cwd.startsWith('/')) return existsSync(cwd);
-  if (!wslDistro) return null;
-  return existsSync(`\\\\wsl.localhost\\${wslDistro}${cwd.replaceAll('/', '\\')}`);
+  const path = reachablePath(cwd, wslDistro);
+  return path === null ? null : existsSync(path);
+}
+
+// What the transcript says the session is about. Its line format is Claude Code's, undocumented, so
+// every field is best effort and missing when the format moves: kind is the first message's command
+// (`/ds:work-on`), title is the `/rename` title, else Claude Code's own latest title, else the first
+// message itself. Titles are searched from the end without parsing every line — transcripts run to
+// megabytes.
+function transcriptFacts(transcriptPath, wslDistro) {
+  const facts = { kind: '', title: '', last_prompt: '' };
+  const path = reachablePath(transcriptPath, wslDistro);
+  let text;
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch {
+    return facts;
+  }
+  // The latest entry of `type` that carries `key` — not every entry does (a `last-prompt` can hold
+  // only a message id).
+  const lastEntry = (type, key) => {
+    for (let at = text.lastIndexOf(`"${key}":`); at >= 0; at = text.lastIndexOf(`"${key}":`, at - 1)) {
+      const end = text.indexOf('\n', at);
+      try {
+        const entry = JSON.parse(text.slice(text.lastIndexOf('\n', at) + 1, end < 0 ? undefined : end));
+        if (entry.type === type && entry[key]) return entry[key];
+      } catch {}
+      if (at === 0) break;
+    }
+    return '';
+  };
+
+  let firstMessage = '';
+  for (const line of text.split('\n', 200)) {
+    if (!line.includes('"type":"user"')) continue;
+    try {
+      const entry = JSON.parse(line);
+      if (entry.type !== 'user' || entry.isMeta) continue;
+      const content = entry.message?.content;
+      firstMessage = typeof content === 'string' ? content
+        : Array.isArray(content) ? content.map((part) => part.text ?? '').join(' ') : '';
+      if (firstMessage) break;
+    } catch {}
+  }
+  const command = firstMessage.match(/<command-name>([^<]*)<\/command-name>/)?.[1];
+  facts.kind = command ?? '';
+  facts.title = lastEntry('custom-title', 'customTitle') || lastEntry('ai-title', 'aiTitle')
+    || (command ? '' : firstMessage.replace(/\s+/g, ' ').trim());
+  facts.last_prompt = lastEntry('last-prompt', 'lastPrompt');
+  return facts;
 }
 
 function ago(iso) {
@@ -138,13 +190,16 @@ function ago(iso) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+// The year only when it is not the current one.
 function localTime(iso) {
   const d = new Date(iso);
   const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const year = d.getFullYear() === new Date().getFullYear() ? '' : `${d.getFullYear()}-`;
+  return `${year}${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 const repoName = (repo) => repo?.split('/').at(-1) ?? '';
+const directoryName = (cwd) => cwd?.split(/[\\/]/).filter(Boolean).at(-1) ?? '';
 const truncate = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 const truncateFront = (text, max) => (text.length > max ? `…${text.slice(text.length - max + 1)}` : text);
 
@@ -195,21 +250,29 @@ function listTickets(sessions, options) {
 function listTicketSessions(sessions, ticket, options) {
   const rows = sessions
     .filter((s) => (ticket === NO_TICKET ? s.ticket === null : s.ticket === ticket.toUpperCase()))
-    .map((s) => ({ ...s, directory_exists: directoryExists(s.cwd, options.wslDistro) }));
+    .map((s) => ({ ...s, ...derivedFacts(s, options.wslDistro) }));
   if (rows.length === 0) fail(`No sessions for ${ticket}.`);
 
   if (options.json) return console.log(JSON.stringify(rows, null, 2));
   const marker = { true: '', false: ' (gone)', null: ' (?)' };
-  printTable(['SESSION', 'REPO', 'BRANCH', 'DIRECTORY', 'STARTED', 'ENDED'], rows.map((s) => [
-    s.session_id.slice(0, 8), repoName(s.repo), s.branch ?? '', (s.cwd ?? '') + marker[s.directory_exists],
-    localTime(s.started_at), s.ended_at ? localTime(s.ended_at) : 'open',
-  ]), { flexible: [1, 2, 3], cutFront: [3] }, options.width);
+  printTable(['SESSION', 'STARTED', 'KIND', 'TITLE', 'DIRECTORY', ''], rows.map((s) => [
+    s.session_id.slice(0, 8), localTime(s.started_at), s.kind, s.title,
+    directoryName(s.cwd) + marker[s.directory_exists], s.ended_at ? '' : 'open',
+  ]), { flexible: [2, 3, 4], cutFront: [4] }, options.width);
 }
 
-function show(prefix) {
+function derivedFacts(session, wslDistro) {
+  return { directory_exists: directoryExists(session.cwd, wslDistro), ...transcriptFacts(session.transcript_path, wslDistro) };
+}
+
+function show(prefix, options) {
   if (!prefix) fail('Usage: sessions-db.mjs show <session-id-prefix>');
-  const session = readSessions().find((s) => s.session_id.startsWith(prefix));
-  if (!session) fail(`No session ${prefix}.`);
+  const found = readSessions().find((s) => s.session_id.startsWith(prefix));
+  if (!found) fail(`No session ${prefix}.`);
+  // What the session is about first: the preview pane shows only the top lines.
+  const facts = derivedFacts(found, options.wslDistro);
+  const session = { session_id: found.session_id, title: facts.title, kind: facts.kind,
+    last_prompt: facts.last_prompt, ...found, ...facts };
   const width = Math.max(...Object.keys(session).map((k) => k.length));
   for (const [key, value] of Object.entries(session)) console.log(`${key.padEnd(width)}  ${value ?? ''}`);
 }
@@ -223,7 +286,8 @@ if (command === 'start' || command === 'end') {
   if (ticket) listTicketSessions(readSessions(), ticket, options);
   else listTickets(readSessions(), options);
 } else if (command === 'show') {
-  show(args[0]);
+  const options = parseArgs(args);
+  show(options.positional[0], options);
 } else {
   throw new Error(`unknown command: ${command}`);
 }
