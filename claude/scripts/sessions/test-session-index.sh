@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests for session-index.sh: pipes crafted SessionStart / SessionEnd payloads through the real hook
-# into a throwaway database and reads the rows back. Run: bash claude/hooks/test-session-index.sh
+# into a throwaway database and reads the rows back. Run: bash claude/scripts/sessions/test-session-index.sh
 HOOK="$(dirname "$0")/session-index.sh"
 fails=0
 

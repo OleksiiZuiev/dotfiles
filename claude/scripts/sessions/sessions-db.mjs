@@ -1,7 +1,7 @@
-// The sessions index: owns its schema, every write, and the reads behind `sessions` (bash.d/sessions.sh).
+// The sessions index: owns its schema, every write, and the reads behind `sessions` (sessions.sh).
 //
 //   node sessions-db.mjs start|end
-//     Writes one hook event. Stdin, as sent by claude/hooks/session-index.sh: three lines of git
+//     Writes one hook event. Stdin, as sent by session-index.sh: three lines of git
 //     facts gathered on the session's own OS (branch, origin URL, git common dir), then the hook
 //     payload JSON.
 //   node sessions-db.mjs list [ticket] [--json] [--width <columns>] [--ticket-contexts <dir>] [--wsl-distro <name>]

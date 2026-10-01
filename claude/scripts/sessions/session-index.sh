@@ -3,13 +3,13 @@
 # Usage: session-index.sh start|end   (hook payload on stdin)
 #
 # Git runs here, on the OS that owns the working directory; the database write is always the
-# Windows node running ../scripts/sessions-db.mjs, because WSL writers over /mnt/c are not safe.
+# Windows node running sessions-db.mjs, because WSL writers over /mnt/c are not safe.
 # Fails open: a failed write logs one line to stderr and the session carries on.
 
 event="$1"
 payload=$(cat)
 
-writer="$(dirname "$0")/../scripts/sessions-db.mjs"
+writer="$(dirname "$0")/sessions-db.mjs"
 if [[ -n "$WSL_DISTRO_NAME" ]]; then
   node_bin="${CLAUDE_SESSIONS_NODE:-/mnt/c/Program Files/nodejs/node.exe}"
   writer=$(wslpath -w "$writer" 2>/dev/null)

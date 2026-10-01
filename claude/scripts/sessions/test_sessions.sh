@@ -1,10 +1,10 @@
 #!/bin/bash
-# Tests for the `sessions` read commands (bash.d/sessions.sh): builds a sessions index through the
+# Tests for the `sessions` read commands (sessions.sh): builds a sessions index through the
 # real writer, then reads it back through `sessions list`, `sessions show` and the view's key handler.
-# Run: bash claude/scripts/test_sessions.sh
+# Run: bash claude/scripts/sessions/test_sessions.sh
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 WRITER="$SCRIPT_DIR/sessions-db.mjs"
-source "$SCRIPT_DIR/../../bash.d/sessions.sh"
+source "$SCRIPT_DIR/sessions.sh"
 fails=0
 
 # Fixtures under $HOME so cygpath round-trips (/tmp maps elsewhere on Git Bash).
@@ -149,7 +149,7 @@ check "show -> title" "$(has "$out" "polish-int-1")" yes
 check "show unknown id -> exit 1" "$(sessions show zzzz > /dev/null 2>&1; echo $?)" 1
 
 # --- The view's key handler: prints the fzf actions for a key in the current mode ---
-view() { FZF_PROMPT="$1" bash "$SCRIPT_DIR/../../bash.d/sessions.sh" _view "${@:2}"; }
+view() { FZF_PROMPT="$1" bash "$SCRIPT_DIR/sessions.sh" _view "${@:2}"; }
 out=$(view 'tickets> ' enter INT-1)
 check "view enter on a ticket -> loads its sessions" "$(has "$out" "list 'INT-1')")" yes
 check "view enter on a ticket -> sessions prompt" "$(has "$out" "change-prompt(INT-1 sessions> )")" yes

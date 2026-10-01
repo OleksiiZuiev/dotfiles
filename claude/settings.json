@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/session-index.sh start",
+            "command": "bash ~/.claude/scripts/sessions/session-index.sh start",
             "timeout": 10
           }
         ]
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/session-index.sh end",
+            "command": "bash ~/.claude/scripts/sessions/session-index.sh end",
             "timeout": 10
           }
         ]
