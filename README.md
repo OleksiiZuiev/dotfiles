@@ -25,7 +25,9 @@ Modular bash scripts loaded via `~/.bashrc`:
 - `claude-bin.sh` - `claude_bin`, which resolves the Claude Code binary for the current OS
 - `git-helpers.sh` - Git helper functions (`gsw` for recent branch switching)
 - `lclaude.sh` - Smart Claude launcher with project history
+- `lcode.sh` - VSCode launcher using the same recent-project menu as `lclaude`
 - `repo-roots.sh` - Per-OS repo roots and repo-map location
+- `repo-pick.sh` - `_repo_pick`, the recent-project menu shared by `lclaude`, `cd-repo` and `lcode`
 
 ## Installation
 
