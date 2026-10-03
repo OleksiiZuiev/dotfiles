@@ -1,6 +1,6 @@
 #!/bin/bash
-# SessionStart / SessionEnd hook: records the session in the sessions index.
-# Usage: session-index.sh start|end   (hook payload on stdin)
+# SessionStart / SessionEnd / UserPromptSubmit hook: records the session in the sessions index.
+# Usage: session-index.sh start|end|fill   (hook payload on stdin)
 #
 # Git runs here, on the OS that owns the working directory; the database write is always the
 # Windows node running sessions-db.mjs, because WSL writers over /mnt/c are not safe.
@@ -8,6 +8,12 @@
 
 event="$1"
 payload=$(cat)
+
+# UserPromptSubmit fires on every prompt; only a /ds:refine one can fill a ticket, so anything else
+# is turned away here rather than paying for a node start. sessions-db.mjs makes the real match.
+if [[ "$event" == "fill" ]]; then
+  case "$payload" in *'"prompt":"/ds:refine '*) ;; *) exit 0 ;; esac
+fi
 
 writer="$(dirname "$0")/sessions-db.mjs"
 if [[ -n "$WSL_DISTRO_NAME" ]]; then

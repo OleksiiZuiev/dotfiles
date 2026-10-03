@@ -1,9 +1,9 @@
 // The sessions index: owns its schema, every write, and the reads behind `sessions` (sessions.sh).
 //
-//   node sessions-db.mjs start|end
+//   node sessions-db.mjs start|end|fill
 //     Writes one hook event. Stdin, as sent by session-index.sh: three lines of git
-//     facts gathered on the session's own OS (branch, origin URL, git common dir), then the hook
-//     payload JSON.
+//     facts gathered on the session's own OS (branch, origin URL, git common dir; empty for end and
+//     fill), then the hook payload JSON.
 //   node sessions-db.mjs list [ticket] [--json] [--refresh] [--width <columns>] [--ticket-contexts <dir>] [--wsl-distro <name>]
 //   node sessions-db.mjs show <session-id-prefix | ticket> [--ticket-contexts <dir>] [--wsl-distro <name>]
 //   node sessions-db.mjs locate <session-id-prefix | ticket>
@@ -35,6 +35,11 @@ CREATE TABLE IF NOT EXISTS sessions (
 // Same rule as /ds:work-on: {type}/{prefix-number}-{slug}.
 const BRANCH_PATTERN = /^[^/]+\/([a-z]+-\d+)(?:-(.*))?$/i;
 
+// /ds:refine runs before a branch exists, so its ticket comes from the prompt. Only /ds:refine: other
+// /ds: commands take a ticket-shaped first argument that means something else (/ds:quick's parent
+// task, /ds:distill's PR number).
+const REFINE_TICKET_PATTERN = /^\/ds:refine\s+([a-z]+-\d+)\b/i;
+
 function ticketFromBranch(branch) {
   const match = branch.match(BRANCH_PATTERN);
   return match ? match[1].toUpperCase() : null;
@@ -58,6 +63,8 @@ function write(event) {
   const [branch, origin, commonDir, ...rest] = readFileSync(0, 'utf8').split('\n');
   const payload = JSON.parse(rest.join('\n'));
   const now = new Date().toISOString();
+  const refineTicket = event === 'fill' ? payload.prompt?.match(REFINE_TICKET_PATTERN)?.[1] : null;
+  if (event === 'fill' && !refineTicket) return;
 
   mkdirSync(dirname(DB_PATH), { recursive: true });
   const db = openDb();
@@ -80,6 +87,11 @@ function write(event) {
           WHERE session_id = ?`).run(now, payload.session_id);
       }
     }
+  } else if (event === 'fill') {
+    // First ticket wins: a branch ticket, or an earlier /ds:refine in the same session, is kept.
+    db.prepare(`
+      UPDATE sessions SET ticket = ?, last_active_at = ?
+      WHERE session_id = ? AND ticket IS NULL`).run(refineTicket.toUpperCase(), now, payload.session_id);
   } else {
     db.prepare(`
       UPDATE sessions SET ended_at = ?, end_reason = ?, last_active_at = ?
@@ -320,7 +332,7 @@ function locate(prefix) {
 }
 
 const [command, ...args] = process.argv.slice(2);
-if (command === 'start' || command === 'end') {
+if (command === 'start' || command === 'end' || command === 'fill') {
   write(command);
 } else if (command === 'list') {
   const options = parseArgs(args);

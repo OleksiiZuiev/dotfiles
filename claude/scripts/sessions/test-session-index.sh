@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests for session-index.sh: pipes crafted SessionStart / SessionEnd payloads through the real hook
+# Tests for session-index.sh: pipes crafted SessionStart / SessionEnd / UserPromptSubmit payloads through the real hook
 # into a throwaway database and reads the rows back. Run: bash claude/scripts/sessions/test-session-index.sh
 HOOK="$(dirname "$0")/session-index.sh"
 fails=0
@@ -15,6 +15,9 @@ start_payload() { # $1 session id  $2 source  $3 cwd
 }
 end_payload() { # $1 session id  $2 reason
   printf '{"session_id":"%s","transcript_path":"C:/t/%s.jsonl","hook_event_name":"SessionEnd","reason":"%s"}' "$1" "$1" "$2"
+}
+prompt_payload() { # $1 session id  $2 prompt
+  printf '{"session_id":"%s","transcript_path":"C:/t/%s.jsonl","cwd":"C:/p","hook_event_name":"UserPromptSubmit","prompt":"%s"}' "$1" "$1" "$2"
 }
 run_hook() { # $1 dir  $2 event  $3 payload; stdout = hook stdout+stderr, $? = hook exit code
   (cd "$1" && printf '%s' "$3" | bash "$HOOK" "$2" 2>&1)
@@ -117,6 +120,39 @@ check "compact -> row unchanged" "$(col s-ticket end_reason)" other
 
 run_hook "$ticket_repo" start "$(start_payload s-cleared clear C:/work/ticket-repo)" > /dev/null
 check "clear -> new id gets a row" "$(col s-cleared ticket)" INT-812
+
+# --- UserPromptSubmit ---
+run_hook "$plain" start "$(start_payload s-refine startup C:/p)" > /dev/null
+out=$(run_hook "$plain" fill "$(prompt_payload s-refine '/ds:refine int-900 tighten the scope')"); code=$?
+check "/ds:refine -> exit 0" "$code" 0
+check "/ds:refine -> no output" "$out" ""
+check "/ds:refine -> fills the ticket, upper-cased" "$(col s-refine ticket)" INT-900
+
+run_hook "$plain" fill "$(prompt_payload s-refine '/ds:refine INT-901')" > /dev/null
+check "second /ds:refine -> first ticket kept" "$(col s-refine ticket)" INT-900
+
+run_hook "$ticket_repo" start "$(start_payload s-branch-ticket startup C:/work/ticket-repo)" > /dev/null
+run_hook "$ticket_repo" fill "$(prompt_payload s-branch-ticket '/ds:refine INT-902')" > /dev/null
+check "/ds:refine on a ticket branch -> branch ticket kept" "$(col s-branch-ticket ticket)" INT-812
+
+run_hook "$plain" start "$(start_payload s-quick startup C:/p)" > /dev/null
+run_hook "$plain" fill "$(prompt_payload s-quick '/ds:quick INT-100 fix the typo')" > /dev/null
+check "other /ds: command with a ticket -> no ticket" "$(col s-quick ticket)" NULL
+
+run_hook "$plain" start "$(start_payload s-chat startup C:/p)" > /dev/null
+run_hook "$plain" fill "$(prompt_payload s-chat 'what does INT-100 change?')" > /dev/null
+check "plain prompt -> no ticket" "$(col s-chat ticket)" NULL
+
+out=$(run_hook "$plain" fill "$(prompt_payload s-never-started '/ds:refine INT-903')"); code=$?
+check "/ds:refine in an unknown session -> exit 0" "$code" 0
+check "/ds:refine in an unknown session -> no row" "$(col s-never-started session_id)" MISSING
+
+out=$(CLAUDE_SESSIONS_NODE=/nonexistent/node run_hook "$plain" fill "$(prompt_payload s-chat 'hello')"); code=$?
+check "plain prompt, broken node path -> exit 0" "$code" 0
+check "plain prompt, broken node path -> node not run, no output" "$out" ""
+out=$(CLAUDE_SESSIONS_NODE=/nonexistent/node run_hook "$plain" fill "$(prompt_payload s-chat '/ds:refine INT-904')")
+check "/ds:refine, broken node path -> node run, logs to stderr" \
+  "$([[ "$out" == *"session-index: fill write failed"* ]] && echo yes)" yes
 
 echo
 if [[ $fails == 0 ]]; then echo "All passed."; else echo "$fails failed."; exit 1; fi

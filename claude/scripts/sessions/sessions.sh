@@ -131,8 +131,9 @@ Usage: sessions                              interactive view (fzf)
        sessions resume <session-id | ticket> reopen a session, or a ticket's latest, in a new tab
 
 Every Claude Code session on this machine, Windows and WSL, as recorded by the
-SessionStart / SessionEnd hooks (session-index.sh), grouped by the
-ticket parsed from its branch. Sessions with no ticket are listed last under —;
+SessionStart / SessionEnd / UserPromptSubmit hooks (session-index.sh), grouped
+by the ticket parsed from its branch, or for a branchless session from a first
+/ds:refine <ticket>. Sessions with no ticket are listed last under —;
 pass — as <ticket> to list them. A session id may be given as any prefix.
 Tables fit the terminal width, cutting the longest columns with an ellipsis.
 
