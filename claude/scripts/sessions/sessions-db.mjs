@@ -6,9 +6,9 @@
 //     fill), then the hook payload JSON.
 //   node sessions-db.mjs list [ticket] [--json] [--refresh] [--width <columns>] [--ticket-contexts <dir>] [--wsl-distro <name>]
 //   node sessions-db.mjs show <session-id-prefix | ticket> [--ticket-contexts <dir>] [--wsl-distro <name>]
-//   node sessions-db.mjs locate <session-id-prefix | ticket>
+//   node sessions-db.mjs locate <session-id-prefix | ticket> [--worktree]
 //     The session `sessions resume` reopens — a ticket's latest — as four lines: session id, cwd,
-//     transcript path, ticket.
+//     transcript path, ticket. With --worktree, the session whose directory `sessions new` opens.
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -322,12 +322,17 @@ function show(prefix, options) {
     last_prompt: facts.last_prompt, ...found, ...facts });
 }
 
-// Sessions are read newest first, so a ticket's first match is its latest.
-function locate(prefix) {
-  if (!prefix) fail('Usage: sessions-db.mjs locate <session-id-prefix | ticket>');
+// Sessions are read newest first, so a ticket's first match is its latest. With `worktree`, the
+// latest session whose branch names the ticket: a /ds:refine session in the repo checkout is not
+// in the ticket's worktree.
+function locate(prefix, worktree) {
+  if (!prefix) fail('Usage: sessions-db.mjs locate <session-id-prefix | ticket> [--worktree]');
   const sessions = readSessions();
-  const found = sessionByPrefix(sessions, prefix) ?? sessions.find((s) => s.ticket === prefix.toUpperCase());
-  if (!found) fail(`No session or ticket ${prefix}.`);
+  const ticket = prefix.toUpperCase();
+  const found = worktree
+    ? sessions.find((s) => s.branch && ticketFromBranch(s.branch) === ticket)
+    : sessionByPrefix(sessions, prefix) ?? sessions.find((s) => s.ticket === ticket);
+  if (!found) fail(worktree ? `sessions: no worktree for ${ticket}` : `No session or ticket ${prefix}.`);
   console.log([found.session_id, found.cwd, found.transcript_path, found.ticket].map((v) => v ?? '').join('\n'));
 }
 
@@ -343,7 +348,7 @@ if (command === 'start' || command === 'end' || command === 'fill') {
   const options = parseArgs(args);
   show(options.positional[0], options);
 } else if (command === 'locate') {
-  locate(args[0]);
+  locate(args.find((a) => a !== '--worktree'), args.includes('--worktree'));
 } else {
   throw new Error(`unknown command: ${command}`);
 }

@@ -172,6 +172,38 @@ check "resume a WSL session -> a WSL tab" "$(tab_args)" "--wsl INT-3 /home/someo
 check "resume a WSL session -> its directory checked in WSL" "$(tr '\n' ' ' < "$root/wsl-args")" "-e test -d /home/someone/gamma "
 check "resume unknown -> exit 1" "$(sessions resume zzzz > /dev/null 2>&1; echo $?)" 1
 check "resume unknown -> no tab" "$(tab_args)" ""
+
+# --- sessions new ---
+sessions new int-2 > /dev/null; code=$?
+check "new -> exit 0" "$code" 0
+check "new -> a tab in the ticket's worktree running plain claude" "$(tab_args)" "INT-2 $alive "
+err=$(sessions new INT-1 2>&1 > /dev/null); code=$?
+check "new when the worktree is gone -> exit 1" "$code" 1
+check "new when the worktree is gone -> says so" "$(has "$err" "no longer exists")" yes
+check "new when the worktree is gone -> no tab" "$(tab_args)" ""
+# A /ds:refine session: on main in the repo checkout, its ticket filled from the prompt.
+add ffffffff-1 main git@github.com:org/alpha.git "$alive" \
+  2026-09-30T16:00:00.000Z 2026-09-30T16:30:00.000Z 2026-09-30T16:30:00.000Z
+printf '\n\n\n{"session_id":"ffffffff-1","prompt":"/ds:refine INT-4"}' \
+  | node --disable-warning=ExperimentalWarning "$(cygpath -w "$WRITER")" fill
+err=$(sessions new INT-4 2>&1 > /dev/null); code=$?
+check "new for a ticket with no session on its branch -> exit 1" "$code" 1
+check "new for a ticket with no session on its branch -> says so" "$(has "$err" "no worktree for INT-4")" yes
+check "new for a ticket with no session on its branch -> no tab" "$(tab_args)" ""
+out=$(FZF_PROMPT='tickets> ' bash "$SCRIPT_DIR/sessions.sh" _view new INT-4)
+check "view ctrl-n on a ticket with no worktree -> the reason in the header" \
+  "$(has "$out" "change-header:")$(has "$out" "no worktree for INT-4")" yesyes
+node --disable-warning=ExperimentalWarning -e '
+  const { DatabaseSync } = require("node:sqlite");
+  new DatabaseSync(process.argv[1]).prepare("DELETE FROM sessions WHERE session_id = ?").run("ffffffff-1");
+' "$CLAUDE_SESSIONS_DB"
+check "view ctrl-n on no ticket -> nothing" "$(FZF_PROMPT='tickets> ' bash "$SCRIPT_DIR/sessions.sh" _view new —)" ""
+rm -f "$root/wsl-args"
+sessions new int-3 > /dev/null
+check "new for a WSL worktree -> a WSL tab" "$(tab_args)" "--wsl INT-3 /home/someone/gamma "
+check "new for a WSL worktree -> its directory checked in WSL" "$(tr '\n' ' ' < "$root/wsl-args")" "-e test -d /home/someone/gamma "
+check "new unknown -> exit 1" "$(sessions new INT-404 > /dev/null 2>&1; echo $?)" 1
+check "new unknown -> no tab" "$(tab_args)" ""
 unset -f claude_tab wsl.exe
 
 # --- The view's key handler: prints the fzf actions for a key in the current mode ---

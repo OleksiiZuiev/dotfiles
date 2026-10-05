@@ -1,6 +1,6 @@
 #!/bin/bash
 # Open a Windows Terminal tab running a Claude session in a given directory,
-# with the given claude arguments: a prompt, or `--resume <session-id>`.
+# with the given claude arguments: a prompt, `--resume <session-id>`, or none.
 #
 # The launching shell is usually a Bash call inside another Claude session, whose
 # environment carries that session's markers. Inherited, CLAUDE_CODE_CHILD_SESSION
@@ -8,7 +8,7 @@
 # session advertise its parent's named pipe as its own address, so the whole set
 # is dropped here and the tab starts as an ordinary top-level session.
 #
-# Usage: claude-tab.sh [--wsl] <title> <dir> <claude-arg>...
+# Usage: claude-tab.sh [--wsl] <title> <dir> [<claude-arg>...]
 #   --wsl  <dir> is a path in the WSL distro, and the tab runs there. Without it
 #          the tab is a Git Bash one, opened from Git Bash only.
 
@@ -34,8 +34,8 @@ claude_tab() {
     local title="$1" dir="$2"
     local claude_args=("${@:3}")
 
-    if [[ -z "$title" || -z "$dir" || ${#claude_args[@]} -eq 0 ]]; then
-        echo "Usage: claude-tab.sh [--wsl] <title> <dir> <claude-arg>..." >&2
+    if [[ -z "$title" || -z "$dir" ]]; then
+        echo "Usage: claude-tab.sh [--wsl] <title> <dir> [<claude-arg>...]" >&2
         return 1
     fi
     if [[ -z "$wsl" && -n "$WSL_DISTRO_NAME" ]]; then

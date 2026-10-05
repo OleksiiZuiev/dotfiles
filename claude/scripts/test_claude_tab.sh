@@ -130,6 +130,16 @@ else
     fail "expected '--resume' 'abc-123', got ${#args[@]}: ${args[*]}"
 fi
 
+# 6. With no claude arguments the tab runs plain claude. The fake prints a bare `ARG:` line when
+# it gets no arguments, so a launch that never happened leaves no line at all.
+rm -f "$launched"
+claude_tab "INT-3" "$test_root"
+if [[ "$(head -n 1 "$launched" 2>/dev/null)" == "ARG:" ]]; then
+    pass "no claude arguments -> plain claude"
+else
+    fail "expected claude launched with no arguments, got: $(grep '^ARG:' "$launched" 2>/dev/null | tr '\n' ' ')"
+fi
+
 # --- --wsl: a tab in the WSL distro ---
 # The WSL side's claude-bin.sh, which the launcher sources inside the tab.
 wsl_home="$test_root/wsl-home"
