@@ -146,7 +146,7 @@ Tables fit the terminal width, cutting the longest columns with an ellipsis.
                   session has no end time. KIND is the command the session
                   began with (/ds:work-on); TITLE is its /rename title, else
                   Claude Code's own, else its first message — both read from
-                  the transcript. DIRECTORY is marked (gone) when it no longer
+                  the transcript; /rename inside a session sets it. DIRECTORY is marked (gone) when it no longer
                   exists, and (?) for a WSL session listed from Windows, whose
                   directory and transcript are not read from there.
 
