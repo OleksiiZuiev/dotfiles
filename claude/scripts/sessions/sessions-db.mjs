@@ -118,12 +118,8 @@ function fail(message) {
   process.exit(1);
 }
 
-function readSessions() {
-  if (!existsSync(DB_PATH)) fail(`No sessions recorded yet (${DB_PATH}).`);
-  const db = openDb();
-  const rows = db.prepare('SELECT * FROM sessions ORDER BY last_active_at DESC').all();
-  db.close();
-  return rows;
+function readSessions(db) {
+  return db.prepare('SELECT * FROM sessions ORDER BY last_active_at DESC').all();
 }
 
 // The Linear title, else the first line of the ticket context (`# INT-868: {title}`), else the slug
@@ -235,15 +231,13 @@ function printTable(header, rows, { flexible, cutFront = [] }, width) {
 }
 
 // One row per ticket, from sessions ordered newest first; the no-ticket group last.
-function ticketsOf(sessions, ticketContexts) {
+function ticketsOf(db, sessions, ticketContexts) {
   const groups = new Map();
   for (const s of sessions) {
     if (!groups.has(s.ticket)) groups.set(s.ticket, []);
     groups.get(s.ticket).push(s);
   }
-  const db = openDb();
   const issues = cachedIssues(db, [...groups.keys()].filter(Boolean));
-  db.close();
   return [...groups.entries()]
     .sort(([a], [b]) => (a === null) - (b === null))
     .map(([ticket, rows]) => ({
@@ -258,21 +252,18 @@ function ticketsOf(sessions, ticketContexts) {
 }
 
 // Linear failing leaves the cached and fallback titles; it is reported only when a refetch was asked for.
-async function refreshTickets(sessions, force) {
+async function refreshTickets(db, sessions, force) {
   const identifiers = [...new Set(sessions.map((s) => s.ticket).filter(Boolean))];
-  const db = openDb();
   try {
     await refreshIssues(db, identifiers, { force });
   } catch (error) {
     if (force) console.error(`sessions: could not reach Linear (${error.message})`);
-  } finally {
-    db.close();
   }
 }
 
-async function listTickets(sessions, options) {
-  await refreshTickets(sessions, options.refresh);
-  const tickets = ticketsOf(sessions, options.ticketContexts);
+async function listTickets(db, sessions, options) {
+  await refreshTickets(db, sessions, options.refresh);
+  const tickets = ticketsOf(db, sessions, options.ticketContexts);
 
   if (options.json) return console.log(JSON.stringify(tickets, null, 2));
   printTable(['TICKET', 'TITLE', 'REPO', 'SESSIONS', 'LAST ACTIVE', ''], tickets.map((t) => [
@@ -307,12 +298,12 @@ function printFields(record) {
 // A session id starts with eight hex digits before its first `-`, so no ticket identifier is a prefix of one.
 const sessionByPrefix = (sessions, prefix) => sessions.find((s) => s.session_id.startsWith(prefix));
 
-function show(prefix, options) {
+function show(db, prefix, options) {
   if (!prefix) fail('Usage: sessions-db.mjs show <session-id-prefix | ticket>');
-  const sessions = readSessions();
+  const sessions = readSessions(db);
   const found = sessionByPrefix(sessions, prefix);
   if (!found) {
-    const ticket = ticketsOf(sessions, options.ticketContexts).find((t) => t.ticket === prefix.toUpperCase());
+    const ticket = ticketsOf(db, sessions, options.ticketContexts).find((t) => t.ticket === prefix.toUpperCase());
     if (!ticket) fail(`No session or ticket ${prefix}.`);
     return printFields({ ...ticket, repos: ticket.repos.join(', '), open: ticket.open ? 'open' : '' });
   }
@@ -325,9 +316,9 @@ function show(prefix, options) {
 // Sessions are read newest first, so a ticket's first match is its latest. With `worktree`, the
 // latest session whose branch names the ticket: a /ds:refine session in the repo checkout is not
 // in the ticket's worktree.
-function locate(prefix, worktree) {
+function locate(db, prefix, worktree) {
   if (!prefix) fail('Usage: sessions-db.mjs locate <session-id-prefix | ticket> [--worktree]');
-  const sessions = readSessions();
+  const sessions = readSessions(db);
   const ticket = prefix.toUpperCase();
   const found = worktree
     ? sessions.find((s) => s.branch && ticketFromBranch(s.branch) === ticket)
@@ -339,16 +330,17 @@ function locate(prefix, worktree) {
 const [command, ...args] = process.argv.slice(2);
 if (command === 'start' || command === 'end' || command === 'fill') {
   write(command);
-} else if (command === 'list') {
+} else if (command === 'list' || command === 'show' || command === 'locate') {
+  // Checked before opening: opening would create an empty database.
+  if (!existsSync(DB_PATH)) fail(`No sessions recorded yet (${DB_PATH}).`);
+  const db = openDb();
   const options = parseArgs(args);
-  const [ticket] = options.positional;
-  if (ticket) listTicketSessions(readSessions(), ticket, options);
-  else await listTickets(readSessions(), options);
-} else if (command === 'show') {
-  const options = parseArgs(args);
-  show(options.positional[0], options);
-} else if (command === 'locate') {
-  locate(args.find((a) => a !== '--worktree'), args.includes('--worktree'));
+  const [target] = options.positional;
+  if (command === 'list' && target) listTicketSessions(readSessions(db), target, options);
+  else if (command === 'list') await listTickets(db, readSessions(db), options);
+  else if (command === 'show') show(db, target, options);
+  else locate(db, args.find((a) => a !== '--worktree'), args.includes('--worktree'));
+  db.close();
 } else {
   throw new Error(`unknown command: ${command}`);
 }

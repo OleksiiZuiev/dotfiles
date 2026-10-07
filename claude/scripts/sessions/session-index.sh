@@ -2,8 +2,8 @@
 # SessionStart / SessionEnd / UserPromptSubmit hook: records the session in the sessions index.
 # Usage: session-index.sh start|end|fill   (hook payload on stdin)
 #
-# Git runs here, on the OS that owns the working directory; the database write is always the
-# Windows node running sessions-db.mjs, because WSL writers over /mnt/c are not safe.
+# Git runs here, on the OS that owns the working directory; the database write is sessions-db.mjs
+# on the Windows node (windows-node.sh).
 # Fails open: a failed write logs one line to stderr and the session carries on.
 
 event="$1"
@@ -15,14 +15,7 @@ if [[ "$event" == "fill" ]]; then
   case "$payload" in *'"prompt":"/ds:refine '*) ;; *) exit 0 ;; esac
 fi
 
-writer="$(dirname "$0")/sessions-db.mjs"
-if [[ -n "$WSL_DISTRO_NAME" ]]; then
-  node_bin="${CLAUDE_SESSIONS_NODE:-/mnt/c/Program Files/nodejs/node.exe}"
-  writer=$(wslpath -w "$writer" 2>/dev/null)
-else
-  node_bin="${CLAUDE_SESSIONS_NODE:-node}"
-  writer=$(cygpath -w "$writer" 2>/dev/null)
-fi
+source "$(dirname "$0")/windows-node.sh"
 
 branch="" origin="" common_dir=""
 if [[ "$event" == "start" ]]; then
@@ -34,7 +27,7 @@ fi
 # Git facts go on stdin ahead of the payload, not in argv or env: Git Bash rewrites path-like
 # arguments for a Windows program, and env vars do not cross WSL interop.
 if ! printf '%s\n%s\n%s\n%s' "$branch" "$origin" "$common_dir" "$payload" \
-    | "$node_bin" --disable-warning=ExperimentalWarning "$writer" "$event" > /dev/null; then
-  echo "session-index: $event write failed (node: $node_bin)" >&2
+    | _sessions_node "$(dirname "$0")/sessions-db.mjs" "$event" > /dev/null; then
+  echo "session-index: $event write failed (node: ${CLAUDE_SESSIONS_NODE:-the Windows node})" >&2
 fi
 exit 0

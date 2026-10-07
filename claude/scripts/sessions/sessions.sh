@@ -1,27 +1,18 @@
 # Every Claude session, grouped by ticket, from the sessions index. See `sessions --help`.
 
 _SESSIONS_SH="${BASH_SOURCE[0]}"
+source "$(dirname "$_SESSIONS_SH")/windows-node.sh"
 _SESSIONS_LINEAR="https://linear.app/datasnipper-test/issue"
 _SESSIONS_TICKETS_PROMPT="tickets> "
 _SESSIONS_TICKETS_HEADER="enter: sessions · ctrl-n: new session in its worktree · ctrl-o: open in Linear · ctrl-r: refetch from Linear · esc: quit"
 _SESSIONS_SESSIONS_HEADER="enter: resume in a new tab · ctrl-o: open the ticket in Linear · ctrl-r: refetch from Linear · esc: back to tickets"
 
-# Runs the sessions index script on the Windows node from either OS, as session-index.sh
-# does: the database lives on C:, and only Windows processes open it.
+# Runs sessions-db.mjs with the options only this side knows: the ticket contexts, the width, and
+# from WSL the distro, through which a WSL session's files are read.
 _sessions_db() {
-    local script="$HOME/.claude/scripts/sessions/sessions-db.mjs" node_bin contexts
-    contexts="${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}"
-    local extra=()
-    if [[ -n "$WSL_DISTRO_NAME" ]]; then
-        node_bin="${CLAUDE_SESSIONS_NODE:-/mnt/c/Program Files/nodejs/node.exe}"
-        script=$(wslpath -w "$script")
-        contexts=$(wslpath -w "$contexts" 2>/dev/null)
-        extra=(--wsl-distro "$WSL_DISTRO_NAME")
-    else
-        node_bin="${CLAUDE_SESSIONS_NODE:-node}"
-        script=$(cygpath -w "$script")
-        contexts=$(cygpath -w "$contexts" 2>/dev/null)
-    fi
+    local contexts extra=()
+    contexts=$(_sessions_native_path "${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}" 2> /dev/null)
+    [[ -n "$WSL_DISTRO_NAME" ]] && extra=(--wsl-distro "$WSL_DISTRO_NAME")
     [[ "$1" == "list" || "$1" == "show" ]] && [[ -n "$contexts" ]] && extra+=(--ticket-contexts "$contexts")
     if [[ "$1" == "list" ]]; then
         # The view sets SESSIONS_WIDTH for its list and preview: fzf exports the FZF_* sizes to every
@@ -30,7 +21,7 @@ _sessions_db() {
         [[ -z "$width" && -t 1 ]] && width=$(tput cols 2>/dev/null)
         [[ -n "$width" ]] && extra+=(--width "$width")
     fi
-    "$node_bin" --disable-warning=ExperimentalWarning "$script" "$@" "${extra[@]}"
+    _sessions_node "$(dirname "$_SESSIONS_SH")/sessions-db.mjs" "$@" "${extra[@]}"
 }
 
 # Opens a tab running claude with the given arguments in a session's directory, on the OS the
