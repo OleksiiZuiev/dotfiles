@@ -67,36 +67,36 @@ In this order. Only `## Summary` is unconditional.
 2. **`## Summary`** — one to three sentences on what now works, plus the single decision when only
    one passes the gate below. Then, when a caller must change, one bolded line on its own:
    `**Breaking:** <what they must now pass, and why the old value was wrong>`.
-3. **`## Where to start`** — the reading order, once the change spans more than about three files.
+3. **The Linear line** — the ticket and this PR's Linear review view, as one blockquote line under
+   the summary, with no heading:
+
+   ```
+   > 🎫 [Linear ticket](<ticket URL>) · 🔍 [Linear review](https://linear.app/review/<owner>/<repo>/pull/<number>)
+   ```
+
+   The blockquote sets it apart from the body's prose — it is navigation, not content — and one line
+   avoids the blockquote joining consecutive lines into a paragraph. The review URL is built from the
+   PR's own path — no API key, no workspace slug — and serves a reviewer without the GitHub → Linear
+   browser extension, which puts the same link on the page for everyone who has it. Use the
+   `https://` form only: GitHub's markdown sanitizer strips the `linear://` desktop-app scheme, so it
+   renders as dead text.
+4. **`## Where to start`** — the reading order, once the change spans more than about three files.
    One bullet per file: the path, then the one fact you would get wrong by reading that file alone.
    Three to six bullets, one to two sentences each.
-4. **`## Decisions`** — a choice a reviewer reading the diff would call a mistake, or would meet with
+5. **`## Decisions`** — a choice a reviewer reading the diff would call a mistake, or would meet with
    "why not the obvious thing". One bullet each, one sentence: what holds, then the constraint that
    forced it, naming the obvious thing only when it is what the reviewer reaches for. Typically two
    or three bullets; a large change may warrant a few more. A choice that misleads only inside one
    file is a reading-order bullet and does not also appear here.
-5. **A contract section, named for the contract** — `## Host contract`, `## Consumer contract`. Only
+6. **A contract section, named for the contract** — `## Host contract`, `## Consumer contract`. Only
    for constraints a consumer cannot infer and would meet as a silent failure. Skip it otherwise;
    most PRs have none.
-6. **`## Not in this PR`** — the follow-up, the other repo's half, the deliberate omission. This is
+7. **`## Not in this PR`** — the follow-up, the other repo's half, the deliberate omission. This is
    the one heading for the concept; `## Scope`, `## Follow-ups` and `## Before merge, not done here`
    are the same section under other names, and inviting "scope" invites restating what *is* in
    scope, which is the summary's job.
-7. **`## Test plan`** — only a check CI does not perform: a manual verification, a device, a
+8. **`## Test plan`** — only a check CI does not perform: a manual verification, a device, a
    deployed environment. Omit the section when CI covers it.
-8. **`## Linear`** — the ticket, and this PR's Linear review view, one labelled line each:
-
-   ```
-   ## Linear
-
-   - Ticket: <ticket URL>
-   - Review this PR: https://linear.app/review/<owner>/<repo>/pull/<number>
-   ```
-
-   The review URL is built from the PR's own path — no API key, no workspace slug — and serves a
-   reviewer without the GitHub → Linear browser extension, which puts the same link on the page for
-   everyone who has it. Use the `https://` form only: GitHub's markdown sanitizer strips the
-   `linear://` desktop-app scheme, so it renders as dead text.
 9. **The attribution footer**, per the session's attribution rule.
 
 A section with one obligatory sentence in it is not a section. Fold it into the summary.
@@ -105,7 +105,7 @@ A section with one obligatory sentence in it is not a section. Fold it into the 
 
 Pull request #386 in `datasnipper-enterprise/integrations-importer-app` — a change spanning source,
 environment files and docs — is five sections and about 380 words. **That is the top of the range,
-not the middle.** A one-file fix is a summary and a ticket link.
+not the middle.** A one-file fix is a summary and the Linear line.
 
 The body grows with the diff far more slowly than the diff does: a change twice the size needs one
 or two more bullets in the reading order, not twice the prose. It fits one screen.

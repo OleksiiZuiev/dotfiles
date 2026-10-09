@@ -518,11 +518,13 @@ Mark `📄 Update PR description` as `in_progress`.
     same reviewer bar the `pr-descriptions` skill's `## Decisions` gate uses.
 - **Draft the revision to the `pr-descriptions` skill's shape** — the skill owns the sections, the
   title form and the budget, so a revision converges on them rather than preserving whatever is
-  there. Carry over the stacked-PR notice as the body's first line and the `## Linear` section's
-  two links, neither of which is derivable from the diff. When the existing body predates the
-  `## Linear` section, **add** the review line — `https://linear.app/review/<owner>/<repo>/pull/{PR_NUMBER}`,
-  with the owner and repo from `gh repo view --json nameWithOwner`. It rides out on the `gh pr edit`
-  below, so the backfill costs no extra call.
+  there. Carry over the stacked-PR notice as the body's first line and the Linear line's two links,
+  neither of which is derivable from the diff. When the existing body predates the Linear line —
+  its links sit in a `## Linear` section at the bottom, or the review link is missing — **rewrite**
+  them as the Linear line under the summary, building any missing review link as
+  `https://linear.app/review/<owner>/<repo>/pull/{PR_NUMBER}` with the owner and repo from
+  `gh repo view --json nameWithOwner`. It rides out on the `gh pr edit` below, so the backfill costs
+  no extra call.
 - **Print both bodies, then edit** — nobody is confirming this revision, so this print is the only
   copy of what was overwritten (GitHub exposes no readable history of PR-body edits):
   ```

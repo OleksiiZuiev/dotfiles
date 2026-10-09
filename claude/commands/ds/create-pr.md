@@ -58,9 +58,8 @@ You are creating a pull request for an implemented ticket.
      now works and what the change deliberately leaves out; they are not sections to transcribe.
    - For a stacked PR, the notice is the body's first line, where the skill's shape expects it:
      `> ⚡ Stacked on #PARENT_PR_NUM (\`<parent>\`) — will retarget to main when that branch merges.`
-   - The `## Linear` section's review line needs the PR's number, which does not exist yet. Write the
-     section with its ticket line alone; Step 7 fills in the review line once GitHub has assigned a
-     number.
+   - The Linear line's review link needs the PR's number, which does not exist yet. Write the Linear
+     line with its ticket link alone; Step 7 adds the review link once GitHub has assigned a number.
 
 7. **Push and Create PR**
    - Push branch to remote with `-u` flag if needed: `git push -u origin <branch>`
@@ -71,11 +70,11 @@ You are creating a pull request for an implemented ticket.
      EOF
      )"
      ```
-   - **Fill in the review line.** `gh pr create` prints the new PR's URL; take the owner, repo and
-     number from it and re-send the body with the `## Linear` section's review line completed:
+   - **Add the review link.** `gh pr create` prints the new PR's URL; take the owner, repo and
+     number from it and re-send the body with the review link added to the Linear line:
      ```bash
      gh pr edit <number> --body "$(cat <<'EOF'
-     <the same body, with `- Review this PR: https://linear.app/review/<owner>/<repo>/pull/<number>`>
+     <the same body, with ` · 🔍 [Linear review](https://linear.app/review/<owner>/<repo>/pull/<number>)` appended to the Linear line>
      EOF
      )"
      ```
