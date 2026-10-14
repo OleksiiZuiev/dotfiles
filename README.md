@@ -4,30 +4,49 @@ Personal configuration files managed with symlinks.
 
 ## What's Tracked
 
+This section describes directories, not the files in them. Each file carries its own summary — a
+command's `description:` frontmatter, a bash function's `--help` — and that is the one place to read it.
+
 ### Claude Code Configuration (`claude/`)
 
-- `commands/` - Custom slash commands for Claude Code
-  - `create-pr.md` - Create PR for a Linear ticket
-  - `git-commit.md` - Commit changes with context
-  - `implement.md` - Execute implementation plans
-  - `polish-pr.md` - Address PR review comments
-  - `refine.md` - Refine Linear tickets with acceptance criteria
-  - `start-task.md` - Start work on a Linear ticket
-- `settings.json` - Claude Code settings (permissions, hooks, model)
+- `commands/` - Slash commands. `ds/` holds the Linear-ticket and PR workflow, invoked as `/ds:<name>`
+  (`/ds:work-on`, `/ds:review`, `/ds:polish-pr` and friends); the top level holds general-purpose ones
+  (`/git-commit`, `/code`). Every `.md` at any depth is a command.
+- `hooks/` - Hook scripts referenced from `settings.json`, each with its test beside it — e.g.
+  `block-bad-bash.sh`, a `PreToolUse` guard on Bash calls.
+- `scripts/` - Helpers that commands, hooks and bash functions call, with their tests beside them.
+  Two subsystems have their own folder: `sessions/` (the session index — its lifecycle hook, store and
+  the `sessions` view) and `tasks/` (the `task` CLI for vault tasks).
+- `skills/` - One directory per skill, each with a `SKILL.md`. Skills installed by the `skills` CLI are
+  moved in here and excluded from git per clone (see the install steps below).
+- `overlays/` - Repo-keyed personal steering, one `{repo-key}.md` per repo. Written by `/ds:distill`,
+  read by `/ds:work-on`.
+- `settings.json` - Claude Code settings (permissions, hooks, env, status line)
 - `CLAUDE.md` - Global instructions for Claude Code
-- `statusline.ps1` - Custom status line script
+- `statusline.sh` - Status line script
 
 ### Bash Configuration (`bash.d/`)
 
-Modular bash scripts loaded via `~/.bashrc`:
+Modular bash scripts loaded via `~/.bashrc`, one function family per file. Every function answers
+`--help`, which is the source of truth for its usage. The ones meant to be typed:
 
-- `cd-repo.sh` - Quick directory switcher for recent git repos
-- `claude-bin.sh` - `claude_bin`, which resolves the Claude Code binary for the current OS
-- `git-helpers.sh` - Git helper functions (`gsw` for recent branch switching)
-- `lclaude.sh` - Smart Claude launcher with project history
-- `lcode.sh` - VSCode launcher using the same recent-project menu as `lclaude`
-- `repo-roots.sh` - Per-OS repo roots and repo-map location
-- `repo-pick.sh` - `_repo_pick`, the recent-project menu shared by `lclaude`, `cd-repo` and `lcode`
+- `lclaude`, `lcode`, `cd-repo` - Open Claude, VS Code or a shell in a recently used repo
+- `gsw` - Switch to a recent branch
+- `start-worktree`, `clean-worktrees` - Create a worktree; remove the ones whose PRs merged
+- `claude-merge`, `claude-rebase` - Merge or rebase with Claude resolving conflicts
+- `sessions` - Every Claude session, grouped by ticket
+- `task` - Vault tasks with IDs and a status in frontmatter
+
+The rest are helpers for these and for the `/ds:*` commands: `repo-roots.sh`, `repo-pick.sh`,
+`claude-bin.sh`, `stack-parent.sh`, `worktree-teardown.sh`, `sweep-launch.sh`. `sessions.sh` and
+`task.sh` are one-line shims that source their subsystem from `claude/scripts/`.
+
+### Other
+
+- `git/shared.gitconfig` - Git settings every home must agree on (see Shared Git Config below)
+- `vscode/settings.json` - VS Code user settings
+- `local/bash.d.example/` - Template for machine-specific bash settings (see Machine-Specific
+  Configuration below)
 
 ## Installation
 
@@ -109,27 +128,27 @@ Claude Code rings the bell.
 ```
 dotfiles/
 ├── README.md
+├── CLAUDE.md               # instructions for working on this repo
 ├── install.sh
 ├── claude/
 │   ├── commands/
-│   │   ├── create-pr.md
-│   │   ├── git-commit.md
-│   │   ├── implement.md
-│   │   ├── polish-pr.md
-│   │   ├── refine.md
-│   │   └── start-task.md
+│   │   └── ds/
+│   ├── hooks/
+│   ├── scripts/
+│   │   ├── sessions/
+│   │   └── tasks/
+│   ├── skills/
+│   ├── overlays/
 │   ├── settings.json
 │   ├── CLAUDE.md
-│   └── statusline.ps1
+│   └── statusline.sh
 ├── bash.d/
-│   ├── cd-repo.sh
-│   ├── git-helpers.sh
-│   └── lclaude.sh
 ├── git/
 │   └── shared.gitconfig
+├── vscode/
+│   └── settings.json
 └── local/
     └── bash.d.example/
-        └── local.sh.example
 ```
 
 ## Symlink Targets
