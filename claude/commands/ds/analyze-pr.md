@@ -1,6 +1,6 @@
 ---
 description: PR-scoped Q&A. Pass a question for one-shot analysis, or a file path containing bulleted questions for thorough grouped+parallelised analysis appended back into the file.
-allowed-tools: Bash(git *), Bash(gh *), Bash(test *), Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, mcp__claude_ai_Linear__get_issue
+allowed-tools: Bash(git *), Bash(gh *), Bash(test *), Read, Write, Edit, Grep, Glob, Agent, TaskCreate, TaskGet, TaskList, TaskUpdate, mcp__claude_ai_Linear__get_issue
 argument-hint: <question | file-path>
 ---
 
@@ -98,13 +98,11 @@ Read into context — this becomes the **shared brief** prepended to every sub-a
 
 Mark `🔬 Single-pass analysis` as `in_progress`.
 
-Launch **one** `Task` sub-agent (`subagent_type: "general-purpose"`, model inherited — opus). The prompt is the shared brief followed by:
+Launch **one** `Agent` sub-agent (`subagent_type: "general-purpose"`, model inherited — opus). The prompt is the shared brief followed by:
 
 > **Your question:** `<PROMPT>`
 >
 > Answer concretely with reference to the diff. Use `Grep`/`Read`/`git show` to look at surrounding code as needed. Show short code excerpts where they help (≤10 lines, fenced). Reference files as `path/to/file:line-range`. Don't pad — if the answer is two paragraphs, give two paragraphs. End with a one-line takeaway.
-
-**Sub-agent allowed tools:** `Bash(git diff*), Bash(git log*), Bash(git show*), Read, Grep, Glob`. No `Edit`/`Write` — analysis only.
 
 Mark `🔬 Single-pass analysis` as `completed` after the sub-agent returns.
 
@@ -143,17 +141,15 @@ Mark `completed`.
 
 **B.3: Launch parallel analysis sub-agents.** Mark `🔬 Launch parallel analysis sub-agents` as `in_progress`.
 
-Launch one `Task` call per planned section, **all in a single message** so they run concurrently. Plus one extra Task for the cross-cutting block if any. Use `subagent_type: "general-purpose"`.
+Launch one `Agent` call per planned section, **all in a single message** so they run concurrently. Plus one extra `Agent` call for the cross-cutting block if any. Use `subagent_type: "general-purpose"`.
 
 **Model tiering:**
-- Sections containing ≥3 bullets, or the cross-cutting Task → opus (inherit, omit `model` field).
+- Sections containing ≥3 bullets, or the cross-cutting call → opus (inherit, omit `model` field).
 - Single-bullet sections → `model: "sonnet"`.
-
-**Sub-agent allowed tools (all):** `Bash(git diff*), Bash(git log*), Bash(git show*), Read, Grep, Glob`. No write tools.
 
 #### Shared brief — prepend to every sub-agent prompt
 
-> You are analysing PR #<N> in the current repo. Below is the shared context. After absorbing it, focus only on your slice (described after this brief).
+> You are analysing PR #<N> in the current repo. Below is the shared context. After absorbing it, focus only on your slice (described after this brief). Do not modify files — you only return your analysis.
 >
 > **PR title:** <title>
 > **PR body:**
@@ -255,8 +251,8 @@ Mark `completed`. Done.
 - **No commits / pushes / ticket-context writes.** Read-mostly. The only file this command writes is the user-named input file in MODE=file. Analysing is not ticket work.
 - **Worktree-friendly:** uses `gh pr diff` rather than `git diff origin/<base>...HEAD`, so the user can be on any branch (including a teammate's PR checked out elsewhere).
 - **Re-run safety:** Step B.1 only parses bullets above any existing `---` separator. Re-running on an already-analysed file will re-parse the same bullets and append a second analysis block — acceptable; user can prune. Refusing re-runs would be a future tweak.
-- **Render results as text:** sub-agent responses must be printed by the main agent as text — users only see your text output, not Task return values.
-- **Parallel sub-agents:** in MODE=file, all section Task calls go in a single tool-use turn so they run concurrently. Do not chain them.
-- **Sub-agents are read-only:** none of the analysis sub-agents has `Edit`/`Write`. The main agent does all file writes in B.5.
+- **Render results as text:** sub-agent responses must be printed by the main agent as text — users only see your text output, not `Agent` return values.
+- **Parallel sub-agents:** in MODE=file, all section `Agent` calls go in a single tool-use turn so they run concurrently. Do not chain them.
+- **Sub-agents are read-only:** the shared brief tells every analysis sub-agent not to modify files. The main agent does all file writes in B.5.
 - **Hybrid output (file mode).** Below the `---`, the narrative answers stay the primary output; alongside them a `## Action items — /ds:analyze-pr — DATE` section emits shared-format item blocks for the *actionable* subset (`confident`/`smell`/`question`), so `/ds:polish <file>` can triage and apply them. The narrative is preserved in full — the items are an addition, not a replacement. Ids continue from the file's max `F<n>` so review + analyze-pr blocks coexist.
 - **Still not `/ds:review`.** This command answers the questions the user brought; it does not run the seven-dimension audit or draft PR comments. The item blocks it emits are just its actionable conclusions rendered in the shared format.

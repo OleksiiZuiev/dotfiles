@@ -4,7 +4,7 @@ allowed-tools: Bash(git status:*), Bash(git add:*), Bash(git diff:*), Bash(git l
 argument-hint: "[context]"
 ---
 
-Stage and commit changes directly using git commands (do NOT use Task tool or delegate to an agent).
+Stage and commit changes directly using git commands (do NOT delegate to an agent).
 
 ## Steps
 

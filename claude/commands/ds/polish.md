@@ -1,6 +1,6 @@
 ---
 description: Address findings from a local findings file — assess each on merit, implement approved fixes, write resolutions back to the file. Off-PR counterpart to /ds:polish-pr.
-allowed-tools: Bash(git *), Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskGet, TaskList, TaskUpdate
+allowed-tools: Bash(git *), Read, Write, Edit, Grep, Glob, TaskCreate, TaskGet, TaskList, TaskUpdate
 argument-hint: <file>
 ---
 

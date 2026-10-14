@@ -1,6 +1,6 @@
 ---
 description: Seven-dimension review of the current PR — code quality plus reliability, operability, configuration and efficacy, with every finding tiered by user impact.
-allowed-tools: Bash(git *), Bash(gh *), Bash(ls *), Bash(find *), Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion, mcp__claude_ai_Linear__get_issue
+allowed-tools: Bash(git *), Bash(gh *), Bash(ls *), Bash(find *), Read, Write, Edit, Grep, Glob, Agent, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion, mcp__claude_ai_Linear__get_issue
 argument-hint: [+comment] [+ask] [<pr-number>] [--to <file>] [--bar low|medium|high]
 ---
 
@@ -173,15 +173,13 @@ Lanes: 7 launched / <N> launched, skipped <lane> (<reason>)
 
 Mark `🔬 Analysis: launch review sub-agents` as `in_progress`.
 
-Launch the reviewers below **in a single message with one parallel `Task` tool call each**. Each call uses `subagent_type: "general-purpose"`. Apply the model tiering shown.
-
-**Sub-agent allowed tools (all):** `Bash(git diff*), Bash(git log*), Bash(git show*), Bash(ls *), Bash(find *), Read, Grep, Glob`. NO Edit — sub-agents surface findings only; nothing in this command modifies the working tree.
+Launch the reviewers below **in a single message with one parallel `Agent` tool call each**. Each call uses `subagent_type: "general-purpose"`. Apply the model tiering shown.
 
 **Skip a lane whose subject is entirely absent from the diff.** A lane with nothing to review still ingests the whole diff to answer "No issues found" — the most expensive way there is to learn nothing. Skip **Configuration & Capacity** when the diff changes no config, infra, dependency version or tuned literal; skip **Test Coverage** when the diff is documentation-only. The bar is *entirely absent*, not *small* — when in doubt, run the lane. Name every skipped lane and its reason in the context banner and in the Step 3 footer, so a thin report is never mistaken for a clean one.
 
 #### Core brief — prepend to every sub-agent prompt
 
-> You are reviewing PR #<N> in the current repo. Below is the shared context. After absorbing it, focus only on your dimension (described after this brief).
+> You are reviewing PR #<N> in the current repo. Below is the shared context. After absorbing it, focus only on your dimension (described after this brief). Do not modify files — you only return findings.
 >
 > **PR title:** <title>
 > **PR body:**
@@ -638,8 +636,6 @@ Otherwise, launch a `general-purpose` sub-agent (`model: "haiku"`) to append a n
 
 The sub-agent should append a new section under `## Sessions` following the existing document template (see the `ticket-context` skill). If the file does not exist, create it.
 
-**Sub-agent allowed tools:** `Bash(git *), Read, Write, Edit`
-
 Mark `📝 Update ticket context` as `completed`.
 
 ### Step 9: Final Summary
@@ -673,7 +669,7 @@ Mark `✅ Final summary` as `completed`.
 ## Important Notes
 
 - **Never touches the working tree**: this command does not edit files, commit, or push, in any mode, with or without `+comment`. The single outward write it can make is posting comments to the PR, and only under `+comment` — unprompted by default, or behind the Step 6 triage and the Step 7c confirmation when `+ask` is set. What still holds on both paths: only shown findings post, a stale local head refuses to post at all, and the dedup guard drops what is already on the PR.
-- **Sub-agents are read-only and drafting is not their job**: analysis sub-agents have no `Edit`/`Write`. They also do not write PR comments — Step 4 drafts from the findings they return, because a draft written in a sub-agent has to be ingested and reprinted anyway, and most drafts are never posted.
+- **Sub-agents are read-only and drafting is not their job**: the core brief tells analysis sub-agents not to modify files. They also do not write PR comments — Step 4 drafts from the findings they return, because a draft written in a sub-agent has to be ingested and reprinted anyway, and most drafts are never posted.
 - **The ladder must stay nested**: shown-at-`high` ⊆ shown-at-`medium` ⊆ shown-at-`low`. The tier rescue is what guarantees it, and it is why the rescue applies at *every* rung rather than only at `high` — rescuing `user-facing` at `high` alone would let a raised bar *reveal* a `user-facing` · `low` finding that `medium` had hidden, and every "re-run with `--bar low` to see them" line in this command assumes the opposite. Do not restrict the rescue to the top rung.
 - **The `medium` floor on the `efficacy` rescue is deliberate**: it is the one narrowing the rescue carries, and it exists because `efficacy` covers any claim the code does not support — including a stale phrase in a docstring, which is a nit. Without the floor no bar could filter that nit, since a rescue beats every rung. The floor costs the nesting nothing: an `efficacy` · `medium` finding clears the `medium` rung on severity alone, so it shows at `medium` whether or not it is rescued. Do not lift the floor to make the two tiers symmetric — `user-facing` needs no floor because a request that got slower is sized before it can claim the tier at all.
 - **`--bar` runs the opposite way to `/code-review`'s `level`**: in the built-in `/code-review` skill, a *higher* level means *broader* coverage and *more* findings. Here a *higher* bar means *fewer*. That is why this flag is called a bar and not a level: the word would import the wrong direction from the neighbouring command. Do not "fix" the direction to match.

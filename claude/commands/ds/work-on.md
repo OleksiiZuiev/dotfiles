@@ -1,6 +1,6 @@
 ---
 description: Work on a Linear ticket — convention-checked plan, implement, one commit, push. Flags: +temp-worktree (isolate in a throwaway worktree and fold back), +auto-plan, +checks (post-implementation convention check)
-allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion, EnterPlanMode
+allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion, EnterPlanMode
 argument-hint: [+temp-worktree] [+auto-plan] [+checks] [+fold-timeout=<Nm>] [extra context]
 ---
 
@@ -166,7 +166,7 @@ Look for Notion page links in the description or comments and fetch those automa
 #### 2A.3. Explore the Codebase
 
 - Use Grep, Glob, and Read tools to understand relevant code areas
-- Use the Task tool with subagent_type=Explore for broader context gathering
+- Use the `Agent` tool with `subagent_type: "Explore"` for broader context gathering
 - Focus on areas mentioned in the ticket or related to the feature/fix
 
 #### 2A.4. Ask Clarifying Questions
@@ -325,7 +325,7 @@ Work through these in order, marking each `in_progress` when starting and `compl
 
 Mark `🔎 Convention check (Sonnet sub-agent)` as `in_progress`. This runs after implementation and **before** the commit, so its fixes land in the single Step 4 commit.
 
-Launch a `Task` sub-agent with `model: "sonnet"` to check the freshly written code against **your own conventions** and auto-apply the safe subset of fixes. The rules are **not hardcoded here** — they are read from two sources: the conventions that already apply to the changed files, **plus** your repo-keyed steering overlay's `## Enforced` rules (`~/.claude/overlays/{repo-key}.md`, maintained by `/ds:distill`). The overlay carries the recurring, already-stated-but-ignored mechanical rules that most need a hard check. Kept deliberately narrower than `/ds:review`: it enforces mechanical, locally-fixable rules only, never a full audit.
+Launch an `Agent` sub-agent with `model: "sonnet"` to check the freshly written code against **your own conventions** and auto-apply the safe subset of fixes. The rules are **not hardcoded here** — they are read from two sources: the conventions that already apply to the changed files, **plus** your repo-keyed steering overlay's `## Enforced` rules (`~/.claude/overlays/{repo-key}.md`, maintained by `/ds:distill`). The overlay carries the recurring, already-stated-but-ignored mechanical rules that most need a hard check. Kept deliberately narrower than `/ds:review`: it enforces mechanical, locally-fixable rules only, never a full audit.
 
 **Sub-agent prompt:**
 > You are checking uncommitted changes in a git worktree against the repository's own conventions and applying only the safe, mechanical fixes.
@@ -338,8 +338,6 @@ Launch a `Task` sub-agent with `model: "sonnet"` to check the freshly written co
 > 5. Apply the qualifying fixes directly to the files (absolute paths under `{WT}`; `Read` each file before `Edit`). Don't touch anything a rule doesn't clearly cover.
 > 6. Be conservative: when a rule needs judgment or a fix would amount to a rewrite, leave it and mention it rather than applying it.
 > 7. Return a short bullet list of what you changed (file + one-line reason), or "no changes — diff already complies".
-
-**Sub-agent allowed tools:** `Read, Edit, Grep, Glob, Bash(git *)`
 
 Record the sub-agent's summary (count of fixes, or "clean") for the final summary, then mark the item `completed`.
 
@@ -490,7 +488,7 @@ Mark the item `completed`.
 
 Mark `📝 Update ticket context: launch sub-agent` as `in_progress`.
 
-Use the Task tool with a subagent (`model: "haiku"`) to update the ticket context document. Pass the subagent all session details:
+Use the `Agent` tool (`model: "haiku"`) to update the ticket context document. Pass the subagent all session details:
 - Ticket ID: `{TICKET_ID}`
 - Context file path
 - Branch name (`F`)
@@ -543,10 +541,6 @@ remote `{F}` in the meantime. Integrate the remote before pushing:
 > stack.
 >
 > Return the PR URL and number, and the `gh stack link` result when the branch was stacked.
-
-**Sub-agent allowed tools:** `Bash, mcp__claude_ai_Linear__get_issue, Read, Glob`
-(`Bash` unrestricted: `stack-parent` and the `GH_REPO=… gh …` prefix that `/ds:create-pr` runs match
-no narrower `Bash(...)` pattern.)
 
 7. **If PR already exists**: note the PR URL and number from the `gh pr view` output. `/ds:create-pr`
    is not the entry point here — it opens a PR, and this branch has one — so register the stack

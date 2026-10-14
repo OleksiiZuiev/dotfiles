@@ -1,6 +1,6 @@
 ---
 description: Distill steering corrections from a branch's artifacts into reusable rules — routed to global CLAUDE.md or the repo-keyed overlay. Human-gated triage, nothing auto-applied.
-allowed-tools: Bash(git *), Bash(gh *), Read, Write, Edit, Grep, Glob, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion, mcp__claude_ai_Linear__get_issue
+allowed-tools: Bash(git *), Bash(gh *), Read, Write, Edit, Grep, Glob, Agent, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion, mcp__claude_ai_Linear__get_issue
 argument-hint: [PR-number | ticket-id]   (default: current branch)
 ---
 
@@ -129,7 +129,7 @@ If every source is empty or fully covered by the ledger, report "nothing new to 
 
 ### Step 2: DISTILL (opus sub-agent — frozen probe logic)
 
-Mark `⚗️ Distill` `in_progress`. Launch a `Task` sub-agent with `model: "opus"`. Pass it the gathered
+Mark `⚗️ Distill` `in_progress`. Launch an `Agent` sub-agent with `model: "opus"`. Pass it the gathered
 raw material (commit diffs, comments, decisions) and the dedup targets. This extraction prompt is
 **frozen** — keep it stable so re-runs are reproducible.
 
@@ -158,8 +158,6 @@ raw material (commit diffs, comments, decisions) and the dedup targets. This ext
 >    `promote-to-enforced`). Do not re-propose existing rules verbatim.
 > 5. Return a numbered list of candidates with their metadata, most-frequent/highest-confidence first.
 > Make no edits and apply nothing — you only propose.
-
-**Sub-agent allowed tools:** `Read, Grep, Glob, Bash(git *), Bash(gh *)`
 
 If it returns zero candidates, report "no new rules distilled" and skip to the summary.
 

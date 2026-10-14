@@ -1,6 +1,6 @@
 ---
 description: Generate a reviewer-onboarding document for a PR — the problem, a high-level story, a mermaid component map, a component walkthrough in reading order, decisions with confidence, and obvious smells. Writes the document to a file.
-allowed-tools: Bash(git *), Bash(gh *), Bash(test *), Bash(mkdir *), Read, Write, Grep, Glob, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, mcp__claude_ai_Linear__get_issue
+allowed-tools: Bash(git *), Bash(gh *), Bash(test *), Bash(mkdir *), Read, Write, Grep, Glob, Agent, TaskCreate, TaskGet, TaskList, TaskUpdate, mcp__claude_ai_Linear__get_issue
 argument-hint: [<output-file-or-dir>]
 ---
 
@@ -92,15 +92,13 @@ Mark `completed`.
 
 Mark `🔬 Generate onboarding document` as `in_progress`.
 
-Launch **one** `Task` sub-agent, `subagent_type: "general-purpose"`, **model inherited (opus)** — omit the `model` field. The sub-agent does the analysis and **returns the full markdown document** as its final message (it does not write files).
-
-**Sub-agent allowed tools:** `Bash(git diff*), Bash(git log*), Bash(git show*), Read, Grep, Glob`. No `Edit`/`Write` — analysis only; the main agent writes the file.
+Launch **one** `Agent` sub-agent, `subagent_type: "general-purpose"`, **model inherited (opus)** — omit the `model` field. The sub-agent does the analysis and **returns the full markdown document** as its final message (it does not write files).
 
 Prompt = the **shared brief** below, then the **document spec**, then the **rules**.
 
 #### Shared brief — prepend to the sub-agent prompt
 
-> You are writing a reviewer-onboarding document for PR #<N> in the current repo. Below is the shared context. Absorb it, then produce the document described after the brief.
+> You are writing a reviewer-onboarding document for PR #<N> in the current repo. Below is the shared context. Absorb it, then produce the document described after the brief. Do not write or modify files — return the document as your final message.
 >
 > **PR title:** <title>
 > **PR body:**
@@ -250,7 +248,7 @@ Mark `completed`. Done.
 ## Important Notes
 
 - **Reviewer onboarding, not a review.** Obvious smells only; the thorough audit is `/ds:review`. Do not categorize findings or draft PR comments.
-- **Single opus agent → coherent narrative.** One generator sees the whole diff, so the story and the ordering stay unified. The sub-agent is read-only; the main agent performs the only file write.
+- **Single opus agent → coherent narrative.** One generator sees the whole diff, so the story and the ordering stay unified. The sub-agent is told not to write files; the main agent performs the only file write.
 - **A picture where a picture helps.** The Component Map draws the whole change as one mermaid flowchart — every touched component tagged new/moved/updated/repointed and coloured, grouped by role, captioned by a table — so the reader gets the shape before the prose. It is conditional: included when the parts interact, skipped when prose is enough. At most one supporting diagram (sequence or state) joins it, and only when ordering or state transitions are the point. The render-safety rules are in the prompt because a diagram that fails to parse is worse than none.
 - **Walkthrough is ordered for comprehension, not build order** — purpose before mechanism: a prerequisite concept before its consumers, but an orchestrator before its private helpers (a single-caller helper is meaningless until its caller's intent is on the table).
 - **Worktree-friendly.** Uses `gh pr diff`, so you can run it from any branch. To explain a teammate's PR, `gh pr checkout <N>` first — the PR is auto-detected from the current branch.
