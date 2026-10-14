@@ -30,6 +30,8 @@ Options:
 EOF
         return 0
     fi
-    # A Windows process started from WSL sees only the variables WSLENV names.
-    WSLENV="${WSLENV:+$WSLENV:}CLAUDE_VAULT_DIR" _sessions_node "$(dirname "$_TASK_SH")/task.mjs" "$@"
+    # A Windows process started from WSL sees only the variables WSLENV names. Git Bash would
+    # rewrite an argument starting with / (a title like "/plan-next") into a Windows path.
+    WSLENV="${WSLENV:+$WSLENV:}CLAUDE_VAULT_DIR" MSYS2_ARG_CONV_EXCL='*' \
+        _sessions_node "$(dirname "$_TASK_SH")/task.mjs" "$@"
 }

@@ -147,5 +147,9 @@ out=$(task list nope 2>&1); code=$?
 check "list unknown project -> exit 1" "$code" 1
 check "list unknown project -> names it" "$(has "$out" "projects/nope")" yes
 
+# --- new: arguments reach node as written ---
+id=$(task new ve slash-title --title "/plan-next with dispatch" | head -1)
+check "new -> a title starting with / is kept as written" "$(sed -n '/^# /p' "$tasks/$id slash-title.md")" "# /plan-next with dispatch"
+
 echo
 if [[ $fails -eq 0 ]]; then echo "All tests passed"; else echo "$fails test(s) failed"; exit 1; fi
