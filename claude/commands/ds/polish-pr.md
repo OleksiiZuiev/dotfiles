@@ -274,8 +274,9 @@ e. **Handle "Discuss"** — record **no** decision for this comment:
    - **Never advance to the next comment on a "Discuss".**
 
 f. **Handle Skipped Comments** — if "Skip", ask for rationale via `AskUserQuestion`
-   ("Not applicable" / "Will address later" / "Disagree with suggestion" / "Custom
-   explanation"). Record the skipped comment + rationale for the reply phase.
+   ("Not applicable" / "Will address later" / "Disagree with suggestion"). The automatic
+   **"Other"** is the custom explanation: record the typed text as the rationale. Record the
+   skipped comment + rationale for the reply phase.
 
 g. **Handle Dismissed Comments** — if "Dismiss", use your thinking-buddy assessment as the
    rationale automatically (no extra prompt). Record it for the reply phase.
