@@ -8,6 +8,7 @@ task() {
         cat <<'EOF'
 Usage: task new <project> <slug> [--title <title>] [--blocked-by <ID>...] [--plan <note>] [--status <status>]
        task set <ID> status <status>
+       task list <project> [--json]
 
 The one writer of vault task files: projects/<project>/tasks/<ID> <slug>.md, with id, status,
 blocked-by and plan in frontmatter.
@@ -16,6 +17,10 @@ blocked-by and plan in frontmatter.
         and writes the task from templates/task.md. Prints the ID, then the path.
         --title defaults to the slug; --status to todo. --blocked-by takes one or more IDs.
   set   Changes a task's status.
+  list  The project's todo and in-progress tasks by ID, one per line, tab-separated: ID, status,
+        title (the task's heading), and its blockers — the blocked-by tasks not yet done, as
+        "VE-3 (todo), VE-7 (cancelled)"; empty when the task is unblocked.
+        --json prints an array of {id, status, title, path, blockers: [{id, status}]}.
 
 Statuses: todo, in-progress, done, cancelled.
 The vault is $CLAUDE_VAULT_DIR, by default C:/work/github/OleksiiZuiev/projects-obsidian.

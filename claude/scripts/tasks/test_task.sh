@@ -119,5 +119,33 @@ out=$(task set VE-99 status done 2>&1); code=$?
 check "set unknown ID -> exit 1" "$code" 1
 check "set unknown ID -> names it" "$(has "$out" "VE-99")" yes
 
+# --- list ---
+# Here VE-1 is done, VE-2's file is deleted, VE-3 is todo and VE-4 is a marker without a file.
+task new ve after-done --title "After done" --blocked-by VE-1 > /dev/null   # VE-5
+task new ve after-todo --title "After todo" --blocked-by VE-3 VE-1 > /dev/null   # VE-6
+task new ve dropped --status cancelled > /dev/null   # VE-7
+task new ve after-dropped --blocked-by VE-7 --status in-progress > /dev/null   # VE-8
+tab=$'\t'
+out=$(task list ve); code=$?
+check "list -> exit 0" "$code" 0
+check "list -> open tasks by ID, title from the heading, open blockers with status" "$out" "VE-3${tab}todo${tab}again${tab}
+VE-5${tab}todo${tab}After done${tab}
+VE-6${tab}todo${tab}After todo${tab}VE-3 (todo)
+VE-8${tab}in-progress${tab}after-dropped${tab}VE-7 (cancelled)"
+
+json=$(task list ve --json)
+row() { # $1 ID  $2 JS expression over the row `r`, with no "/" in it: Git Bash rewrites those
+  node -e 'const [json, id, expr] = process.argv.slice(1);
+    const r = JSON.parse(json).find((t) => t.id === id);
+    console.log(eval(expr));' "$json" "$1" "$2"
+}
+check "list --json -> same tasks" "$(node -e 'console.log(JSON.parse(process.argv[1]).map((t) => t.id).join(" "))' "$json")" "VE-3 VE-5 VE-6 VE-8"
+check "list --json -> blockers with status" "$(row VE-6 'JSON.stringify(r.blockers)')" '[{"id":"VE-3","status":"todo"}]'
+check "list --json -> path to the task file" "$(row VE-5 r.path)" "$(cygpath -w "$tasks/VE-5 after-done.md")"
+
+out=$(task list nope 2>&1); code=$?
+check "list unknown project -> exit 1" "$code" 1
+check "list unknown project -> names it" "$(has "$out" "projects/nope")" yes
+
 echo
 if [[ $fails -eq 0 ]]; then echo "All tests passed"; else echo "$fails test(s) failed"; exit 1; fi

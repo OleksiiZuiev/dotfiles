@@ -2,6 +2,7 @@
 //
 //   node task.mjs new <project> <slug> [--title <title>] [--blocked-by <ID>...] [--plan <note>] [--status <status>]
 //   node task.mjs set <ID> status <status>
+//   node task.mjs list <project> [--json]
 //
 // An ID is claimed by exclusively creating the empty marker tasks/.ids/<ID>: two writers can both
 // create differently named task files, but only one can create the marker. Markers are never
@@ -17,7 +18,7 @@ function fail(message) {
   process.exit(1);
 }
 
-function frontmatterValue(text, key) {
+export function frontmatterValue(text, key) {
   const block = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   const line = block?.[1].match(new RegExp(`^${key}:\\s*(.+?)\\s*$`, 'm'));
   return line?.[1];
@@ -41,7 +42,7 @@ function projectForId(id) {
     });
 }
 
-function nextNumber(idsDir, prefix) {
+export function nextNumber(idsDir, prefix) {
   const taken = new RegExp(`^${prefix}-(\\d+)$`);
   return Math.max(0, ...readdirSync(idsDir).map((name) => Number(name.match(taken)?.[1] ?? 0))) + 1;
 }
@@ -102,26 +103,74 @@ function newTask(args) {
   console.log(path);
 }
 
+function taskPath(id) {
+  const project = projectForId(id);
+  const tasksDir = project && join(VAULT, 'projects', project, 'tasks');
+  const name = tasksDir && existsSync(tasksDir) && readdirSync(tasksDir).find((file) => file.startsWith(`${id} `) && file.endsWith('.md'));
+  return name ? join(tasksDir, name) : null;
+}
+
 function setField(args) {
   const [id, field, value] = args;
   if (!id || !field || value === undefined) fail('usage: task set <ID> status <status>');
   if (field !== 'status') fail(`only status can be set; got ${field}`);
   checkStatus(value);
-  const project = projectForId(id);
-  const tasksDir = project && join(VAULT, 'projects', project, 'tasks');
-  const name = tasksDir && existsSync(tasksDir) && readdirSync(tasksDir).find((file) => file.startsWith(`${id} `) && file.endsWith('.md'));
-  if (!name) fail(`no task ${id}`);
+  const path = taskPath(id);
+  if (!path) fail(`no task ${id}`);
 
-  const path = join(tasksDir, name);
   const text = readFileSync(path, 'utf8');
   const block = text.match(/^---\r?\n[\s\S]*?\r?\n---/);
   if (!block || !/^status:.*$/m.test(block[0])) fail(`${path} has no status in its frontmatter`);
   writeFileSync(path, block[0].replace(/^status:.*$/m, `status: ${value}`) + text.slice(block[0].length));
 }
 
+function blockedByIds(text) {
+  return [...(frontmatterValue(text, 'blocked-by') ?? '').matchAll(/\[\[([^\]|]+)/g)].map((match) => match[1]);
+}
+
+// A blocker stays open until it is done: a cancelled one is listed so the dependent gets a look.
+function listTasks(args) {
+  const [project, ...rest] = args;
+  if (!project || project.startsWith('--')) fail('usage: task list <project> [--json]');
+  const tasksDir = join(VAULT, 'projects', project, 'tasks');
+  if (!existsSync(tasksDir)) fail(`no tasks folder ${tasksDir} (projects/${project})`);
+
+  const tasks = readdirSync(tasksDir)
+    .filter((name) => /^[A-Z]+-\d+ .*\.md$/.test(name))
+    .map((name) => {
+      const path = join(tasksDir, name);
+      const text = readFileSync(path, 'utf8');
+      const blockers = blockedByIds(text)
+        .map((id) => {
+          const blockerPath = taskPath(id);
+          return { id, status: blockerPath ? frontmatterValue(readFileSync(blockerPath, 'utf8'), 'status') : 'missing' };
+        })
+        .filter((blocker) => blocker.status !== 'done');
+      return {
+        id: frontmatterValue(text, 'id'),
+        status: frontmatterValue(text, 'status'),
+        title: text.match(/^# (.+?)\s*$/m)?.[1] ?? name,
+        path,
+        blockers,
+      };
+    })
+    .filter((task) => task.status === 'todo' || task.status === 'in-progress')
+    .sort((a, b) => Number(a.id.match(/\d+$/)[0]) - Number(b.id.match(/\d+$/)[0]));
+
+  if (rest.includes('--json')) {
+    console.log(JSON.stringify(tasks));
+    return;
+  }
+  for (const task of tasks) {
+    const blockers = task.blockers.map((blocker) => `${blocker.id} (${blocker.status})`).join(', ');
+    console.log([task.id, task.status, task.title, blockers].join('\t'));
+  }
+}
+
 if (import.meta.main) {
   const [command, ...args] = process.argv.slice(2);
   if (command === 'new') newTask(args);
   else if (command === 'set') setField(args);
-  else fail('usage: task new|set ... (see task --help)');
+  else if (command === 'list') listTasks(args);
+  else fail('usage: task new|set|list ... (see task --help)');
 }
