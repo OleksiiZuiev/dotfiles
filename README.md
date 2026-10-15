@@ -36,10 +36,12 @@ Modular bash scripts loaded via `~/.bashrc`, one function family per file. Every
 - `claude-merge`, `claude-rebase` - Merge or rebase with Claude resolving conflicts
 - `sessions` - Every Claude session, grouped by ticket
 - `task` - Vault tasks with IDs and a status in frontmatter
+- `plan` - The plan registry: named sets of vault tasks
 
 The rest are helpers for these and for the `/ds:*` commands: `repo-roots.sh`, `repo-pick.sh`,
-`claude-bin.sh`, `stack-parent.sh`, `worktree-teardown.sh`, `sweep-launch.sh`. `sessions.sh` and
-`task.sh` are one-line shims that source their subsystem from `claude/scripts/`.
+`claude-bin.sh`, `stack-parent.sh`, `worktree-teardown.sh`, `sweep-launch.sh`. `sessions.sh`,
+`task.sh` and `plan.sh` are one-line shims that source their subsystem from `claude/scripts/`; the
+Windows-node wrapper, database opener and Linear cache they share are in `claude/scripts/lib/`.
 
 ### Other
 
