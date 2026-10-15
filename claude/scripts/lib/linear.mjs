@@ -1,5 +1,5 @@
-// Ticket title and project from Linear, cached in a table of the sessions database. Only the list
-// fetches: a title fetched when a session starts would go stale on a rename.
+// Ticket title and project from Linear, cached in a table of the shared database (db.mjs). Callers
+// fetch on demand: a title fetched when a session starts would go stale on a rename.
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';

@@ -4,7 +4,7 @@
 // (`git mv` rewrites none). Done and checkbox-less legacy files are left as they are. Archived
 // projects are skipped.
 //
-//   source claude/scripts/tasks/task.sh && _sessions_node claude/scripts/tasks/migrate-legacy.mjs [--dry-run]
+//   source claude/scripts/tasks/task.sh && _windows_node claude/scripts/tasks/migrate-legacy.mjs [--dry-run]
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';

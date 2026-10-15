@@ -8,7 +8,7 @@ fails=0
 root="$HOME/.session-index-test.$$"
 mkdir -p "$root"
 trap 'rm -rf "$root"' EXIT
-export CLAUDE_SESSIONS_DB="$(cygpath -w "$root/sessions.db")"
+export CLAUDE_DATA_DB="$(cygpath -w "$root/claude-data.db")"
 
 start_payload() { # $1 session id  $2 source  $3 cwd
   printf '{"session_id":"%s","transcript_path":"C:/t/%s.jsonl","cwd":"%s","hook_event_name":"SessionStart","source":"%s"}' "$1" "$1" "$3" "$2"
@@ -33,7 +33,7 @@ col() { # $1 session id  $2 column; prints the value, NULL, or MISSING when ther
       if (!/no such table/.test(e.message)) throw e;
     }
     console.log(row === undefined ? "MISSING" : row[column] ?? "NULL");
-  ' "$CLAUDE_SESSIONS_DB" "$1" "$2" 2>/dev/null
+  ' "$CLAUDE_DATA_DB" "$1" "$2" 2>/dev/null
 }
 check() { # $1 name  $2 actual  $3 expected
   if [[ "$2" == "$3" ]]; then
@@ -67,7 +67,7 @@ plain="$root/plain"
 mkdir -p "$plain"
 
 # --- Fail open ---
-out=$(CLAUDE_SESSIONS_NODE=/nonexistent/node run_hook "$ticket_repo" start "$(start_payload s-broken startup C:/x)"); code=$?
+out=$(CLAUDE_WINDOWS_NODE=/nonexistent/node run_hook "$ticket_repo" start "$(start_payload s-broken startup C:/x)"); code=$?
 check "broken node path -> exit 0" "$code" 0
 check "broken node path -> logs to stderr" "$([[ "$out" == *"session-index: start write failed"* ]] && echo yes)" yes
 check "broken node path -> no row" "$(col s-broken session_id)" MISSING
@@ -147,10 +147,10 @@ out=$(run_hook "$plain" fill "$(prompt_payload s-never-started '/ds:refine INT-9
 check "/ds:refine in an unknown session -> exit 0" "$code" 0
 check "/ds:refine in an unknown session -> no row" "$(col s-never-started session_id)" MISSING
 
-out=$(CLAUDE_SESSIONS_NODE=/nonexistent/node run_hook "$plain" fill "$(prompt_payload s-chat 'hello')"); code=$?
+out=$(CLAUDE_WINDOWS_NODE=/nonexistent/node run_hook "$plain" fill "$(prompt_payload s-chat 'hello')"); code=$?
 check "plain prompt, broken node path -> exit 0" "$code" 0
 check "plain prompt, broken node path -> node not run, no output" "$out" ""
-out=$(CLAUDE_SESSIONS_NODE=/nonexistent/node run_hook "$plain" fill "$(prompt_payload s-chat '/ds:refine INT-904')")
+out=$(CLAUDE_WINDOWS_NODE=/nonexistent/node run_hook "$plain" fill "$(prompt_payload s-chat '/ds:refine INT-904')")
 check "/ds:refine, broken node path -> node run, logs to stderr" \
   "$([[ "$out" == *"session-index: fill write failed"* ]] && echo yes)" yes
 

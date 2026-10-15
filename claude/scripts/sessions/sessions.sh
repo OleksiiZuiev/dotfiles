@@ -1,7 +1,7 @@
 # Every Claude session, grouped by ticket, from the sessions index. See `sessions --help`.
 
 _SESSIONS_SH="${BASH_SOURCE[0]}"
-source "$(dirname "$_SESSIONS_SH")/windows-node.sh"
+source "$(dirname "$_SESSIONS_SH")/../lib/windows-node.sh"
 _SESSIONS_LINEAR="https://linear.app/datasnipper-test/issue"
 _SESSIONS_TICKETS_PROMPT="tickets> "
 _SESSIONS_TICKETS_HEADER="enter: sessions · ctrl-n: new session in its worktree · ctrl-o: open in Linear · ctrl-r: refetch from Linear · esc: quit"
@@ -11,7 +11,7 @@ _SESSIONS_SESSIONS_HEADER="enter: resume in a new tab · ctrl-o: open the ticket
 # from WSL the distro, through which a WSL session's files are read.
 _sessions_db() {
     local contexts extra=()
-    contexts=$(_sessions_native_path "${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}" 2> /dev/null)
+    contexts=$(_native_path "${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}" 2> /dev/null)
     [[ -n "$WSL_DISTRO_NAME" ]] && extra=(--wsl-distro "$WSL_DISTRO_NAME")
     [[ "$1" == "list" || "$1" == "show" ]] && [[ -n "$contexts" ]] && extra+=(--ticket-contexts "$contexts")
     if [[ "$1" == "list" ]]; then
@@ -21,7 +21,7 @@ _sessions_db() {
         [[ -z "$width" && -t 1 ]] && width=$(tput cols 2>/dev/null)
         [[ -n "$width" ]] && extra+=(--width "$width")
     fi
-    _sessions_node "$(dirname "$_SESSIONS_SH")/sessions-db.mjs" "$@" "${extra[@]}"
+    _windows_node "$(dirname "$_SESSIONS_SH")/sessions-db.mjs" "$@" "${extra[@]}"
 }
 
 # Opens a tab running claude with the given arguments in a session's directory, on the OS the
@@ -191,8 +191,8 @@ The pane below shows the row under the cursor: a ticket's fields and its
 sessions, or every field of a session.
 
 Environment:
-  CLAUDE_SESSIONS_DB          database (default C:/work/claude-data/sessions.db)
-  CLAUDE_SESSIONS_NODE        node binary that opens it (default: the Windows node)
+  CLAUDE_DATA_DB             database (default C:/work/claude-data/claude-data.db)
+  CLAUDE_WINDOWS_NODE        node binary that opens it (default: the Windows node)
   CLAUDE_TICKET_CONTEXTS_DIR  ticket contexts (default /c/work/ticket-contexts)
   CLAUDE_LINEAR_KEY_FILE      Linear API key (default ~/.config/linear/api-key)
   CLAUDE_LINEAR_API           Linear GraphQL endpoint (default https://api.linear.app/graphql)

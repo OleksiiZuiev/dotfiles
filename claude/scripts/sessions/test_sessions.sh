@@ -11,7 +11,7 @@ fails=0
 root="$HOME/.sessions-test.$$"
 mkdir -p "$root/contexts" "$root/alive" "$root/transcripts"
 trap 'kill $linear_pid 2> /dev/null; rm -rf "$root"' EXIT
-export CLAUDE_SESSIONS_DB="$(cygpath -w "$root/sessions.db")"
+export CLAUDE_DATA_DB="$(cygpath -w "$root/claude-data.db")"
 export CLAUDE_TICKET_CONTEXTS_DIR="$root/contexts"
 # No key until the Linear section, so nothing before it reaches the real Linear.
 export CLAUDE_LINEAR_KEY_FILE="$(cygpath -w "$root/no-key")"
@@ -47,7 +47,7 @@ add() { # $1 id  $2 branch  $3 origin  $4 cwd  $5 started  $6 last active  $7 en
     new DatabaseSync(db).prepare(
       "UPDATE sessions SET started_at = ?, last_active_at = ?, ended_at = ? WHERE session_id = ?"
     ).run(started, last, ended || null, id);
-  ' "$CLAUDE_SESSIONS_DB" "$1" "$5" "$6" "$7"
+  ' "$CLAUDE_DATA_DB" "$1" "$5" "$6" "$7"
 }
 add aaaaaaaa-1 feat/int-1-first-thing git@github.com:org/alpha.git "$alive" \
   2026-09-30T10:00:00.000Z 2026-09-30T11:00:00.000Z 2026-09-30T11:00:00.000Z
@@ -196,7 +196,7 @@ check "view ctrl-n on a ticket with no worktree -> the reason in the header" \
 node --disable-warning=ExperimentalWarning -e '
   const { DatabaseSync } = require("node:sqlite");
   new DatabaseSync(process.argv[1]).prepare("DELETE FROM sessions WHERE session_id = ?").run("ffffffff-1");
-' "$CLAUDE_SESSIONS_DB"
+' "$CLAUDE_DATA_DB"
 check "view ctrl-n on no ticket -> nothing" "$(FZF_PROMPT='tickets> ' bash "$SCRIPT_DIR/sessions.sh" _view new —)" ""
 rm -f "$root/wsl-args"
 sessions new int-3 > /dev/null
@@ -265,13 +265,13 @@ age_cache() { # $1 ticket: makes its cached row two days old
     const { DatabaseSync } = require("node:sqlite");
     new DatabaseSync(process.argv[1]).prepare("UPDATE linear_issues SET fetched_at = ? WHERE identifier = ?")
       .run(new Date(Date.now() - 2 * 86400000).toISOString(), process.argv[2]);
-  ' "$CLAUDE_SESSIONS_DB" "$1"
+  ' "$CLAUDE_DATA_DB" "$1"
 }
 clear_cache() {
   node --disable-warning=ExperimentalWarning -e '
     const { DatabaseSync } = require("node:sqlite");
     new DatabaseSync(process.argv[1]).exec("DELETE FROM linear_issues");
-  ' "$CLAUDE_SESSIONS_DB"
+  ' "$CLAUDE_DATA_DB"
 }
 
 sessions list > /dev/null
@@ -325,7 +325,7 @@ check "Linear unreachable, nothing cached -> the ticket context title" \
   "$(has "$(sessions list | grep '^INT-1 ')" "First thing title")" yes
 
 # --- help ---
-out=$(CLAUDE_SESSIONS_DB='C:\nonexistent\x.db' sessions --help); code=$?
+out=$(CLAUDE_DATA_DB='C:\nonexistent\x.db' sessions --help); code=$?
 check "help -> exit 0" "$code" 0
 check "help -> usage" "$(has "$out" "Usage: sessions")" yes
 

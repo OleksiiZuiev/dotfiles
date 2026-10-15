@@ -9,12 +9,11 @@
 //   node sessions-db.mjs locate <session-id-prefix | ticket> [--worktree]
 //     The session `sessions resume` reopens — a ticket's latest — as four lines: session id, cwd,
 //     transcript path, ticket. With --worktree, the session whose directory `sessions new` opens.
-import { DatabaseSync } from 'node:sqlite';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { cachedIssues, refreshIssues } from './linear.mjs';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { createDb, DB_PATH, openDb } from '../lib/db.mjs';
+import { cachedIssues, refreshIssues } from '../lib/linear.mjs';
 
-const DB_PATH = process.env.CLAUDE_SESSIONS_DB ?? 'C:/work/claude-data/sessions.db';
 const NO_TICKET = '—';
 
 // Timestamps are ISO-8601 text written only from here, via toISOString(), so they sort as text.
@@ -53,12 +52,6 @@ function repoFrom(origin, commonDir) {
   return null;
 }
 
-function openDb() {
-  const db = new DatabaseSync(DB_PATH);
-  db.exec('PRAGMA busy_timeout = 5000');
-  return db;
-}
-
 function write(event) {
   const [branch, origin, commonDir, ...rest] = readFileSync(0, 'utf8').split('\n');
   const payload = JSON.parse(rest.join('\n'));
@@ -66,9 +59,7 @@ function write(event) {
   const refineTicket = event === 'fill' ? payload.prompt?.match(REFINE_TICKET_PATTERN)?.[1] : null;
   if (event === 'fill' && !refineTicket) return;
 
-  mkdirSync(dirname(DB_PATH), { recursive: true });
-  const db = openDb();
-  db.exec('PRAGMA journal_mode = WAL');
+  const db = createDb();
   db.exec(SCHEMA);
 
   // Session boundaries: startup and clear begin a new id; resume reopens an id (inserting it when the
