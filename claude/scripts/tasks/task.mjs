@@ -30,7 +30,7 @@ function projectPrefix(project) {
   return frontmatterValue(readFileSync(file, 'utf8'), 'id-prefix');
 }
 
-function projectForId(id) {
+export function projectForId(id) {
   const prefix = id.replace(/-\d+$/, '');
   const projects = join(VAULT, 'projects');
   return readdirSync(projects, { withFileTypes: true })
@@ -128,14 +128,13 @@ function blockedByIds(text) {
   return [...(frontmatterValue(text, 'blocked-by') ?? '').matchAll(/\[\[([^\]|]+)/g)].map((match) => match[1]);
 }
 
-// A blocker stays open until it is done: a cancelled one is listed so the dependent gets a look.
-function listTasks(args) {
-  const [project, ...rest] = args;
-  if (!project || project.startsWith('--')) fail('usage: task list <project> [--json]');
+// Every task of the project, whatever its status, by ID. A blocker stays open until it is done: a
+// cancelled one is listed so the dependent gets a look. `plan` is the raw frontmatter value.
+export function readTasks(project) {
   const tasksDir = join(VAULT, 'projects', project, 'tasks');
   if (!existsSync(tasksDir)) fail(`no tasks folder ${tasksDir} (projects/${project})`);
 
-  const tasks = readdirSync(tasksDir)
+  return readdirSync(tasksDir)
     .filter((name) => /^[A-Z]+-\d+ .*\.md$/.test(name))
     .map((name) => {
       const path = join(tasksDir, name);
@@ -152,10 +151,18 @@ function listTasks(args) {
         title: text.match(/^# (.+?)\s*$/m)?.[1] ?? name,
         path,
         blockers,
+        plan: frontmatterValue(text, 'plan') ?? null,
       };
     })
-    .filter((task) => task.status === 'todo' || task.status === 'in-progress')
     .sort((a, b) => Number(a.id.match(/\d+$/)[0]) - Number(b.id.match(/\d+$/)[0]));
+}
+
+function listTasks(args) {
+  const [project, ...rest] = args;
+  if (!project || project.startsWith('--')) fail('usage: task list <project> [--json]');
+  const tasks = readTasks(project)
+    .filter((task) => task.status === 'todo' || task.status === 'in-progress')
+    .map(({ plan, ...task }) => task);
 
   if (rest.includes('--json')) {
     console.log(JSON.stringify(tasks));

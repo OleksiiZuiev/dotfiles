@@ -1,0 +1,160 @@
+// The plan registry: owns the plans table and the reads behind `plan` (plan.sh). Usage is `plan --help`.
+//
+//   node plan.mjs register <slug> <note> [--title <title>]
+//   node plan.mjs list [--json]
+//   node plan.mjs status <slug> [--json]
+//
+// A vault plan is a note whose `## Tasks` section lists its tasks as [[ID]] links. That list is the
+// membership; each task's `plan:` link points back, and `status` reports where the two disagree.
+import { existsSync, readFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import { createDb, DB_PATH, openDb } from '../lib/db.mjs';
+import { projectForId, readTasks } from '../tasks/task.mjs';
+
+const VAULT = process.env.CLAUDE_VAULT_DIR ?? 'C:/work/github/OleksiiZuiev/projects-obsidian';
+
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS plans (
+  slug TEXT PRIMARY KEY,
+  home TEXT NOT NULL,
+  locator TEXT NOT NULL,
+  title TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  closed_at TEXT,
+  close_reason TEXT
+) STRICT`;
+
+function fail(message) {
+  console.error(`plan: ${message}`);
+  process.exit(1);
+}
+
+function register(args) {
+  const [slug, locator, ...rest] = args;
+  if (!slug || !locator || slug.startsWith('--')) fail('usage: plan register <slug> <note> [--title <title>]');
+  let title = null;
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i] !== '--title' || rest[i + 1] === undefined) fail(`unknown option ${rest[i]}`);
+    title = rest[++i];
+  }
+  const file = join(VAULT, locator);
+  if (!existsSync(file)) fail(`no note ${file}`);
+  title ??= readFileSync(file, 'utf8').match(/^# (.+?)\s*$/m)?.[1] ?? basename(locator, '.md');
+
+  const db = createDb();
+  db.exec(SCHEMA);
+  try {
+    db.prepare(`
+      INSERT INTO plans (slug, home, locator, title, status, created_at)
+      VALUES (?, 'vault', ?, ?, 'active', ?)`).run(slug, locator, title, new Date().toISOString());
+  } catch (error) {
+    if (db.prepare('SELECT 1 FROM plans WHERE slug = ?').get(slug)) fail(`${slug} is already registered`);
+    throw error;
+  }
+  db.close();
+}
+
+// A database without a plans table holds no plans; neither is created by a read.
+function readPlans() {
+  if (!existsSync(DB_PATH)) return [];
+  const db = openDb();
+  try {
+    return db.prepare('SELECT * FROM plans ORDER BY created_at').all();
+  } catch {
+    return [];
+  } finally {
+    db.close();
+  }
+}
+
+function printTable(rows) {
+  const widths = rows[0].map((_, i) => Math.max(...rows.map((row) => row[i].length)));
+  for (const row of rows) console.log(row.map((cell, i) => cell.padEnd(widths[i])).join('  ').trimEnd());
+}
+
+function list(args) {
+  const plans = readPlans();
+  if (args.includes('--json')) return console.log(JSON.stringify(plans, null, 2));
+  if (plans.length === 0) return console.log('No plans registered.');
+  printTable(plans.map((p) => [p.slug, p.status, p.home, p.title]));
+}
+
+const TASK_LINK = /\[\[([A-Z]+-\d+)(?:[|#][^\]]*)?\]\]/g;
+
+function memberIds(note) {
+  const section = note.match(/^## Tasks[^\n]*\n([\s\S]*?)(?=^## |(?![\s\S]))/m)?.[1] ?? '';
+  return [...new Set([...section.matchAll(TASK_LINK)].map((match) => match[1]))];
+}
+
+// The note a `plan:` value links to, by its name: a link may carry a folder, a heading or an alias.
+function linkedNote(planValue) {
+  return planValue?.match(/\[\[([^\]|#]+)/)?.[1].split('/').at(-1) ?? null;
+}
+
+function statusOf(plan) {
+  const noteName = basename(plan.locator, '.md');
+  const ids = memberIds(readFileSync(join(VAULT, plan.locator), 'utf8'));
+
+  const project = plan.locator.match(/^projects\/([^/]+)\//)?.[1];
+  const tasksByProject = new Map();
+  const tasksOf = (name) => {
+    if (!tasksByProject.has(name)) tasksByProject.set(name, readTasks(name));
+    return tasksByProject.get(name);
+  };
+  const find = (id) => {
+    const owner = projectForId(id);
+    return owner ? tasksOf(owner).find((task) => task.id === id) : undefined;
+  };
+
+  const members = ids.map((id) => {
+    const task = find(id);
+    return task
+      ? { id, status: task.status, title: task.title, blockers: task.blockers, plan: task.plan }
+      : { id, status: 'missing', title: '', blockers: [], plan: null };
+  });
+  const drift = [];
+  for (const member of members) {
+    if (member.status === 'missing') drift.push(`${member.id} is listed under ## Tasks but has no task`);
+    else if (linkedNote(member.plan) !== noteName) drift.push(`${member.id} is listed under ## Tasks but does not link back with plan:`);
+  }
+  if (project) {
+    for (const task of tasksOf(project)) {
+      if (linkedNote(task.plan) === noteName && !ids.includes(task.id)) {
+        drift.push(`${task.id} links to the plan but is not listed under ## Tasks`);
+      }
+    }
+  }
+  return {
+    slug: plan.slug,
+    title: plan.title,
+    status: plan.status,
+    done: members.filter((m) => m.status === 'done').length,
+    remaining: members.filter((m) => ['todo', 'in-progress', 'missing'].includes(m.status)).length,
+    members: members.map(({ plan: _plan, ...member }) => member),
+    frontier: members.filter((m) => m.status === 'todo' && m.blockers.length === 0).map((m) => m.id),
+    drift,
+  };
+}
+
+function status(args) {
+  const [slug, ...rest] = args;
+  if (!slug || slug.startsWith('--')) fail('usage: plan status <slug> [--json]');
+  const plan = readPlans().find((p) => p.slug === slug);
+  if (!plan) fail(`no plan ${slug}`);
+  const result = statusOf(plan);
+
+  if (rest.includes('--json')) return console.log(JSON.stringify(result, null, 2));
+  console.log(`${result.slug} — ${result.title} (${result.status})`);
+  console.log(`done ${result.done}, remaining ${result.remaining}`);
+  printTable(result.members.map((m) => [m.id, m.status, m.title,
+    m.blockers.map((b) => `blocked by ${b.id} (${b.status})`).join(', ')]));
+  console.log(`frontier: ${result.frontier.join(', ') || 'none'}`);
+  if (result.drift.length) console.log(['drift:', ...result.drift.map((line) => `  ${line}`)].join('\n'));
+}
+
+const [command, ...args] = process.argv.slice(2);
+if (command === 'register') register(args);
+else if (command === 'list') list(args);
+else if (command === 'status') status(args);
+else fail('usage: plan register|list|status ... (see plan --help)');
