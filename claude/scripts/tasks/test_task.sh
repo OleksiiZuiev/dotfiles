@@ -151,5 +151,56 @@ check "list unknown project -> names it" "$(has "$out" "projects/nope")" yes
 id=$(task new ve slash-title --title "/plan-next with dispatch" | head -1)
 check "new -> a title starting with / is kept as written" "$(sed -n '/^# /p' "$tasks/$id slash-title.md")" "# /plan-next with dispatch"
 
+# --- set blocked-by ---
+a=$(task new ve dep-a | head -1)
+b=$(task new ve dep-b | head -1)
+c=$(task new ve dep-c | head -1)
+file_of() { local f=("$tasks/$1 "*.md); printf "%s" "${f[0]}"; }
+blocked_by() { grep "^blocked-by:" "$(file_of "$1")" || echo none; }
+
+task set "$a" blocked-by "$b"; code=$?
+check "set blocked-by -> exit 0" "$code" 0
+check "set blocked-by -> writes the line as new does" "$(blocked_by "$a")" "blocked-by: [\"[[$b]]\"]"
+check "set blocked-by -> inserted after status, other lines intact" "$(sed -n 1,6p "$(file_of "$a")")" "---
+id: $a
+aliases: [$a]
+status: todo
+blocked-by: [\"[[$b]]\"]
+created: $today"
+
+task set "$a" blocked-by "$c" VE-1
+check "set blocked-by -> replaces the whole list" "$(blocked_by "$a")" "blocked-by: [\"[[$c]]\", \"[[VE-1]]\"]"
+
+task set "$a" blocked-by
+check "set blocked-by with no IDs -> clears the line" "$(blocked_by "$a")" none
+check "set blocked-by with no IDs -> other lines intact" "$(sed -n 1,5p "$(file_of "$a")")" "---
+id: $a
+aliases: [$a]
+status: todo
+created: $today"
+
+task set "$a" blocked-by "$b"
+before=$(cat "$(file_of "$a")")
+out=$(task set "$a" blocked-by VE-99 2>&1); code=$?
+check "set blocked-by unknown ID -> exit 1" "$code" 1
+check "set blocked-by unknown ID -> names it" "$(has "$out" VE-99)" yes
+check "set blocked-by unknown ID -> file unchanged" "$(cat "$(file_of "$a")")" "$before"
+
+out=$(task set "$a" blocked-by "$c" "$a" 2>&1); code=$?
+check "set blocked-by itself -> exit 1" "$code" 1
+check "set blocked-by itself -> file unchanged" "$(cat "$(file_of "$a")")" "$before"
+
+before_b=$(cat "$(file_of "$b")")
+out=$(task set "$b" blocked-by "$a" 2>&1); code=$?
+check "set blocked-by direct cycle -> exit 1" "$code" 1
+check "set blocked-by direct cycle -> names the cycle" "$(has "$out" cycle)" yes
+check "set blocked-by direct cycle -> file unchanged" "$(cat "$(file_of "$b")")" "$before_b"
+
+task set "$b" blocked-by "$c"
+before_c=$(cat "$(file_of "$c")")
+out=$(task set "$c" blocked-by "$a" 2>&1); code=$?
+check "set blocked-by indirect cycle -> exit 1" "$code" 1
+check "set blocked-by indirect cycle -> file unchanged" "$(cat "$(file_of "$c")")" "$before_c"
+
 echo
 if [[ $fails -eq 0 ]]; then echo "All tests passed"; else echo "$fails test(s) failed"; exit 1; fi

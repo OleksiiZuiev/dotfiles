@@ -2,6 +2,7 @@
 //
 //   node task.mjs new <project> <slug> [--title <title>] [--blocked-by <ID>...] [--plan <note>] [--status <status>]
 //   node task.mjs set <ID> status <status>
+//   node task.mjs set <ID> blocked-by [<ID>...]
 //   node task.mjs list <project> [--json]
 //
 // An ID is claimed by exclusively creating the empty marker tasks/.ids/<ID>: two writers can both
@@ -85,7 +86,7 @@ function newTask(args) {
   const tasksDir = join(VAULT, 'projects', project, 'tasks');
   const idsDir = join(tasksDir, '.ids');
   for (const blocker of options.blockedBy) {
-    if (!existsSync(join(idsDir, blocker))) fail(`--blocked-by ${blocker}: no such task in ${project}`);
+    if (!taskExists(project, blocker)) fail(`--blocked-by ${blocker}: no such task in ${project}`);
   }
   const template = readFileSync(join(VAULT, 'templates', 'task.md'), 'utf8').replace(/\r\n/g, '\n');
 
@@ -110,22 +111,56 @@ function taskPath(id) {
   return name ? join(tasksDir, name) : null;
 }
 
+function blockedByIds(text) {
+  return [...(frontmatterValue(text, 'blocked-by') ?? '').matchAll(/\[\[([^\]|]+)/g)].map((match) => match[1]);
+}
+
+function taskExists(project, id) {
+  return existsSync(join(VAULT, 'projects', project, 'tasks', '.ids', id));
+}
+
+// Whether `from` is blocked, directly or through other tasks, by `target`.
+function blockedThrough(from, target, seen = new Set()) {
+  if (from === target) return true;
+  if (seen.has(from)) return false;
+  seen.add(from);
+  const path = taskPath(from);
+  return path !== null && blockedByIds(readFileSync(path, 'utf8')).some((next) => blockedThrough(next, target, seen));
+}
+
+function checkBlockers(id, project, blockers) {
+  for (const blocker of blockers) {
+    if (blocker === id) fail(`${id} cannot be blocked by itself`);
+    if (!taskExists(project, blocker)) fail(`blocked-by ${blocker}: no such task in ${project}`);
+    if (blockedThrough(blocker, id)) fail(`blocked-by ${blocker}: ${blocker} is already blocked by ${id}, which would make a cycle`);
+  }
+}
+
 function setField(args) {
-  const [id, field, value] = args;
-  if (!id || !field || value === undefined) fail('usage: task set <ID> status <status>');
-  if (field !== 'status') fail(`only status can be set; got ${field}`);
-  checkStatus(value);
+  const [id, field, ...values] = args;
+  if (!id || !field) fail('usage: task set <ID> status <status> | task set <ID> blocked-by [<ID>...]');
+  if (field !== 'status' && field !== 'blocked-by') fail(`only status and blocked-by can be set; got ${field}`);
+  if (field === 'status') {
+    if (values.length !== 1) fail('usage: task set <ID> status <status>');
+    checkStatus(values[0]);
+  }
   const path = taskPath(id);
   if (!path) fail(`no task ${id}`);
 
   const text = readFileSync(path, 'utf8');
   const block = text.match(/^---\r?\n[\s\S]*?\r?\n---/);
   if (!block || !/^status:.*$/m.test(block[0])) fail(`${path} has no status in its frontmatter`);
-  writeFileSync(path, block[0].replace(/^status:.*$/m, `status: ${value}`) + text.slice(block[0].length));
-}
 
-function blockedByIds(text) {
-  return [...(frontmatterValue(text, 'blocked-by') ?? '').matchAll(/\[\[([^\]|]+)/g)].map((match) => match[1]);
+  let frontmatter;
+  if (field === 'status') {
+    frontmatter = block[0].replace(/^status:.*$/m, `status: ${values[0]}`);
+  } else {
+    checkBlockers(id, projectForId(id), values);
+    const line = values.length ? `blocked-by: [${values.map((blocker) => `"[[${blocker}]]"`).join(', ')}]` : null;
+    const withoutOld = block[0].replace(/^blocked-by:.*\r?\n/m, '');
+    frontmatter = line ? withoutOld.replace(/^status:.*$/m, (status) => `${status}\n${line}`) : withoutOld;
+  }
+  writeFileSync(path, frontmatter + text.slice(block[0].length));
 }
 
 // Every task of the project, whatever its status, by ID. A blocker stays open until it is done: a

@@ -8,6 +8,7 @@ task() {
         cat <<'EOF'
 Usage: task new <project> <slug> [--title <title>] [--blocked-by <ID>...] [--plan <note>] [--status <status>]
        task set <ID> status <status>
+       task set <ID> blocked-by [<ID>...]
        task list <project> [--json]
 
 The one writer of vault task files: projects/<project>/tasks/<ID> <slug>.md, with id, status,
@@ -16,7 +17,10 @@ blocked-by and plan in frontmatter.
   new   Claims the project's next ID (prefix from `id-prefix:` in projects/<project>/<project>.md)
         and writes the task from templates/task.md. Prints the ID, then the path.
         --title defaults to the slug; --status to todo. --blocked-by takes one or more IDs.
-  set   Changes a task's status.
+  set   Changes a task's status, or replaces its whole blocked-by list; no IDs clears it. A
+        blocked-by ID must be a task of the same project, not the task itself, and must not
+        already be blocked by it, directly or through other tasks (a cycle). Nothing is written
+        when a check fails.
   list  The project's todo and in-progress tasks by ID, one per line, tab-separated: ID, status,
         title (the task's heading), and its blockers — the blocked-by tasks not yet done, as
         "VE-3 (todo), VE-7 (cancelled)"; empty when the task is unblocked.
