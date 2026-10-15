@@ -139,6 +139,14 @@ run_hook "$plain" start "$(start_payload s-quick startup C:/p)" > /dev/null
 run_hook "$plain" fill "$(prompt_payload s-quick '/ds:quick INT-100 fix the typo')" > /dev/null
 check "other /ds: command with a ticket -> no ticket" "$(col s-quick ticket)" NULL
 
+run_hook "$plain" start "$(start_payload s-work-on startup C:/p)" > /dev/null
+run_hook "$plain" fill "$(prompt_payload s-work-on '/work-on vibe-engineering VE-4')" > /dev/null
+check "/work-on <project> <ID> -> fills the task ID" "$(col s-work-on ticket)" VE-4
+
+run_hook "$plain" start "$(start_payload s-work-on-text startup C:/p)" > /dev/null
+run_hook "$plain" fill "$(prompt_payload s-work-on-text '/work-on vibe-engineering add caching-2 layer')" > /dev/null
+check "/work-on with a description -> no ticket" "$(col s-work-on-text ticket)" NULL
+
 run_hook "$plain" start "$(start_payload s-chat startup C:/p)" > /dev/null
 run_hook "$plain" fill "$(prompt_payload s-chat 'what does INT-100 change?')" > /dev/null
 check "plain prompt -> no ticket" "$(col s-chat ticket)" NULL

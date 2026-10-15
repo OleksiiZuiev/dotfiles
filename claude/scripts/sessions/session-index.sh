@@ -9,10 +9,11 @@
 event="$1"
 payload=$(cat)
 
-# UserPromptSubmit fires on every prompt; only a /ds:refine one can fill a ticket, so anything else
-# is turned away here rather than paying for a node start. sessions-db.mjs makes the real match.
+# UserPromptSubmit fires on every prompt; only a /ds:refine or /work-on one can fill a ticket, so
+# anything else is turned away here rather than paying for a node start. sessions-db.mjs makes the
+# real match.
 if [[ "$event" == "fill" ]]; then
-  case "$payload" in *'"prompt":"/ds:refine '*) ;; *) exit 0 ;; esac
+  case "$payload" in *'"prompt":"/ds:refine '* | *'"prompt":"/work-on '*) ;; *) exit 0 ;; esac
 fi
 
 source "$(dirname "$0")/../lib/windows-node.sh"
