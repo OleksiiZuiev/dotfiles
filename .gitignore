@@ -1,2 +1,4 @@
 install-admin.ps1
 __pycache__/
+claude/skills/.trash/
+claude/skills/synced/
