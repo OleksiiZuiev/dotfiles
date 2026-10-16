@@ -202,5 +202,27 @@ out=$(task set "$c" blocked-by "$a" 2>&1); code=$?
 check "set blocked-by indirect cycle -> exit 1" "$code" 1
 check "set blocked-by indirect cycle -> file unchanged" "$(cat "$(file_of "$c")")" "$before_c"
 
+# --- set plan ---
+check "--help -> documents set plan" "$(has "$(task --help)" "task set <ID> plan")" yes
+p=$(task new ve planned --blocked-by "$a" --plan some-plan | head -1)
+task set "$p" plan; code=$?
+check "set plan with no value -> exit 0" "$code" 0
+check "set plan with no value -> clears the line, other lines intact" "$(sed -n 1,7p "$(file_of "$p")")" "---
+id: $p
+aliases: [$p]
+status: todo
+blocked-by: [\"[[$a]]\"]
+created: $today
+---"
+
+before=$(cat "$(file_of "$p")")
+task set "$p" plan; code=$?
+check "set plan on a task with no plan -> exit 0" "$code" 0
+check "set plan on a task with no plan -> file unchanged" "$(cat "$(file_of "$p")")" "$before"
+
+out=$(task set "$p" plan other-plan 2>&1); code=$?
+check "set plan with a value -> exit 1" "$code" 1
+check "set plan with a value -> file unchanged" "$(cat "$(file_of "$p")")" "$before"
+
 echo
 if [[ $fails -eq 0 ]]; then echo "All tests passed"; else echo "$fails test(s) failed"; exit 1; fi

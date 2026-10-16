@@ -3,6 +3,7 @@
 //   node task.mjs new <project> <slug> [--title <title>] [--blocked-by <ID>...] [--plan <note>] [--status <status>]
 //   node task.mjs set <ID> status <status>
 //   node task.mjs set <ID> blocked-by [<ID>...]
+//   node task.mjs set <ID> plan
 //   node task.mjs list <project> [--json]
 //
 // An ID is claimed by exclusively creating the empty marker tasks/.ids/<ID>: two writers can both
@@ -138,12 +139,13 @@ function checkBlockers(id, project, blockers) {
 
 function setField(args) {
   const [id, field, ...values] = args;
-  if (!id || !field) fail('usage: task set <ID> status <status> | task set <ID> blocked-by [<ID>...]');
-  if (field !== 'status' && field !== 'blocked-by') fail(`only status and blocked-by can be set; got ${field}`);
+  if (!id || !field) fail('usage: task set <ID> status <status> | task set <ID> blocked-by [<ID>...] | task set <ID> plan');
+  if (!['status', 'blocked-by', 'plan'].includes(field)) fail(`only status, blocked-by and plan can be set; got ${field}`);
   if (field === 'status') {
     if (values.length !== 1) fail('usage: task set <ID> status <status>');
     checkStatus(values[0]);
   }
+  if (field === 'plan' && values.length) fail('usage: task set <ID> plan (clears the link; a plan is given with task new --plan)');
   const path = taskPath(id);
   if (!path) fail(`no task ${id}`);
 
@@ -154,6 +156,8 @@ function setField(args) {
   let frontmatter;
   if (field === 'status') {
     frontmatter = block[0].replace(/^status:.*$/m, `status: ${values[0]}`);
+  } else if (field === 'plan') {
+    frontmatter = block[0].replace(/^plan:.*\r?\n/m, '');
   } else {
     checkBlockers(id, projectForId(id), values);
     const line = values.length ? `blocked-by: [${values.map((blocker) => `"[[${blocker}]]"`).join(', ')}]` : null;

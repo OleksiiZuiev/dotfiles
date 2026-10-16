@@ -95,4 +95,37 @@ check "drift -> the mention outside ## Tasks is not drift" "$(has "$drift" "VE-8
 out=$(plan status unknown 2>&1); code=$?
 check "status of an unregistered slug -> fails" "$code" 1
 
+# --- close ---
+check "--help -> documents close" "$(has "$(plan --help)" "plan close <slug>")" yes
+plan_field() { # $1 slug  $2 property
+  field "$(plan list --json)" "s.find((p) => p.slug === '$1').$2"
+}
+write_note VE-1 VE-2   # VE-1 done, VE-2 todo
+
+out=$(plan close ladder closed 2>&1); code=$?
+check "close closed with a todo member -> fails" "$code" 1
+check "close closed with a todo member -> names it" "$(has "$out" VE-2)" yes
+check "close closed with a todo member -> stays active" "$(plan_field ladder status)" active
+out=$(plan close ladder finished 2>&1); code=$?
+check "close with an unknown status -> fails" "$code" 1
+check "close with an unknown status -> stays active" "$(plan_field ladder status)" active
+
+out=$(plan close titled cancelled --reason "Dropped for now"); code=$?
+check "close cancelled with a todo member -> exit 0" "$code" 0
+check "close cancelled -> status and reason" \
+  "$(plan_field titled status)|$(plan_field titled close_reason)" "cancelled|Dropped for now"
+check "close cancelled -> closed_at set" "$(plan_field titled 'closed_at !== null')" true
+out=$(plan close titled closed 2>&1); code=$?
+check "close a plan that is not active -> fails" "$code" 1
+check "close a plan that is not active -> keeps its status" "$(plan_field titled status)" cancelled
+
+task set VE-2 status cancelled
+out=$(plan close ladder closed); code=$?
+check "close closed with only done and cancelled members -> exit 0" "$code" 0
+check "close closed -> status closed, no reason" \
+  "$(plan_field ladder status)|$(plan_field ladder close_reason)" "closed|null"
+
+out=$(plan close unknown closed 2>&1); code=$?
+check "close an unregistered slug -> fails" "$code" 1
+
 exit "$fails"

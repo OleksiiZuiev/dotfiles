@@ -9,6 +9,7 @@ task() {
 Usage: task new <project> <slug> [--title <title>] [--blocked-by <ID>...] [--plan <note>] [--status <status>]
        task set <ID> status <status>
        task set <ID> blocked-by [<ID>...]
+       task set <ID> plan
        task list <project> [--json]
 
 The one writer of vault task files: projects/<project>/tasks/<ID> <slug>.md, with id, status,
@@ -20,7 +21,8 @@ blocked-by and plan in frontmatter.
   set   Changes a task's status, or replaces its whole blocked-by list; no IDs clears it. A
         blocked-by ID must be a task of the same project, not the task itself, and must not
         already be blocked by it, directly or through other tasks (a cycle). Nothing is written
-        when a check fails.
+        when a check fails. `set <ID> plan` clears the plan: link; a plan is only ever
+        given with `new --plan`.
   list  The project's todo and in-progress tasks by ID, one per line, tab-separated: ID, status,
         title (the task's heading), and its blockers — the blocked-by tasks not yet done, as
         "VE-3 (todo), VE-7 (cancelled)"; empty when the task is unblocked.

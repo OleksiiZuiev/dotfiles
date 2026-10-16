@@ -3,6 +3,7 @@
 //   node plan.mjs register <slug> <note> [--title <title>]
 //   node plan.mjs list [--json]
 //   node plan.mjs status <slug> [--json]
+//   node plan.mjs close <slug> closed|cancelled [--reason <reason>]
 //
 // A vault plan is a note whose `## Tasks` section lists its tasks as [[ID]] links. That list is the
 // membership; each task's `plan:` link points back, and `status` reports where the two disagree.
@@ -153,8 +154,34 @@ function status(args) {
   if (result.drift.length) console.log(['drift:', ...result.drift.map((line) => `  ${line}`)].join('\n'));
 }
 
+// `closed` says the plan's work is finished, so it waits for every member; `cancelled` does not.
+function close(args) {
+  const [slug, status, ...rest] = args;
+  if (!slug || !['closed', 'cancelled'].includes(status)) fail('usage: plan close <slug> closed|cancelled [--reason <reason>]');
+  let reason = null;
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i] !== '--reason' || rest[i + 1] === undefined) fail(`unknown option ${rest[i]}`);
+    reason = rest[++i];
+  }
+  const plan = readPlans().find((p) => p.slug === slug);
+  if (!plan) fail(`no plan ${slug}`);
+  if (plan.status !== 'active') fail(`${slug} is already ${plan.status}`);
+  if (status === 'closed') {
+    const open = statusOf(plan).members.filter((m) => ['todo', 'in-progress', 'missing'].includes(m.status));
+    if (open.length) {
+      fail(`${slug} has open tasks: ${open.map((m) => `${m.id} (${m.status})`).join(', ')}; cancel or detach them, or close it as cancelled`);
+    }
+  }
+
+  const db = createDb();
+  db.prepare('UPDATE plans SET status = ?, closed_at = ?, close_reason = ? WHERE slug = ?')
+    .run(status, new Date().toISOString(), reason, slug);
+  db.close();
+}
+
 const [command, ...args] = process.argv.slice(2);
 if (command === 'register') register(args);
 else if (command === 'list') list(args);
 else if (command === 'status') status(args);
-else fail('usage: plan register|list|status ... (see plan --help)');
+else if (command === 'close') close(args);
+else fail('usage: plan register|list|status|close ... (see plan --help)');
