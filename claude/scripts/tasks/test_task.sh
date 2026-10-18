@@ -13,6 +13,7 @@ printf '# {{title}}\n\n## Description\n' > "$root/templates/task.md"
 printf -- '---\ncreated: 2026-01-01\nid-prefix: VE\n---\n\n# VE\n' > "$root/projects/ve/ve.md"
 printf -- '---\ncreated: 2026-01-01\n---\n\n# Bare\n' > "$root/projects/bare/bare.md"
 export CLAUDE_VAULT_DIR="$(cygpath -w "$root")"
+export CLAUDE_SCRIPTS_DIR="$(realpath "$SCRIPT_DIR/..")"
 tasks="$root/projects/ve/tasks"
 today=$(date +%Y-%m-%d)
 
@@ -146,6 +147,13 @@ check "list --json -> path to the task file" "$(row VE-5 r.path)" "$(cygpath -w 
 out=$(task list nope 2>&1); code=$?
 check "list unknown project -> exit 1" "$code" 1
 check "list unknown project -> names it" "$(has "$out" "projects/nope")" yes
+
+# --- a shell restored from a Claude Code snapshot ---
+# The snapshot keeps the task function's text, but neither the underscore helpers nor the variables
+# that sourcing task.sh set.
+out=$(bash --norc --noprofile -c "$(declare -f task); task list ve" 2>&1); code=$?
+check "restored shell -> list exit 0" "$code" 0
+check "restored shell -> list prints the open tasks" "$(cut -f1 <<< "$out" | tr '\n' ' ')" "VE-3 VE-5 VE-6 VE-8 "
 
 # --- new: arguments reach node as written ---
 id=$(task new ve slash-title --title "/plan-next with dispatch" | head -1)

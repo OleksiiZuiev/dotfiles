@@ -1,8 +1,5 @@
 # The plan registry: named sets of vault tasks. See `plan --help`.
 
-_PLAN_SH="${BASH_SOURCE[0]}"
-source "$(dirname "$_PLAN_SH")/../lib/windows-node.sh"
-
 plan() {
     if [[ "$1" == "-h" || "$1" == "--help" ]]; then
         cat <<'EOF'
@@ -27,13 +24,18 @@ links; the registry row says the note is a plan and whether it is active.
 
 The vault is $CLAUDE_VAULT_DIR, by default C:/work/github/OleksiiZuiev/projects-obsidian.
 The registry is the plans table of $CLAUDE_DATA_DB (see `sessions --help`).
+The scripts are read from $CLAUDE_SCRIPTS_DIR, by default ~/.claude/scripts.
 
 Options:
   -h, --help    Show this help and exit
 EOF
         return 0
     fi
+    # A shell Claude Code restores from a snapshot keeps this function but not the underscore helpers
+    # or the variables set when this file was sourced, so the files are found from here, at call time.
+    local scripts="${CLAUDE_SCRIPTS_DIR:-$HOME/.claude/scripts}"
+    source "$scripts/lib/windows-node.sh" || return 1
     # A Windows process started from WSL sees only the variables WSLENV names.
     WSLENV="${WSLENV:+$WSLENV:}CLAUDE_VAULT_DIR:CLAUDE_DATA_DB" MSYS2_ARG_CONV_EXCL='*' \
-        _windows_node "$(dirname "$_PLAN_SH")/plan.mjs" "$@"
+        _windows_node "$scripts/plans/plan.mjs" "$@"
 }

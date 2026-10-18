@@ -14,6 +14,7 @@ printf '# {{title}}\n\n## Description\n' > "$root/templates/task.md"
 printf -- '---\ncreated: 2026-01-01\nid-prefix: VE\n---\n\n# VE\n' > "$root/projects/ve/ve.md"
 export CLAUDE_VAULT_DIR="$(cygpath -w "$root")"
 export CLAUDE_DATA_DB="$(cygpath -w "$root/claude-data.db")"
+export CLAUDE_SCRIPTS_DIR="$(realpath "$SCRIPT_DIR/..")"
 note="projects/ve/work-notes/2026-01-01-ladder-plan.md"
 
 check() { # $1 name  $2 actual  $3 expected
@@ -69,6 +70,13 @@ check "register a missing note -> not in the list" "$(field "$(plan list --json)
 out=$(plan register titled "$note" --title "Given title" 2>&1)
 check "register --title wins over the heading" \
   "$(field "$(plan list --json)" 's.find((p) => p.slug === "titled").title')" "Given title"
+
+# --- a shell restored from a Claude Code snapshot ---
+# The snapshot keeps the plan function's text, but neither the underscore helpers nor the variables
+# that sourcing plan.sh set.
+out=$(bash --norc --noprofile -c "$(declare -f plan); plan list --json" 2>&1); code=$?
+check "restored shell -> list exit 0" "$code" 0
+check "restored shell -> list prints the plans" "$(field "$out" 's.map((p) => p.slug).join(" ")')" "ladder titled"
 
 # --- status ---
 out=$(plan status ladder --json); code=$?
