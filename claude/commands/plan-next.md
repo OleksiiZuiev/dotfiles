@@ -35,9 +35,9 @@ Vault paths here (`projects/…`, the plan note, task files) are relative to the
      ```bash
      bash ~/.claude/scripts/claude-tab.sh "{ID}" "{checkout}" "/task-run {ID}"
      ```
-   - **Any other key**: take the repo path from the `Path` column of `${CLAUDE_REPO_MAP:-/c/work/claude-data/repo-map.md}`, create the worktree on branch `feature/{id in lower case}-{slug}` (the slug is the task file name after the ID, so `/task-run` recovers the ID from the branch), and open the tab in it with the vault added. The prompt goes before `--add-dir`, which takes every following argument as a directory:
+   - **Any other key**: take the repo path from the `Path` column of `${CLAUDE_REPO_MAP:-/c/work/claude-data/repo-map.md}`. Pick the branch prefix: say in prose which of `feat`, `fix` or `chore` fits the task and why, then ask with a single-select `AskUserQuestion` over the three. Create the worktree on branch `{prefix}/{id in lower case}-{slug}` (the slug is the task file name after the ID, so `/task-run` recovers the ID from the branch), and open the tab in it with the vault added. The prompt goes before `--add-dir`, which takes every following argument as a directory:
      ```bash
-     wt=$(bash ~/.claude/scripts/make-worktree.sh "{repo path}" "feature/{id}-{slug}")
+     wt=$(bash ~/.claude/scripts/make-worktree.sh "{repo path}" "{prefix}/{id}-{slug}")
      bash ~/.claude/scripts/claude-tab.sh "{ID}" "$wt" "/task-run {ID}" --add-dir "{vault root}"
      ```
      `make-worktree.sh` refuses a repo with uncommitted changes; report that to the user rather than working around it
