@@ -26,6 +26,8 @@ work: the same corrections get re-spent next session.
   posture). The user decides Approve / Modify / Skip / Dismiss and confirms the destination.
 - **Distill rules, not requirements.** Drop anything that's a one-off scope/requirement change; keep
   only generalizable *how-to-build* corrections.
+- **Leave `## Workflow` alone.** Never add, edit or remove it; routing and ledger writes touch only
+  `## Enforced`, `## Plan directives` and `## Distill ledger`.
 - **Re-runnable.** A ledger in the overlay records what's already been harvested/dismissed so a
   re-run on the same branch doesn't re-propose it.
 
@@ -45,6 +47,11 @@ consumed by /ds:work-on (Step 2.7 → Plan directives, Step 3.5 → Enforced).
 <!-- Structural rules folded into the Step 2.7 plan self-check. -->
 - <imperative bullet>            (src: <short evidence>)
 
+## Workflow
+<!-- Per-repo delivery. Hand-written; /ds:distill never edits this section. -->
+delivery: pr | direct
+worktree: yes | no
+
 ## Distill ledger
 <!-- /ds:distill bookkeeping for re-run dedup. No consumer reads this section. -->
 ### Harvested sources
@@ -53,9 +60,14 @@ consumed by /ds:work-on (Step 2.7 → Plan directives, Step 3.5 → Enforced).
 - <short fingerprint of a dismissed candidate>
 ```
 
-`/ds:work-on` only reads `## Enforced` and `## Plan directives`; the `## Distill ledger` is private
+`/ds:work-on` reads `## Enforced` and `## Plan directives`; the `## Distill ledger` is private
 bookkeeping. Create the file from this template the first time anything routes to the overlay (or the
-ledger needs an entry).
+ledger needs an entry), leaving out `## Workflow`.
+
+`## Workflow` is read by the unified task-run command. `delivery: pr` opens a pull request and
+`delivery: direct` commits on the current branch; `worktree: yes` works in a worktree and
+`worktree: no` works in the checkout. A repo without the section gets a worktree and a draft pull
+request.
 
 ## Your Task
 
@@ -219,11 +231,6 @@ Mark `🧾 Record` `in_progress`.
    )"
    ```
    End the message with the environment's `Co-Authored-By` trailer.
-3. **If a *new* overlay file was created**, the symlink doesn't exist yet — run
-   `powershell.exe -File "$dotfiles/install-admin.ps1"` once so `/ds:work-on` can read it from
-   `~/.claude/overlays/`. Editing an **existing** overlay or global CLAUDE.md flows through the
-   existing symlink — **skip** the install in that case.
-
 Mark `🧾 Record` `completed`.
 
 ### Step 6: Final summary
@@ -236,7 +243,7 @@ Gathered:  C commits · P PR comments · T ticket decisions  (S skipped via ledg
 Distilled: N candidates
 Promoted:  G → global CLAUDE.md · E → overlay ## Enforced · D → overlay ## Plan directives
 Skipped:   K   Dismissed: M
-Committed: <sha>     Install re-run: yes (new overlay) / no
+Committed: <sha>
 ```
 
 List the promoted rules with their destinations. Suggest next steps:
