@@ -30,12 +30,19 @@ Vault paths here (`projects/…`, the plan note, task files) are relative to the
    - *stale*: something the catch-up found changes the task's premise
    - *open questions*: a section is still a template placeholder, or a question blocks the work
 6. **Refine** when the verdict is not *ready*: resolve it with the user in this session and fill the task file's sections. Never hand-write task frontmatter; a status or `blocked-by` change goes through `task set`
-7. **Dispatch**: as one Bash call, with the slash command kept inside one quoted argument so it reaches claude as one argument:
-   ```bash
-   bash ~/.claude/scripts/claude-tab.sh "{ID}" "{vault root}" "/work-on {project} {ID}"
-   ```
-   `claude-tab.sh` opens a Git Bash tab and refuses from WSL. From WSL, say so and print the line for the user to run from a Windows shell
-8. **Stop there.** The dispatched `/work-on` sets the task `in-progress`; do not set it here
+7. **Dispatch** into the task's workspace, running `/task-run`. Take the repo key from `workspace` in `task list {project} --json`; with `null`, ask with `AskUserQuestion` (the repo names of the repo map plus `vault`) and use the answer for this dispatch only, without writing it back. Keep the slash command inside one quoted argument so it reaches claude as one argument:
+   - **Workspace `vault`**, or an overlay `~/.claude/overlays/{repo-key}.md` whose `## Workflow` says `worktree: no`: the tab starts in that checkout (the vault root for `vault`):
+     ```bash
+     bash ~/.claude/scripts/claude-tab.sh "{ID}" "{checkout}" "/task-run {ID}"
+     ```
+   - **Any other key**: take the repo path from the `Path` column of `${CLAUDE_REPO_MAP:-/c/work/claude-data/repo-map.md}`, create the worktree on branch `feature/{id in lower case}-{slug}` (the slug is the task file name after the ID, so `/task-run` recovers the ID from the branch), and open the tab in it with the vault added. The prompt goes before `--add-dir`, which takes every following argument as a directory:
+     ```bash
+     wt=$(bash ~/.claude/scripts/make-worktree.sh "{repo path}" "feature/{id}-{slug}")
+     bash ~/.claude/scripts/claude-tab.sh "{ID}" "$wt" "/task-run {ID}" --add-dir "{vault root}"
+     ```
+     `make-worktree.sh` refuses a repo with uncommitted changes; report that to the user rather than working around it
+   `claude-tab.sh` opens a Git Bash tab and refuses from WSL. From WSL, say so and print the lines for the user to run from a Windows shell
+8. **Stop there.** Report the worktree path and branch. The dispatched `/task-run` sets the task `in-progress`; do not set it here
 
 ## Examples
 
