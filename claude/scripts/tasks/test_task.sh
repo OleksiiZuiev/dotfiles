@@ -10,7 +10,7 @@ root="$HOME/.task-test.$$"
 trap 'rm -rf "$root"' EXIT
 mkdir -p "$root/templates" "$root/projects/ve/tasks" "$root/projects/bare/tasks"
 printf '# {{title}}\n\n## Description\n' > "$root/templates/task.md"
-printf -- '---\ncreated: 2026-01-01\nid-prefix: VE\n---\n\n# VE\n' > "$root/projects/ve/ve.md"
+printf -- '---\ncreated: 2026-01-01\nid-prefix: VE\nworkspace: acme/app\n---\n\n# VE\n' > "$root/projects/ve/ve.md"
 printf -- '---\ncreated: 2026-01-01\n---\n\n# Bare\n' > "$root/projects/bare/bare.md"
 export CLAUDE_VAULT_DIR="$(cygpath -w "$root")"
 export CLAUDE_SCRIPTS_DIR="$(realpath "$SCRIPT_DIR/..")"
@@ -231,6 +231,28 @@ check "set plan on a task with no plan -> file unchanged" "$(cat "$(file_of "$p"
 out=$(task set "$p" plan other-plan 2>&1); code=$?
 check "set plan with a value -> exit 1" "$code" 1
 check "set plan with a value -> file unchanged" "$(cat "$(file_of "$p")")" "$before"
+
+# --- workspace ---
+check "--help -> documents --workspace" "$(has "$(task --help)" "--workspace <repo-key>")" yes
+w=$(task new ve in-other-repo --workspace other/repo | head -1)
+check "new --workspace -> writes the line before created" "$(sed -n 1,6p "$(file_of "$w")")" "---
+id: $w
+aliases: [$w]
+status: todo
+workspace: other/repo
+created: $today"
+check "new without --workspace -> no workspace line" "$(grep -c '^workspace:' "$(file_of "$a")")" 0
+
+out=$(task new ve no-value --workspace 2>&1); code=$?
+check "new --workspace without a value -> exit 1" "$code" 1
+
+json=$(task list ve --json)
+check "list --json -> task without override gets the project workspace" "$(row "$a" r.workspace)" acme/app
+check "list --json -> task override wins" "$(row "$w" r.workspace)" other/repo
+
+printf -- '---\ncreated: 2026-01-01\nid-prefix: BA\n---\n\n# Bare\n' > "$root/projects/bare/bare.md"
+task new bare plain > /dev/null
+check "list --json -> no project default and no override is null" "$(node -e 'console.log(JSON.parse(process.argv[1])[0].workspace)' "$(task list bare --json)")" null
 
 echo
 if [[ $fails -eq 0 ]]; then echo "All tests passed"; else echo "$fails test(s) failed"; exit 1; fi

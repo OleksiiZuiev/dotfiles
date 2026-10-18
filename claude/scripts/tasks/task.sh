@@ -4,17 +4,20 @@ task() {
     if [[ "$1" == "-h" || "$1" == "--help" ]]; then
         cat <<'EOF'
 Usage: task new <project> <slug> [--title <title>] [--blocked-by <ID>...] [--plan <note>] [--status <status>]
+                         [--workspace <repo-key>]
        task set <ID> status <status>
        task set <ID> blocked-by [<ID>...]
        task set <ID> plan
        task list <project> [--json]
 
 The one writer of vault task files: projects/<project>/tasks/<ID> <slug>.md, with id, status,
-blocked-by and plan in frontmatter.
+blocked-by, plan and workspace in frontmatter.
 
   new   Claims the project's next ID (prefix from `id-prefix:` in projects/<project>/<project>.md)
         and writes the task from templates/task.md. Prints the ID, then the path.
         --title defaults to the slug; --status to todo. --blocked-by takes one or more IDs.
+        --workspace names the repo the task's work lands in, by its repo-map key (`vault` for the
+        vault); without it the task inherits `workspace:` from the project file.
   set   Changes a task's status, or replaces its whole blocked-by list; no IDs clears it. A
         blocked-by ID must be a task of the same project, not the task itself, and must not
         already be blocked by it, directly or through other tasks (a cycle). Nothing is written
@@ -23,7 +26,8 @@ blocked-by and plan in frontmatter.
   list  The project's todo and in-progress tasks by ID, one per line, tab-separated: ID, status,
         title (the task's heading), and its blockers — the blocked-by tasks not yet done, as
         "VE-3 (todo), VE-7 (cancelled)"; empty when the task is unblocked.
-        --json prints an array of {id, status, title, path, blockers: [{id, status}]}.
+        --json prints an array of {id, status, title, path, blockers: [{id, status}], workspace}, where
+        workspace is the task's own or else the project's, null when neither names one.
 
 Statuses: todo, in-progress, done, cancelled.
 The vault is $CLAUDE_VAULT_DIR, by default C:/work/github/OleksiiZuiev/projects-obsidian.

@@ -1,6 +1,6 @@
 // Vault task files: the one writer of their frontmatter. Usage is `task --help` (task.sh).
 //
-//   node task.mjs new <project> <slug> [--title <title>] [--blocked-by <ID>...] [--plan <note>] [--status <status>]
+//   node task.mjs new <project> <slug> [--title <title>] [--blocked-by <ID>...] [--plan <note>] [--status <status>] [--workspace <repo-key>]
 //   node task.mjs set <ID> status <status>
 //   node task.mjs set <ID> blocked-by [<ID>...]
 //   node task.mjs set <ID> plan
@@ -68,12 +68,12 @@ function checkStatus(status) {
 function newTask(args) {
   const [project, slug, ...rest] = args;
   if (!project || !slug || slug.startsWith('--')) fail('usage: task new <project> <slug> [options]');
-  const options = { title: slug, blockedBy: [], plan: null, status: 'todo' };
+  const options = { title: slug, blockedBy: [], plan: null, status: 'todo', workspace: null };
   for (let i = 0; i < rest.length; i++) {
     const flag = rest[i];
     if (flag === '--blocked-by') {
       while (rest[i + 1] && !rest[i + 1].startsWith('--')) options.blockedBy.push(rest[++i]);
-    } else if (flag === '--title' || flag === '--plan' || flag === '--status') {
+    } else if (flag === '--title' || flag === '--plan' || flag === '--status' || flag === '--workspace') {
       if (rest[i + 1] === undefined) fail(`${flag} needs a value`);
       options[flag.slice(2)] = rest[++i];
     } else {
@@ -98,6 +98,7 @@ function newTask(args) {
     lines.push(`blocked-by: [${options.blockedBy.map((blocker) => `"[[${blocker}]]"`).join(', ')}]`);
   }
   if (options.plan) lines.push(`plan: "[[${options.plan}]]"`);
+  if (options.workspace) lines.push(`workspace: ${options.workspace}`);
   lines.push(`created: ${new Date().toLocaleDateString('sv')}`, '---', '');
   const path = join(tasksDir, `${id} ${slug}.md`);
   writeFileSync(path, `${lines.join('\n')}\n${template.replaceAll('{{title}}', options.title)}`, { flag: 'wx' });
@@ -168,8 +169,11 @@ function setField(args) {
 }
 
 // Every task of the project, whatever its status, by ID. A blocker stays open until it is done: a
-// cancelled one is listed so the dependent gets a look. `plan` is the raw frontmatter value.
+// cancelled one is listed so the dependent gets a look. `plan` is the raw frontmatter value;
+// `workspace` is the task's own, else the project's.
 export function readTasks(project) {
+  const projectFile = join(VAULT, 'projects', project, `${project}.md`);
+  const defaultWorkspace = existsSync(projectFile) ? frontmatterValue(readFileSync(projectFile, 'utf8'), 'workspace') : undefined;
   const tasksDir = join(VAULT, 'projects', project, 'tasks');
   if (!existsSync(tasksDir)) fail(`no tasks folder ${tasksDir} (projects/${project})`);
 
@@ -191,6 +195,7 @@ export function readTasks(project) {
         path,
         blockers,
         plan: frontmatterValue(text, 'plan') ?? null,
+        workspace: frontmatterValue(text, 'workspace') ?? defaultWorkspace ?? null,
       };
     })
     .sort((a, b) => Number(a.id.match(/\d+$/)[0]) - Number(b.id.match(/\d+$/)[0]));
