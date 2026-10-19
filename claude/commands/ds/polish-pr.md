@@ -218,13 +218,8 @@ NO commits** — all reads are against the current dir.
 
 For each comment:
 
-a. **Display Comment Context**
-   - File path and line number, the code snippet being reviewed, the reviewer's comment, and
-     surrounding code if helpful.
-
-b. **Assess Comment & Propose Fix**
-
-   **Part 1 — Thinking Buddy Assessment:**
+a. **Read and Assess** — read the code at the comment's location, then work through the
+   thinking-buddy assessment. Nothing is shown yet; this is the material for the decision card.
    - **Evaluate merit**: does the suggestion actually improve the code? Valid concern or style
      preference? Real problem?
    - **Price the fix**: name what it adds — a concept, a cache, a memo, an indirection, a new
@@ -240,14 +235,35 @@ b. **Assess Comment & Propose Fix**
    - **Categorize**: "strong agree", "agree with modifications", "minor/style preference",
      "not worth it — the problem is real, the fix costs more than it buys", or
      "disagree — here's why".
+   - **Propose a specific fix** (may differ from what the reviewer suggested if you have a better
+     idea). If you disagree, still propose what you would do if asked.
 
-   **Part 2 — Proposed Fix:**
-   - Propose a specific fix (may differ from what the reviewer suggested if you have a better idea).
-   - Explain what changes will be made and why.
-   - If you disagree, still propose what you would do if asked, but communicate the disagreement.
+b. **Print the Decision Card** — as chat text, in the same message and **before** the
+   `AskUserQuestion` call. The user decides from this card alone: an assessment that stays in your
+   reasoning is invisible to them, and a question with no card in front of it cannot be answered on
+   merit. Never ask about a comment whose card is not on screen.
 
-c. **Get User Decision** — use `AskUserQuestion`. The tool caps explicit options at **4**,
-   then appends its own "Other" as the free-text slot, so present exactly these four:
+   ````
+   ### Comment {n} of {total} — {path}:{line} (@{author})
+
+   **Original comment**
+   > {the reviewer's body, verbatim — every line quoted}
+
+   ```{lang}
+   {the code the comment points at, with a few lines of context}
+   ```
+
+   **Analysis** — {merit; what the fix adds set against what it removes; any disagreement or
+   better alternative}
+   Stance: {category}
+
+   **Recommendation** — {the concrete fix: what changes, in which files, how it is tested. For a
+   "disagree" or "not worth it" stance: why no change, and what you would do if asked}
+   ````
+
+c. **Get User Decision** — use `AskUserQuestion`. The card carries the substance, so the question
+   is short: `Comment {n} of {total} — {path}:{line}: decision?`. The tool caps explicit options at
+   **4**, then appends its own "Other" as the free-text slot, so present exactly these four:
    - **"Approve fix"** — proceed with this specific fix
    - **"Discuss"** — ask a question or push back; no decision recorded yet
    - **"Skip this comment"** — don't address now (deal with later)
@@ -268,7 +284,7 @@ d. **Handle "Approve fix"** — if a repeating pattern is detected across the re
 e. **Handle "Discuss"** — record **no** decision for this comment:
    - Answer the question, or engage with the pushback, in plain chat. Stay **read-only** —
      this is still the Plan Phase, so no edits and no commits.
-   - Revise the Part 2 proposed fix if the discussion changed it.
+   - If the discussion changed the fix, re-print the card's **Recommendation** with the revision.
    - Re-ask this same comment's decision with the same four options, and repeat until it
      reaches a terminal decision.
    - **Never advance to the next comment on a "Discuss".**
@@ -621,6 +637,8 @@ Remind the user to **manually resolve** the conversations after reviewing the ch
 - **Two-Phase Approach**: complete the Plan Phase (approval for ALL comments) before any
   implementation.
 - **One-by-One Planning**: process each comment individually, getting approval before the next.
+- **Card Before Question**: every per-comment `AskUserQuestion` follows that comment's decision
+  card (Step 5, sub-step b) — original comment, analysis, recommendation — printed as chat text.
 - **Four Options Max**: `AskUserQuestion` accepts at most 4 explicit options and appends its own
   "Other". Step 5's menu spends those four on Approve / Discuss / Skip / Dismiss, and "Other"
   carries **Modify approach** — the free text is where a modification has to be typed anyway.
