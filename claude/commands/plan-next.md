@@ -21,7 +21,7 @@ Vault paths here (`projects/…`, the plan note, task files) are relative to the
    - Otherwise run `plan list`; with one active plan use it, with several show a numbered menu
    - With no plans, say so and stop
 2. **Read it**: run `plan status <slug> --json`. The `plan` CLI is the reader, so do not parse the plan note or task frontmatter yourself.
-   - The **frontier** is the candidates. `plan status` counts only `todo` tasks as the frontier, so list the members with status `in-progress` separately as "already running": they are neither offered nor hidden
+   - The **frontier** is the candidates. `plan status` counts only `todo` tasks as the frontier, so list the members with status `in-progress` separately as "already running", and those with status `in-review` as "in review, waiting for the merge": they are neither offered nor hidden
    - With an empty frontier, say so, give the blockers of the earliest remaining task, and stop
 3. **Select first**: say in prose which frontier task you recommend and why, then offer one single-select `AskUserQuestion` over the frontier, each option `{id}: {title}`. One task per run: dispatching several tabs into one checkout makes the sessions re-orient on each other's changes
 4. **Catch up**, for the chosen task only: the plan's change-log entries and the recently done members (read them through `task list`), plus `git log` on the project since the plan note last changed. Keep it as context; do not dump it

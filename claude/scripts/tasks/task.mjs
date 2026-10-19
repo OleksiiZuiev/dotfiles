@@ -13,7 +13,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, 
 import { join } from 'node:path';
 
 const VAULT = process.env.CLAUDE_VAULT_DIR ?? 'C:/work/github/OleksiiZuiev/projects-obsidian';
-const STATUSES = ['todo', 'in-progress', 'done', 'cancelled'];
+const STATUSES = ['todo', 'in-progress', 'in-review', 'done', 'cancelled'];
 
 function fail(message) {
   console.error(`task: ${message}`);
@@ -205,7 +205,7 @@ function listTasks(args) {
   const [project, ...rest] = args;
   if (!project || project.startsWith('--')) fail('usage: task list <project> [--json]');
   const tasks = readTasks(project)
-    .filter((task) => task.status === 'todo' || task.status === 'in-progress')
+    .filter((task) => ['todo', 'in-progress', 'in-review'].includes(task.status))
     .map(({ plan, ...task }) => task);
 
   if (rest.includes('--json')) {

@@ -250,6 +250,16 @@ json=$(task list ve --json)
 check "list --json -> task without override gets the project workspace" "$(row "$a" r.workspace)" acme/app
 check "list --json -> task override wins" "$(row "$w" r.workspace)" other/repo
 
+# --- in-review ---
+r=$(task new ve in-review-work | head -1)
+d=$(task new ve after-review --blocked-by "$r" | head -1)
+task set "$r" status in-review; code=$?
+check "set status in-review -> exit 0" "$code" 0
+check "set status in-review -> writes the status" "$(grep '^status:' "$(file_of "$r")")" "status: in-review"
+json=$(task list ve --json)
+check "list -> shows an in-review task" "$(row "$r" r.status)" in-review
+check "list -> an in-review blocker stays open" "$(row "$d" 'JSON.stringify(r.blockers)')" "[{\"id\":\"$r\",\"status\":\"in-review\"}]"
+
 printf -- '---\ncreated: 2026-01-01\nid-prefix: BA\n---\n\n# Bare\n' > "$root/projects/bare/bare.md"
 task new bare plain > /dev/null
 check "list --json -> no project default and no override is null" "$(node -e 'console.log(JSON.parse(process.argv[1])[0].workspace)' "$(task list bare --json)")" null

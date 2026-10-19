@@ -23,13 +23,14 @@ blocked-by, plan and workspace in frontmatter.
         already be blocked by it, directly or through other tasks (a cycle). Nothing is written
         when a check fails. `set <ID> plan` clears the plan: link; a plan is only ever
         given with `new --plan`.
-  list  The project's todo and in-progress tasks by ID, one per line, tab-separated: ID, status,
+  list  The project's todo, in-progress and in-review tasks by ID, one per line, tab-separated: ID, status,
         title (the task's heading), and its blockers — the blocked-by tasks not yet done, as
         "VE-3 (todo), VE-7 (cancelled)"; empty when the task is unblocked.
         --json prints an array of {id, status, title, path, blockers: [{id, status}], workspace}, where
         workspace is the task's own or else the project's, null when neither names one.
 
-Statuses: todo, in-progress, done, cancelled.
+Statuses: todo, in-progress, in-review, done, cancelled. in-review is work delivered as a pull
+request that has not merged; it stays an open blocker until it is done.
 The vault is $CLAUDE_VAULT_DIR, by default C:/work/github/OleksiiZuiev/projects-obsidian.
 The scripts are read from $CLAUDE_SCRIPTS_DIR, by default ~/.claude/scripts.
 
