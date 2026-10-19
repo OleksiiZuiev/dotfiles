@@ -260,6 +260,42 @@ json=$(task list ve --json)
 check "list -> shows an in-review task" "$(row "$r" r.status)" in-review
 check "list -> an in-review blocker stays open" "$(row "$d" 'JSON.stringify(r.blockers)')" "[{\"id\":\"$r\",\"status\":\"in-review\"}]"
 
+# --- branch ---
+check "--help -> documents set branch" "$(has "$(task --help)" "task set <ID> branch [<name>]")" yes
+g=$(task new ve on-a-branch --blocked-by "$a" | head -1)
+json=$(task list ve --json)
+check "list --json -> branch is null when unset" "$(row "$g" r.branch)" null
+task set "$g" branch feat/ve-1-on-a-branch; code=$?
+check "set branch -> exit 0" "$code" 0
+check "set branch -> writes the line before the closing ---, other lines intact" "$(sed -n 1,8p "$(file_of "$g")")" "---
+id: $g
+aliases: [$g]
+status: todo
+blocked-by: [\"[[$a]]\"]
+created: $today
+branch: feat/ve-1-on-a-branch
+---"
+json=$(task list ve --json)
+check "list --json -> returns the branch" "$(row "$g" r.branch)" feat/ve-1-on-a-branch
+
+task set "$g" branch fix/ve-1-other
+check "set branch again -> replaces the line" "$(grep '^branch:' "$(file_of "$g")")" "branch: fix/ve-1-other"
+
+before=$(cat "$(file_of "$g")")
+out=$(task set "$g" branch one two 2>&1); code=$?
+check "set branch with two names -> exit 1" "$code" 1
+check "set branch with two names -> file unchanged" "$(cat "$(file_of "$g")")" "$before"
+
+task set "$g" branch
+check "set branch with no name -> clears the line" "$(grep -c '^branch:' "$(file_of "$g")")" 0
+check "set branch with no name -> other lines intact" "$(sed -n 1,7p "$(file_of "$g")")" "---
+id: $g
+aliases: [$g]
+status: todo
+blocked-by: [\"[[$a]]\"]
+created: $today
+---"
+
 printf -- '---\ncreated: 2026-01-01\nid-prefix: BA\n---\n\n# Bare\n' > "$root/projects/bare/bare.md"
 task new bare plain > /dev/null
 check "list --json -> no project default and no override is null" "$(node -e 'console.log(JSON.parse(process.argv[1])[0].workspace)' "$(task list bare --json)")" null

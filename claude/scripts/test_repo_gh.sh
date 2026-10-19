@@ -18,6 +18,7 @@ if [[ "$1 $2 $3" == "auth token --user" ]]; then
   echo "token-for-$4"
   exit 0
 fi
+[[ "$1" == "pwd" ]] && { pwd -W; exit 0; }
 echo "GH_TOKEN=[${GH_TOKEN-unset}] args=[$*]"
 EOF
 chmod +x "$root/bin/gh"
@@ -75,6 +76,25 @@ check "line outside ## Workflow -> ignored" \
 check "outside a git repo -> gh runs as the active account" \
   "$(in_dir "$root/outside" repo-gh api user)" \
   "GH_TOKEN=[unset] args=[api user]"
+
+# --- -C <dir> ---
+# Run from outside any repo, so only the -C folder can supply the account.
+check "-C -> the other folder's account" \
+  "$(in_dir "$root/outside" repo-gh -C "$root/acme-wt" pr list)" \
+  "GH_TOKEN=[token-for-octo] args=[pr list]"
+check "-C -> gh runs in that folder" \
+  "$(in_dir "$root/outside" repo-gh -C "$root/acme-wt" pwd)" \
+  "$(cygpath -m -l "$root/acme-wt")"
+
+out=$(in_dir "$root/outside" repo-gh -C "$root/missing" pr list 2>&1); code=$?
+check "-C missing folder -> exit 1" "$code" 1
+check "-C missing folder -> names it, gh not run" \
+  "$([[ "$out" == *"$root/missing"* && "$out" != *"args=["* ]] && echo yes || echo "no: $out")" yes
+
+out=$(in_dir "$root/outside" repo-gh -C 2>&1); code=$?
+check "-C without a folder -> exit 1" "$code" 1
+check "-C without a folder -> gh not run" \
+  "$([[ -n "$out" && "$out" != *"args=["* ]] && echo yes || echo "no: $out")" yes
 
 # --- the named account has no token ---
 printf '## Workflow\ngithub-account: ghost\n' > "$root/overlays/acme.md"

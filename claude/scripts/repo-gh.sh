@@ -1,11 +1,14 @@
-# Run `gh` as the GitHub account the current repo's overlay names. See `repo-gh --help`.
+# Run `gh` as the GitHub account the repo's overlay names. See `repo-gh --help`.
 
 repo-gh() {
     if [[ "$1" == "-h" || "$1" == "--help" ]]; then
         cat <<'EOF'
-Usage: repo-gh <gh arguments>
+Usage: repo-gh [-C <dir>] <gh arguments>
 
 Run gh as the GitHub account the current repo names, without switching the active gh account.
+With -C, like `git -C`, the repo is the one at <dir>: its overlay names the account and gh runs
+inside <dir>, so gh also takes the repo from <dir>'s remote. A <dir> that is not a directory fails
+before gh runs.
 
 The account is the `github-account: <login>` line in the `## Workflow` section of the repo's
 overlay, ~/.claude/overlays/<repo-key>.md (the format is defined in ~/.claude/commands/ds/distill.md).
@@ -23,8 +26,17 @@ EOF
         return 0
     fi
 
-    local common_dir overlay account token
-    if common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null); then
+    local dir=. common_dir overlay account token
+    if [[ "$1" == "-C" ]]; then
+        if [[ -z "$2" || ! -d "$2" ]]; then
+            echo "repo-gh: -C needs a directory; got '${2-}'" >&2
+            return 1
+        fi
+        dir="$2"
+        shift 2
+    fi
+
+    if common_dir=$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null); then
         overlay="${CLAUDE_OVERLAYS_DIR:-$HOME/.claude/overlays}/$(basename "$(dirname "$common_dir")").md"
         [[ -f "$overlay" ]] && account=$(awk '
             /^## / { in_workflow = ($0 == "## Workflow") }
@@ -33,12 +45,12 @@ EOF
     fi
 
     if [[ -z "$account" ]]; then
-        gh "$@"
+        (cd "$dir" && gh "$@")
         return
     fi
     if ! token=$(gh auth token --user "$account"); then
         echo "repo-gh: no gh token for $account (named in $overlay); run: gh auth login" >&2
         return 1
     fi
-    GH_TOKEN="$token" gh "$@"
+    (cd "$dir" && GH_TOKEN="$token" gh "$@")
 }

@@ -8,10 +8,11 @@ Usage: task new <project> <slug> [--title <title>] [--blocked-by <ID>...] [--pla
        task set <ID> status <status>
        task set <ID> blocked-by [<ID>...]
        task set <ID> plan
+       task set <ID> branch [<name>]
        task list <project> [--json]
 
 The one writer of vault task files: projects/<project>/tasks/<ID> <slug>.md, with id, status,
-blocked-by, plan and workspace in frontmatter.
+blocked-by, plan, workspace and branch in frontmatter.
 
   new   Claims the project's next ID (prefix from `id-prefix:` in projects/<project>/<project>.md)
         and writes the task from templates/task.md. Prints the ID, then the path.
@@ -22,12 +23,14 @@ blocked-by, plan and workspace in frontmatter.
         blocked-by ID must be a task of the same project, not the task itself, and must not
         already be blocked by it, directly or through other tasks (a cycle). Nothing is written
         when a check fails. `set <ID> plan` clears the plan: link; a plan is only ever
-        given with `new --plan`.
+        given with `new --plan`. `set <ID> branch <name>` records the git branch the task's
+        work is on; no name clears it.
   list  The project's todo, in-progress and in-review tasks by ID, one per line, tab-separated: ID, status,
         title (the task's heading), and its blockers — the blocked-by tasks not yet done, as
         "VE-3 (todo), VE-7 (cancelled)"; empty when the task is unblocked.
-        --json prints an array of {id, status, title, path, blockers: [{id, status}], workspace}, where
-        workspace is the task's own or else the project's, null when neither names one.
+        --json prints an array of {id, status, title, path, blockers: [{id, status}], workspace, branch},
+        where workspace is the task's own or else the project's, null when neither names one, and
+        branch is null when unset.
 
 Statuses: todo, in-progress, in-review, done, cancelled. in-review is work delivered as a pull
 request that has not merged; it stays an open blocker until it is done.
