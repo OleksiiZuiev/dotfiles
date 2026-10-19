@@ -1,6 +1,6 @@
 # Steering overlay — dotfiles
 
 ## Workflow
-delivery: pr
+delivery: direct
 worktree: yes
 github-account: OleksiiZuiev

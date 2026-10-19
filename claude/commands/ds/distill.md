@@ -66,9 +66,9 @@ bookkeeping. Create the file from this template the first time anything routes t
 ledger needs an entry), leaving out `## Workflow`.
 
 `## Workflow` is read by the unified task-run command. `delivery: pr` opens a pull request and
-`delivery: direct` commits on the current branch; `worktree: yes` works in a worktree and
-`worktree: no` works in the checkout; `github-account:` names the GitHub account `repo-gh` runs `gh`
-as, and without it `gh` runs as the active account. A repo without the section gets a worktree and a
+`delivery: direct` lands the commit without one, pushing it to `origin/main` from a worktree;
+`worktree: yes` works in a worktree and `worktree: no` works in the checkout; `github-account:` names
+the GitHub account `repo-gh` runs `gh` as, and without it `gh` runs as the active account. A repo without the section gets a worktree and a
 draft pull request.
 
 ## Your Task
