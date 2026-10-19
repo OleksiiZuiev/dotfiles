@@ -4,6 +4,7 @@
 //   node task.mjs set <ID> status <status>
 //   node task.mjs set <ID> blocked-by [<ID>...]
 //   node task.mjs set <ID> plan
+//   node task.mjs set <ID> branch [<name>]
 //   node task.mjs list <project> [--json]
 //
 // An ID is claimed by exclusively creating the empty marker tasks/.ids/<ID>: two writers can both
@@ -140,13 +141,14 @@ function checkBlockers(id, project, blockers) {
 
 function setField(args) {
   const [id, field, ...values] = args;
-  if (!id || !field) fail('usage: task set <ID> status <status> | task set <ID> blocked-by [<ID>...] | task set <ID> plan');
-  if (!['status', 'blocked-by', 'plan'].includes(field)) fail(`only status, blocked-by and plan can be set; got ${field}`);
+  if (!id || !field) fail('usage: task set <ID> status <status> | task set <ID> blocked-by [<ID>...] | task set <ID> plan | task set <ID> branch [<name>]');
+  if (!['status', 'blocked-by', 'plan', 'branch'].includes(field)) fail(`only status, blocked-by, plan and branch can be set; got ${field}`);
   if (field === 'status') {
     if (values.length !== 1) fail('usage: task set <ID> status <status>');
     checkStatus(values[0]);
   }
   if (field === 'plan' && values.length) fail('usage: task set <ID> plan (clears the link; a plan is given with task new --plan)');
+  if (field === 'branch' && values.length > 1) fail('usage: task set <ID> branch [<name>]');
   const path = taskPath(id);
   if (!path) fail(`no task ${id}`);
 
@@ -159,6 +161,9 @@ function setField(args) {
     frontmatter = block[0].replace(/^status:.*$/m, `status: ${values[0]}`);
   } else if (field === 'plan') {
     frontmatter = block[0].replace(/^plan:.*\r?\n/m, '');
+  } else if (field === 'branch') {
+    const withoutOld = block[0].replace(/^branch:.*\r?\n/m, '');
+    frontmatter = values.length ? withoutOld.replace(/(\r?\n)---$/, `$1branch: ${values[0]}$1---`) : withoutOld;
   } else {
     checkBlockers(id, projectForId(id), values);
     const line = values.length ? `blocked-by: [${values.map((blocker) => `"[[${blocker}]]"`).join(', ')}]` : null;
@@ -196,6 +201,7 @@ export function readTasks(project) {
         blockers,
         plan: frontmatterValue(text, 'plan') ?? null,
         workspace: frontmatterValue(text, 'workspace') ?? defaultWorkspace ?? null,
+        branch: frontmatterValue(text, 'branch') ?? null,
       };
     })
     .sort((a, b) => Number(a.id.match(/\d+$/)[0]) - Number(b.id.match(/\d+$/)[0]));
