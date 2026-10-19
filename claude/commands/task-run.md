@@ -28,14 +28,20 @@ The session starts inside the task's workspace repo, on a branch that carries th
    - Linear: `~/.claude/skills/task-run-sources/linear.md`
 3. **Load the task** through the adapter. It returns the title, description, context, acceptance criteria, the workspace repo key and the plan link, if any.
 4. **Check the workspace**: look the repo key up in `${CLAUDE_REPO_MAP:-/c/work/claude-data/repo-map.md}` and compare its path with `git rev-parse --path-format=absolute --git-common-dir` of the current directory (its parent is the main checkout). The key `vault` means the vault checkout. A task with no workspace: ask. On a mismatch stop and name the workspace; say that `/plan-next` dispatches into it. Do not edit, branch or create a worktree from the wrong directory.
-5. **Read the overlay** `~/.claude/overlays/{repo-key}.md`, the key being the workspace's. `## Workflow` `delivery: pr | direct` decides step 10 (no section: draft pull request); the `worktree:` line belongs to the dispatcher and `github-account:` to `repo-gh`. Its `## Plan directives` feed step 6. The format is defined in `~/.claude/commands/ds/distill.md`.
+5. **Read the overlay** `~/.claude/overlays/{repo-key}.md`, the key being the workspace's. `## Workflow` `delivery: pr | direct` decides step 9 (no section: draft pull request); the `worktree:` line belongs to the dispatcher and `github-account:` to `repo-gh`. Its `## Plan directives` feed step 6. The format is defined in `~/.claude/commands/ds/distill.md`.
 6. **Plan**: explore the code, ask clarifying questions with `AskUserQuestion` (grouped, at most 4 per call) where the task leaves a choice open, then draft the plan. Before presenting it, make it name how it complies with the design-level conventions of the files it touches: the global `~/.claude/CLAUDE.md`, every `CLAUDE.md` and `AGENTS.md` from each touched directory to the repo root, and the overlay's plan directives. Name the functions to add and where new code lands; mechanical rules (comment style, naming) are not this step's concern. Without `+auto-plan`, call `EnterPlanMode`, write the plan, and wait for approval. Never change code without an approved plan.
 7. **Implement** in the current checkout. In the vault, `task`, `plan` and the run-recording write through its absolute path.
 8. **Commit**: exactly one commit in the workspace repo, staging only the files this run changed (never `git add -A`); a dirty tree beforehand is fine. Use the `Co-Authored-By` trailer the session specifies. Skip this step when the workspace is the vault: its auto-backup commits.
-9. **Finish the task** through the adapter: with `delivery: pr` it waits for its merge (vault: `task set {ID} status in-review`), with `delivery: direct` it is done (`task set {ID} status done`); `cancelled` if the work showed it should not be done.
-10. **Deliver** per the overlay:
+9. **Deliver** per the overlay. When a delivery step fails, stop there: the task stays `in-progress`, steps 10 to 12 are skipped, and the summary gives the reason.
     - `pr`: fetch and rebase on `origin/{branch}` when it diverged, push with `git push -u origin {branch}` (never `--force`), then have a subagent (`model: sonnet`) run `/ds:create-pr` with no arguments and return the URL and number. When a pull request already exists, say so and give its URL.
-    - `direct`: the change is already where it belongs.
+    - `direct` from a worktree (`git rev-parse --path-format=absolute --git-dir` differs from its `--git-common-dir`):
+      1. `git fetch origin`, then `git rebase origin/main`. On a conflict, `git rebase --abort` and stop.
+      2. `git push origin HEAD:main` (never `--force`). A rejected push fetches, rebases and pushes once more, then stops.
+      3. Fast-forward the main checkout (the parent of `--git-common-dir`) under the fast-forward rule of `~/.claude/commands/plan-next.md` (step 2, Close merged tasks). A main checkout it leaves is not a failed delivery; the summary names the reason.
+
+      The commit reported and recorded is the rebased one.
+    - `direct` in the main checkout (the vault included): the change is already where it belongs.
+10. **Finish the task** through the adapter, once step 9 succeeded: with `delivery: pr` it waits for its merge (vault: `task set {ID} status in-review`), with `delivery: direct` it is done (`task set {ID} status done`); `cancelled` if the work showed it should not be done.
 11. **Plan**, only for a task with a registered plan link (the adapter says whether it has one): run the `/plan-update {slug}` flow only when this run added or cancelled a task, changed a `blocked-by`, or proved a premise wrong; it proposes and applies nothing before the user confirms its diff. Otherwise end with one line: `Plan {slug} unchanged`. Never write an "as built" paragraph; a decision goes in the run record first.
 12. **Record the run** through the adapter: hand it what was done, the decisions with their rationale (only those the session made), the files, the branch, the commit and the pull request.
 13. **Summary**:
@@ -43,10 +49,13 @@ The session starts inside the task's workspace repo, on a branch that carries th
     Task: {ID} — {title}   Source: vault | Linear
     Workspace: {repo-key}   Delivery: pr | direct
     Change: {one line}   Files: {count}
-    Commit: {sha}   PR: {url} (draft) | none
-    Plan: {slug} unchanged | updated | none
-    Run recorded: {where}
+    Commit: {sha}   PR: {url} (draft) | pushed to origin/main | none
+    Main checkout: fast-forwarded | left: {reason}
+    Delivery failed: {reason}
+    Plan: {slug} unchanged | updated | none | skipped
+    Run recorded: {where} | skipped
     ```
+    `Main checkout` appears only for `direct` from a worktree, `Delivery failed` only when step 9 stopped.
 
 ## Examples
 
