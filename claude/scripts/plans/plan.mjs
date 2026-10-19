@@ -1,16 +1,18 @@
 // The plan registry: owns the plans table and the reads behind `plan` (plan.sh). Usage is `plan --help`.
 //
-//   node plan.mjs register <slug> <note> [--title <title>]
+//   node plan.mjs register <slug> <note|document URL> [--title <title>]
 //   node plan.mjs list [--json]
 //   node plan.mjs status <slug> [--json]
 //   node plan.mjs close <slug> closed|cancelled [--reason <reason>]
 //
 // A vault plan is a note whose `## Tasks` section lists its tasks as [[ID]] links. That list is the
-// membership; each task's `plan:` link points back, and `status` reports where the two disagree.
+// membership; each task's `plan:` link points back, and `status` reports where the two disagree. A
+// Linear document plan has the same shape in Linear (linear-doc.mjs).
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { createDb, DB_PATH, openDb } from '../lib/db.mjs';
 import { projectForId, readTasks } from '../tasks/task.mjs';
+import { documentTitle, linearDocStatus } from './linear-doc.mjs';
 
 const VAULT = process.env.CLAUDE_VAULT_DIR ?? 'C:/work/github/OleksiiZuiev/projects-obsidian';
 
@@ -31,24 +33,29 @@ function fail(message) {
   process.exit(1);
 }
 
-function register(args) {
+async function register(args) {
   const [slug, locator, ...rest] = args;
-  if (!slug || !locator || slug.startsWith('--')) fail('usage: plan register <slug> <note> [--title <title>]');
+  if (!slug || !locator || slug.startsWith('--')) fail('usage: plan register <slug> <note|document URL> [--title <title>]');
   let title = null;
   for (let i = 0; i < rest.length; i++) {
     if (rest[i] !== '--title' || rest[i + 1] === undefined) fail(`unknown option ${rest[i]}`);
     title = rest[++i];
   }
-  const file = join(VAULT, locator);
-  if (!existsSync(file)) fail(`no note ${file}`);
-  title ??= readFileSync(file, 'utf8').match(/^# (.+?)\s*$/m)?.[1] ?? basename(locator, '.md');
+  const home = locator.startsWith('https://linear.app/') ? 'linear-doc' : 'vault';
+  if (home === 'linear-doc') {
+    title ??= await documentTitle(locator);
+  } else {
+    const file = join(VAULT, locator);
+    if (!existsSync(file)) fail(`no note ${file}`);
+    title ??= readFileSync(file, 'utf8').match(/^# (.+?)\s*$/m)?.[1] ?? basename(locator, '.md');
+  }
 
   const db = createDb();
   db.exec(SCHEMA);
   try {
     db.prepare(`
       INSERT INTO plans (slug, home, locator, title, status, created_at)
-      VALUES (?, 'vault', ?, ?, 'active', ?)`).run(slug, locator, title, new Date().toISOString());
+      VALUES (?, ?, ?, ?, 'active', ?)`).run(slug, home, locator, title, new Date().toISOString());
   } catch (error) {
     if (db.prepare('SELECT 1 FROM plans WHERE slug = ?').get(slug)) fail(`${slug} is already registered`);
     throw error;
@@ -93,7 +100,7 @@ function linkedNote(planValue) {
   return planValue?.match(/\[\[([^\]|#]+)/)?.[1].split('/').at(-1) ?? null;
 }
 
-function statusOf(plan) {
+function vaultStatus(plan) {
   const noteName = basename(plan.locator, '.md');
   const ids = memberIds(readFileSync(join(VAULT, plan.locator), 'utf8'));
 
@@ -126,6 +133,11 @@ function statusOf(plan) {
       }
     }
   }
+  return { members: members.map(({ plan: _plan, ...member }) => member), drift };
+}
+
+async function statusOf(plan) {
+  const { members, drift } = plan.home === 'linear-doc' ? await linearDocStatus(plan) : vaultStatus(plan);
   return {
     slug: plan.slug,
     title: plan.title,
@@ -133,18 +145,18 @@ function statusOf(plan) {
     done: members.filter((m) => m.status === 'done').length,
     inReview: members.filter((m) => m.status === 'in-review').length,
     remaining: members.filter((m) => ['todo', 'in-progress', 'missing'].includes(m.status)).length,
-    members: members.map(({ plan: _plan, ...member }) => member),
+    members,
     frontier: members.filter((m) => m.status === 'todo' && m.blockers.length === 0).map((m) => m.id),
     drift,
   };
 }
 
-function status(args) {
+async function status(args) {
   const [slug, ...rest] = args;
   if (!slug || slug.startsWith('--')) fail('usage: plan status <slug> [--json]');
   const plan = readPlans().find((p) => p.slug === slug);
   if (!plan) fail(`no plan ${slug}`);
-  const result = statusOf(plan);
+  const result = await statusOf(plan);
 
   if (rest.includes('--json')) return console.log(JSON.stringify(result, null, 2));
   console.log(`${result.slug} — ${result.title} (${result.status})`);
@@ -156,7 +168,7 @@ function status(args) {
 }
 
 // `closed` says the plan's work is finished, so it waits for every member; `cancelled` does not.
-function close(args) {
+async function close(args) {
   const [slug, status, ...rest] = args;
   if (!slug || !['closed', 'cancelled'].includes(status)) fail('usage: plan close <slug> closed|cancelled [--reason <reason>]');
   let reason = null;
@@ -168,7 +180,7 @@ function close(args) {
   if (!plan) fail(`no plan ${slug}`);
   if (plan.status !== 'active') fail(`${slug} is already ${plan.status}`);
   if (status === 'closed') {
-    const open = statusOf(plan).members.filter((m) => ['todo', 'in-progress', 'in-review', 'missing'].includes(m.status));
+    const open = (await statusOf(plan)).members.filter((m) => ['todo', 'in-progress', 'in-review', 'missing'].includes(m.status));
     if (open.length) {
       fail(`${slug} has open tasks: ${open.map((m) => `${m.id} (${m.status})`).join(', ')}; cancel or detach them, or close it as cancelled`);
     }
@@ -180,9 +192,11 @@ function close(args) {
   db.close();
 }
 
+const commands = { register, list, status, close };
 const [command, ...args] = process.argv.slice(2);
-if (command === 'register') register(args);
-else if (command === 'list') list(args);
-else if (command === 'status') status(args);
-else if (command === 'close') close(args);
-else fail('usage: plan register|list|status|close ... (see plan --help)');
+if (!commands[command]) fail('usage: plan register|list|status|close ... (see plan --help)');
+try {
+  await commands[command](args);
+} catch (error) {
+  fail(error.message);
+}

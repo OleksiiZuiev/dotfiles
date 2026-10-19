@@ -1,6 +1,6 @@
 ---
 name: linear-tickets
-description: How to write a Linear ticket — the body carries what to build, the context needed to act on it, and the open questions that block it; the rationale behind each of those goes in a comment on the ticket. Covers the routing test, the signatures of a body that has drifted into a document, concision per surface, what to do on a re-refinement, and why a ticket must stand alone without the private notes behind it. Use whenever creating, refining or updating a Linear issue description or writing a comment on one — including any `save_issue` or `save_comment` call, and the ticket-writing steps of `/ds:refine` and `/ds:quick`.
+description: How to write a Linear ticket — the body carries what to build, the context needed to act on it, and the open questions that block it; the rationale behind each of those goes in a comment on the ticket. Covers the routing test, the signatures of a body that has drifted into a document, concision per surface, what to do on a re-refinement, why a ticket must stand alone without the private notes behind it, and the `Workspace:` and `Plan:` lines that end the body. Use whenever creating, refining or updating a Linear issue description or writing a comment on one — including any `save_issue` or `save_comment` call, and the ticket-writing steps of `/ds:refine` and `/ds:quick`.
 ---
 
 # Writing Linear tickets
@@ -80,6 +80,26 @@ act on the ticket.
 - Links between Linear issues are the exception and are encouraged — every reader can open those.
 
 The link runs one way: notes cite their ticket, the ticket cites nothing private.
+
+## Workspace and plan lines
+
+The body ends with one line per fact, each on its own line, in this order:
+
+```
+Workspace: <repo-key>
+Plan: <Linear document URL>
+```
+
+- **`Workspace:`** — every ticket. The repo the work happens in, as its key in the repo map
+  (`dotfiles`, `agents-and-tools`). `/task-run` reads it to check it runs in the right checkout;
+  `/plan-next` reads it to dispatch.
+- **`Plan:`** — a ticket that belongs to a plan whose home is a Linear document. The document's
+  URL. The document lists the ticket under `## Tasks`; `plan status` reports a ticket where the two
+  disagree.
+
+Both are org-readable — a repo name and a Linear link — so they keep the ticket standing alone.
+Edit them in place like the rest of the body; detaching a ticket from its plan removes its
+`Plan:` line.
 
 ## Small tickets
 

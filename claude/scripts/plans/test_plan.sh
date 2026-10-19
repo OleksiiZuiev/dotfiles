@@ -148,4 +148,144 @@ check "close closed -> status closed, no reason" \
 out=$(plan close unknown closed 2>&1); code=$?
 check "close an unregistered slug -> fails" "$code" 1
 
+# --- Linear document plans ---
+# A fake Linear that answers like the real one: a document by its slugId, issues by aliased
+# identifier (an unknown identifier nulls the whole `data` and is named by its alias in `errors`),
+# and issues whose description contains a text. It reads $root/linear.json on every request, so a
+# test changes Linear by rewriting that file.
+cat > "$root/fake-linear.mjs" <<'EOF'
+import { createServer } from 'node:http';
+import { readFileSync, writeFileSync } from 'node:fs';
+const [fixture, portFile] = process.argv.slice(2);
+const server = createServer((req, res) => {
+  let body = '';
+  req.on('data', (chunk) => (body += chunk));
+  req.on('end', () => {
+    const { query, variables = {} } = JSON.parse(body);
+    const { documents, issues } = JSON.parse(readFileSync(fixture, 'utf8'));
+    const toIssue = (id) => ({
+      identifier: id,
+      title: issues[id].title,
+      description: issues[id].description,
+      state: issues[id].state,
+      inverseRelations: { nodes: (issues[id].blockedBy ?? []).map((blocker) =>
+        ({ type: blocker.type ?? 'blocks', issue: { identifier: blocker.id, state: issues[blocker.id].state } })) },
+    });
+    let reply;
+    if (/document\(id:/.test(query)) {
+      const doc = documents[variables.id];
+      reply = doc ? { data: { document: doc } } : { data: null, errors: [{ message: 'Entity not found: Document' }] };
+    } else if (/issues\(/.test(query)) {
+      const ids = Object.keys(issues).filter((id) => issues[id].description.includes(variables.text));
+      reply = { data: { issues: { nodes: ids.map(toIssue) } } };
+    } else {
+      const aliases = [...query.matchAll(/(\w+): issue\(id: "([^"]+)"\)/g)];
+      const unknown = aliases.filter(([, , id]) => !issues[id]);
+      reply = unknown.length
+        ? { data: null, errors: unknown.map(([, alias]) => ({ message: 'Entity not found: Issue', path: [alias] })) }
+        : { data: Object.fromEntries(aliases.map(([, alias, id]) => [alias, toIssue(id)])) };
+    }
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify(reply));
+  });
+});
+server.listen(0, '127.0.0.1', () => writeFileSync(portFile, String(server.address().port)));
+EOF
+doc_url="https://linear.app/acme/document/ladder-doc-abc123def456"
+todo='{"type": "unstarted", "name": "Todo"}'
+write_linear() { # $1 the ## Tasks lines  $2 the issues as a JSON object
+  local content="# Ladder doc\n\nSee [INT-9](https://linear.app/acme/issue/INT-9/x) outside the list.\n\n## Tasks\n\n$1\n## Open questions\n\n- none\n"
+  printf '{"documents": {"abc123def456": {"title": "Ladder doc", "url": "%s", "content": "%s"}}, "issues": %s}\n' \
+    "$doc_url" "$content" "$2" > "$root/linear.json"
+}
+ticket() { # $1 title  $2 state JSON  $3 description  [$4 blockedBy JSON]
+  printf '{"title": "%s", "state": %s, "description": "%s", "blockedBy": %s}' "$1" "$2" "$3" "${4:-[]}"
+}
+plan_line="Workspace: dotfiles\nPlan:https://linear.app/acme/document/old-title-abc123def456"
+two_tickets() { # $1 INT-1 state JSON  [$2 INT-2 state JSON]
+  printf '{"INT-1": %s, "INT-2": %s, "INT-9": %s}' \
+    "$(ticket "First ticket" "$1" "Do it.\n\n$plan_line")" \
+    "$(ticket "Second ticket" "${2:-$todo}" "$plan_line" '[{"id": "INT-1"}, {"id": "INT-9", "type": "related"}]')" \
+    "$(ticket "Elsewhere" "$todo" "Unrelated.")"
+}
+tasks_lines='- [INT-1](https://linear.app/acme/issue/INT-1/first-ticket)\n- [INT-2](https://linear.app/acme/issue/INT-2/second-ticket)\n'
+write_linear "$tasks_lines" "$(two_tickets "$todo")"
+
+node "$(cygpath -w "$root/fake-linear.mjs")" "$(cygpath -w "$root/linear.json")" "$(cygpath -w "$root/linear.port")" &
+linear_pid=$!
+trap 'kill "$linear_pid" 2> /dev/null; rm -rf "$root"' EXIT
+for _ in $(seq 50); do [[ -s "$root/linear.port" ]] && break; sleep 0.1; done
+export CLAUDE_LINEAR_API="http://127.0.0.1:$(cat "$root/linear.port")"
+printf 'test-key\n' > "$root/api-key"
+export CLAUDE_LINEAR_KEY_FILE="$(cygpath -w "$root/api-key")"
+
+out=$(plan register doc "$doc_url" 2>&1); code=$?
+check "register a document URL -> exit 0" "$code" 0
+check "register a document URL -> linear-doc home, the URL as locator, the document's title" \
+  "$(field "$(plan list --json)" 's.filter((p) => p.slug === "doc").map((p) => [p.home, p.locator, p.title, p.status].join("|")).join(",")')" \
+  "linear-doc|$doc_url|Ladder doc|active"
+check "register a document URL -> list shows it" "$(has "$(plan list)" "linear-doc")" yes
+out=$(plan register gone "https://linear.app/acme/document/gone-000000000000" 2>&1); code=$?
+check "register an unknown document -> fails" "$code" 1
+check "register an unknown document -> not in the list" "$(field "$(plan list --json)" 's.some((p) => p.slug === "gone")')" false
+
+out=$(plan status doc --json); code=$?
+check "linear status -> exit 0" "$code" 0
+check "linear status -> members in document order with their titles, the mention outside ## Tasks left out" \
+  "$(field "$out" 's.members.map((m) => [m.id, m.status, m.title].join(":")).join(",")')" "INT-1:todo:First ticket,INT-2:todo:Second ticket"
+check "linear status -> blockers from the blocks relations only" \
+  "$(field "$out" 's.members.find((m) => m.id === "INT-2").blockers.map((b) => b.id + ":" + b.status).join(",")')" "INT-1:todo"
+check "linear status -> frontier is the todo ticket without an open blocker" "$(field "$out" 's.frontier.join(",")')" INT-1
+check "linear status -> no drift when a Plan: line names the document under an old title" "$(field "$out" 's.drift.join(" ; ")')" ""
+check "linear status -> counts" "$(field "$out" '[s.done, s.inReview, s.remaining].join("/")')" "0/0/2"
+
+state_of() { # $1 INT-1 state JSON: the status plan status maps it to
+  write_linear "$tasks_lines" "$(two_tickets "$1")"
+  field "$(plan status doc --json)" 's.members[0].status'
+}
+check "state started -> in-progress" "$(state_of '{"type": "started", "name": "In Progress"}')" in-progress
+check "state started named In Review -> in-review" "$(state_of '{"type": "started", "name": "In review"}')" in-review
+check "state triage -> todo" "$(state_of '{"type": "triage", "name": "Triage"}')" todo
+check "state backlog -> todo" "$(state_of '{"type": "backlog", "name": "Backlog"}')" todo
+check "state completed -> done" "$(state_of '{"type": "completed", "name": "Done"}')" done
+check "state canceled -> cancelled" "$(state_of '{"type": "canceled", "name": "Canceled"}')" cancelled
+check "state duplicate -> cancelled" "$(state_of '{"type": "duplicate", "name": "Duplicate"}')" cancelled
+
+write_linear "$tasks_lines" "$(two_tickets '{"type": "started", "name": "In Review"}')"
+out=$(plan status doc --json)
+check "linear in-review blocker -> its dependent is not on the frontier" "$(field "$out" 's.frontier.length')" 0
+write_linear "$tasks_lines" "$(two_tickets '{"type": "completed", "name": "Done"}')"
+out=$(plan status doc --json)
+check "linear done blocker -> its dependent reaches the frontier" "$(field "$out" 's.frontier.join(",")')" INT-2
+write_linear "$tasks_lines" "$(two_tickets '{"type": "canceled", "name": "Canceled"}')"
+check "linear cancelled blocker -> its dependent stays off the frontier" "$(field "$(plan status doc --json)" 's.frontier.length')" 0
+
+out=$(plan close doc closed 2>&1); code=$?
+check "linear close closed with an open ticket -> fails" "$code" 1
+check "linear close closed with an open ticket -> names it" "$(has "$out" "INT-2 (todo)")" yes
+
+write_linear "$tasks_lines- [INT-4](https://linear.app/acme/issue/INT-4/x)\n- [INT-5](https://linear.app/acme/issue/INT-5/x)\n- INT-99\n" \
+  "$(two_tickets "$todo" | sed 's/}$//'), $(printf '"INT-3": %s, "INT-4": %s, "INT-5": %s}' \
+    "$(ticket "Unlisted" "$todo" "Plan: $doc_url")" \
+    "$(ticket "No plan line" "$todo" "Mentions $doc_url in passing.")" \
+    "$(ticket "Other plan" "$todo" "Plan: https://linear.app/acme/document/other-fff000fff000")")"
+out=$(plan status doc --json)
+drift=$(field "$out" 's.drift.join(" ; ")')
+check "linear drift -> a ticket with the Plan: line that is not listed" "$(has "$drift" "INT-3")" yes
+check "linear drift -> a listed ticket without the Plan: line" "$(has "$drift" "INT-4")" yes
+check "linear drift -> a listed ticket whose Plan: line names another document" "$(has "$drift" "INT-5")" yes
+check "linear drift -> a listed ID Linear does not know" "$(has "$drift" "INT-99")" yes
+check "linear drift -> an unknown ID is a missing member" \
+  "$(field "$out" 's.members.find((m) => m.id === "INT-99").status')" missing
+check "linear drift -> the known tickets still read when one ID is unknown" \
+  "$(field "$out" 's.members.find((m) => m.id === "INT-1").title')" "First ticket"
+check "linear drift -> four lines, nothing about the tickets that agree" "$(field "$out" 's.drift.length')" 4
+
+check "vault status -> unchanged beside a Linear plan" "$(field "$(plan status ladder --json)" 's.members.map((m) => m.id).join(",")')" "VE-1,VE-2,VE-8"
+
+rm "$root/api-key"
+out=$(plan status doc --json 2>&1); code=$?
+check "linear status without an API key -> fails" "$code" 1
+check "linear status without an API key -> says so" "$(has "$out" "API key")" yes
+
 exit "$fails"

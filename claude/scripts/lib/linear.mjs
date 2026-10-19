@@ -1,5 +1,5 @@
-// Ticket title and project from Linear, cached in a table of the shared database (db.mjs). Callers
-// fetch on demand: a title fetched when a session starts would go stale on a rename.
+// Linear's GraphQL API, and a cache of ticket title and project in a table of the shared database
+// (db.mjs). Callers fetch on demand: a title fetched when a session starts would go stale on a rename.
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -42,21 +42,55 @@ function readKey() {
   }
 }
 
-async function query(key, identifiers) {
-  const aliases = identifiers.map((identifier, i) => `i${i}: issue(id: ${JSON.stringify(identifier)}) { title project { name } }`);
+function requireKey() {
+  const key = readKey();
+  if (!key) throw new Error(`no Linear API key in ${KEY_FILE}`);
+  return key;
+}
+
+async function post(key, query, variables = {}, timeoutMs = TIMEOUT_MS) {
   const response = await fetch(API, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: key },
-    body: JSON.stringify({ query: `query { ${aliases.join(' ')} }` }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    body: JSON.stringify({ query, variables }),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) throw new Error(`Linear answered ${response.status}`);
   return response.json();
 }
 
-// Fetches the identifiers missing from the cache or older than a day — every one with `force`. One
-// unknown identifier nulls the whole response, with its alias in `errors`, so those are cached as
-// unknown and the rest asked for again. Throws when Linear cannot be reached; nothing is cached then.
+// The `data` of one query. Throws without a key, when Linear cannot be reached, or on any error.
+export async function linearRequest(query, variables, { timeoutMs } = {}) {
+  const { data, errors } = await post(requireKey(), query, variables, timeoutMs);
+  if (errors?.length) throw new Error(errors[0].message);
+  return data;
+}
+
+// Each identifier's `fields` (a GraphQL selection), null for an identifier Linear does not know. One
+// unknown identifier nulls the whole response, with its alias in `errors`, so those are set aside and
+// the rest asked for again. Throws without a key or when Linear cannot be reached.
+export async function fetchIssues(identifiers, fields, { key = requireKey(), timeoutMs } = {}) {
+  const issues = new Map();
+  for (let start = 0; start < identifiers.length; start += BATCH) {
+    let batch = identifiers.slice(start, start + BATCH);
+    while (batch.length > 0) {
+      const aliases = batch.map((identifier, i) => `i${i}: issue(id: ${JSON.stringify(identifier)}) { ${fields} }`);
+      const { data, errors = [] } = await post(key, `query { ${aliases.join(' ')} }`, {}, timeoutMs);
+      if (data) {
+        batch.forEach((id, i) => issues.set(id, data[`i${i}`] ?? null));
+        break;
+      }
+      const unknown = new Set(errors.map((e) => e.path?.[0]).filter(Boolean));
+      if (unknown.size === 0) throw new Error(errors[0]?.message ?? 'Linear returned no data');
+      batch.forEach((id, i) => unknown.has(`i${i}`) && issues.set(id, null));
+      batch = batch.filter((_, i) => !unknown.has(`i${i}`));
+    }
+  }
+  return issues;
+}
+
+// Fetches the identifiers missing from the cache or older than a day — every one with `force`.
+// Without a key it does nothing; when Linear cannot be reached it throws and nothing is cached.
 export async function refreshIssues(db, identifiers, { force = false } = {}) {
   db.exec(SCHEMA);
   const cached = cachedIssues(db, identifiers);
@@ -66,22 +100,10 @@ export async function refreshIssues(db, identifiers, { force = false } = {}) {
   const key = readKey();
   if (!key) return;
 
+  const issues = await fetchIssues(wanted, 'title project { name }', { key });
   const upsert = db.prepare(`
     INSERT INTO linear_issues (identifier, title, project, fetched_at) VALUES (?, ?, ?, ?)
     ON CONFLICT (identifier) DO UPDATE SET title = excluded.title, project = excluded.project, fetched_at = excluded.fetched_at`);
-  for (let start = 0; start < wanted.length; start += BATCH) {
-    let batch = wanted.slice(start, start + BATCH);
-    while (batch.length > 0) {
-      const { data, errors = [] } = await query(key, batch);
-      const now = new Date().toISOString();
-      if (data) {
-        batch.forEach((id, i) => upsert.run(id, data[`i${i}`]?.title ?? null, data[`i${i}`]?.project?.name ?? null, now));
-        break;
-      }
-      const unknown = new Set(errors.map((e) => e.path?.[0]).filter(Boolean));
-      if (unknown.size === 0) throw new Error(errors[0]?.message ?? 'Linear returned no data');
-      batch.forEach((id, i) => unknown.has(`i${i}`) && upsert.run(id, null, null, now));
-      batch = batch.filter((_, i) => !unknown.has(`i${i}`));
-    }
-  }
+  const now = new Date().toISOString();
+  for (const [id, issue] of issues) upsert.run(id, issue?.title ?? null, issue?.project?.name ?? null, now);
 }
