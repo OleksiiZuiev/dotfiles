@@ -23,7 +23,7 @@ Output (one space-separated line):
 
 Fetches origin/main first — the whole rule is stated relative to it.
 
-Requires: gh, authenticated.
+Requires: gh, authenticated as the account `repo-gh` resolves for the repo.
 
 Options:
   -h, --help    Show this help and exit
@@ -68,7 +68,7 @@ EOF
     local distance branch pr
     while read -r distance branch; do
         [[ -z "$nearest" ]] && nearest="$branch"
-        pr=$(gh pr list --head "$branch" --state open --json number -q '.[0].number' 2>/dev/null)
+        pr=$(repo-gh pr list --head "$branch" --state open --json number -q '.[0].number' 2>/dev/null)
         if [[ -n "$pr" ]]; then
             echo "$branch $pr"
             return 0

@@ -63,17 +63,19 @@ You are creating a pull request for an implemented ticket.
 
 7. **Push and Create PR**
    - Push branch to remote with `-u` flag if needed: `git push -u origin <branch>`
-   - Create PR using `gh` CLI with HEREDOC format:
+   - Create PR with `repo-gh` (a `bash.d` wrapper over `gh` that runs as the GitHub account the
+     repo's overlay names, and as the active account when it names none; `repo-gh --help`), using
+     HEREDOC format. Every `gh` call that reaches GitHub below goes through it:
      ```bash
-     gh pr create --title "<type>: <summary> #<ticket-id>" --draft --body "$(cat <<'EOF'
+     repo-gh pr create --title "<type>: <summary> #<ticket-id>" --draft --body "$(cat <<'EOF'
      <body per the pr-descriptions skill>
      EOF
      )"
      ```
-   - **Add the review link.** `gh pr create` prints the new PR's URL; take the owner, repo and
+   - **Add the review link.** `repo-gh pr create` prints the new PR's URL; take the owner, repo and
      number from it and re-send the body with the review link added to the Linear line:
      ```bash
-     gh pr edit <number> --body "$(cat <<'EOF'
+     repo-gh pr edit <number> --body "$(cat <<'EOF'
      <the same body, with ` · 🔍 [Linear review](https://linear.app/review/<owner>/<repo>/pull/<number>)` appended to the Linear line>
      EOF
      )"
@@ -81,10 +83,10 @@ You are creating a pull request for an implemented ticket.
      `--body` replaces the body wholesale, so re-send the whole text rather than trying to patch it.
      **A failed edit is not fatal**: the PR exists and is correct but for one link; report the error
      and carry on.
-   - For a **stacked PR**, add `--base "$BASE_BRANCH"` to the `gh pr create` call, then register the
+   - For a **stacked PR**, add `--base "$BASE_BRANCH"` to the `repo-gh pr create` call, then register the
      stack with GitHub's native stacked-PR system:
      ```bash
-     GH_REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)" gh stack link "$BASE_BRANCH" "$(git branch --show-current)"
+     GH_REPO="$(repo-gh repo view --json nameWithOwner -q .nameWithOwner)" repo-gh stack link "$BASE_BRANCH" "$(git branch --show-current)"
      ```
      Install the extension first if missing: `gh extension list | grep -q gh-stack || gh extension install github/gh-stack`.
      `GH_REPO` is required, not decorative: the extension parses `origin` itself and rejects an SSH

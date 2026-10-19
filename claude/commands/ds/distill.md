@@ -51,6 +51,7 @@ consumed by /ds:work-on (Step 2.7 → Plan directives, Step 3.5 → Enforced).
 <!-- Per-repo delivery. Hand-written; /ds:distill never edits this section. -->
 delivery: pr | direct
 worktree: yes | no
+github-account: <login>
 
 ## Distill ledger
 <!-- /ds:distill bookkeeping for re-run dedup. No consumer reads this section. -->
@@ -66,8 +67,9 @@ ledger needs an entry), leaving out `## Workflow`.
 
 `## Workflow` is read by the unified task-run command. `delivery: pr` opens a pull request and
 `delivery: direct` commits on the current branch; `worktree: yes` works in a worktree and
-`worktree: no` works in the checkout. A repo without the section gets a worktree and a draft pull
-request.
+`worktree: no` works in the checkout; `github-account:` names the GitHub account `repo-gh` runs `gh`
+as, and without it `gh` runs as the active account. A repo without the section gets a worktree and a
+draft pull request.
 
 ## Your Task
 
