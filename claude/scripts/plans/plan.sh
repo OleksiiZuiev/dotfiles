@@ -14,12 +14,14 @@ links; the registry row says the note is a plan and whether it is active.
   register  Adds the note at <note> (a path relative to the vault) under <slug>. The title defaults
             to the note's heading.
   list      Every registered plan: slug, status, home, title.
-  status    The plan's tasks with their statuses, how many are done and remaining, the frontier
-            (todo tasks whose blockers are all done) and any drift between the note's "## Tasks"
-            list and the tasks' plan: links. Drift is reported, never repaired.
-            --json prints {slug, title, status, done, remaining, members, frontier, drift}.
+  status    The plan's tasks with their statuses, how many are done, in review and remaining
+            (todo, in-progress or missing), the frontier (todo tasks whose blockers are all done)
+            and any drift between the note's "## Tasks" list and the tasks' plan: links. Drift is
+            reported, never repaired.
+            --json prints {slug, title, status, done, inReview, remaining, members, frontier, drift}.
   close     Ends an active plan: sets its status, closed_at and close_reason (from --reason).
-            closed is refused while a task under "## Tasks" is todo, in-progress or missing;
+            closed is refused while a task under "## Tasks" is todo, in-progress, in-review or
+            missing;
             cancelled is not. The tasks are left as they are — cancel or detach them first.
 
 The vault is $CLAUDE_VAULT_DIR, by default C:/work/github/OleksiiZuiev/projects-obsidian.

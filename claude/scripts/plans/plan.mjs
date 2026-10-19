@@ -131,6 +131,7 @@ function statusOf(plan) {
     title: plan.title,
     status: plan.status,
     done: members.filter((m) => m.status === 'done').length,
+    inReview: members.filter((m) => m.status === 'in-review').length,
     remaining: members.filter((m) => ['todo', 'in-progress', 'missing'].includes(m.status)).length,
     members: members.map(({ plan: _plan, ...member }) => member),
     frontier: members.filter((m) => m.status === 'todo' && m.blockers.length === 0).map((m) => m.id),
@@ -147,7 +148,7 @@ function status(args) {
 
   if (rest.includes('--json')) return console.log(JSON.stringify(result, null, 2));
   console.log(`${result.slug} — ${result.title} (${result.status})`);
-  console.log(`done ${result.done}, remaining ${result.remaining}`);
+  console.log(`done ${result.done}, in review ${result.inReview}, remaining ${result.remaining}`);
   printTable(result.members.map((m) => [m.id, m.status, m.title,
     m.blockers.map((b) => `blocked by ${b.id} (${b.status})`).join(', ')]));
   console.log(`frontier: ${result.frontier.join(', ') || 'none'}`);
@@ -167,7 +168,7 @@ function close(args) {
   if (!plan) fail(`no plan ${slug}`);
   if (plan.status !== 'active') fail(`${slug} is already ${plan.status}`);
   if (status === 'closed') {
-    const open = statusOf(plan).members.filter((m) => ['todo', 'in-progress', 'missing'].includes(m.status));
+    const open = statusOf(plan).members.filter((m) => ['todo', 'in-progress', 'in-review', 'missing'].includes(m.status));
     if (open.length) {
       fail(`${slug} has open tasks: ${open.map((m) => `${m.id} (${m.status})`).join(', ')}; cancel or detach them, or close it as cancelled`);
     }

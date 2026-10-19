@@ -25,11 +25,11 @@ Vault paths here (`projects/…`, the plan note, task files) are relative to the
    - **closed** — the plan's work is finished
    - **cancelled** — the plan is abandoned
    - and an optional reason, recorded as the registry's `close_reason`
-4. **Propose, per open task** (`todo` or `in-progress`), one of:
+4. **Propose, per open task** (`todo`, `in-progress` or `in-review`), one of:
    - **cancel**: `task set <ID> status cancelled`; it stays listed under `## Tasks`
    - **detach**: `task set <ID> plan`, which clears its `plan:` link, and its `- [[ID]]` line removed from the note's `## Tasks`; it stays a detail task in its project's backlog
 
-   Tasks already `done` or `cancelled` stay as they are. A `missing` member (listed under `## Tasks` with no task) is removed from the list. Recommend per task from the plan and the task: detach work that still matters without the plan, cancel work that only made sense inside it
+   Tasks already `done` or `cancelled` stay as they are. A `missing` member (listed under `## Tasks` with no task) is removed from the list. Recommend per task from the plan and the task: detach work that still matters without the plan, cancel work that only made sense inside it. Recommend detach for an `in-review` task: its work is delivered and waits for its merge, and `plan close <slug> closed` is refused while it stays in the plan
 5. **Show one diff** covering everything, and write nothing yet:
    - the task calls, exactly as they will run
    - the note edit in full, as before and after text

@@ -127,7 +127,19 @@ out=$(plan close titled closed 2>&1); code=$?
 check "close a plan that is not active -> fails" "$code" 1
 check "close a plan that is not active -> keeps its status" "$(plan_field titled status)" cancelled
 
+task set VE-2 status in-review
+task new ve after-review --blocked-by VE-2 --plan 2026-01-01-ladder-plan > /dev/null   # VE-8
+write_note VE-1 VE-2 VE-8
+out=$(plan status ladder --json)
+check "in-review -> counted apart from done and remaining" "$(field "$out" '[s.done, s.inReview, s.remaining].join("/")')" "1/1/1"
+check "in-review -> a task it blocks is not on the frontier" "$(field "$out" 's.frontier.length')" 0
+check "in-review -> text shows the count" "$(has "$(plan status ladder)" "in review 1")" yes
+out=$(plan close ladder closed 2>&1); code=$?
+check "close closed with an in-review member -> fails" "$code" 1
+check "close closed with an in-review member -> names it" "$(has "$out" "VE-2 (in-review)")" yes
+
 task set VE-2 status cancelled
+task set VE-8 status cancelled
 out=$(plan close ladder closed); code=$?
 check "close closed with only done and cancelled members -> exit 0" "$code" 0
 check "close closed -> status closed, no reason" \
