@@ -291,6 +291,13 @@ if [[ "$(uname -s)" == "Linux" ]]; then
     install_fzf || echo "  Warning: fzf $FZF_VERSION was not installed"
 fi
 
+if command -v cygpath >/dev/null 2>&1; then
+    echo ""
+    echo "Registering the worktree prune task..."
+    bash "$DOTFILES_DIR/claude/scripts/register-prune-worktrees.sh" ||
+        echo "  Warning: rerun claude/scripts/register-prune-worktrees.sh"
+fi
+
 echo ""
 echo "Installation complete!"
 

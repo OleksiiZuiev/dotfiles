@@ -32,7 +32,9 @@ Modular bash scripts loaded via `~/.bashrc`, one function family per file. Every
 
 - `lclaude`, `lcode`, `cd-repo` - Open Claude, VS Code or a shell in a recently used repo
 - `gsw` - Switch to a recent branch
-- `start-worktree`, `clean-worktrees` - Create a worktree; remove the ones whose PRs merged
+- `start-worktree` - Create a worktree. The ones whose work reached `origin/main` are removed daily by
+  `claude/scripts/prune-worktrees.sh`, a Windows scheduled task the install registers; run it by hand
+  with `--dry-run` to see what it would remove
 - `claude-merge`, `claude-rebase` - Merge or rebase with Claude resolving conflicts
 - `sessions` - Every Claude session, grouped by ticket
 - `task` - Vault tasks with IDs and a status in frontmatter
