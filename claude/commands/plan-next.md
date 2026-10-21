@@ -50,7 +50,7 @@ Vault paths here (`projects/…`, the plan note, task files) are relative to the
    - mechanical work in one repo with every section filled: `sonnet`, effort `medium`
    - anything else: `sonnet`, effort `high`
 7. **Refine** each task whose verdict is not *ready*, one after another: resolve it with the user in this session and fill the task file's sections, then recompute the suggested model from the filled file. Never hand-write task frontmatter; a status or `blocked-by` change goes through `task set`. A ticket's body is rewritten by the `linear-tickets` skill and saved with `save_issue` only after the new body is shown and confirmed
-8. **Dispatch** each selected task into its workspace, running `/task-run`, in frontier order. First ask for every task's model and effort, before any dispatch: one single-select question per task, headed with its ID, up to four questions per `AskUserQuestion` call. Each question offers the suggested model first, marked Recommended, then "Default"; the built-in "Other" takes a different model and effort. The pick becomes `--model {model} --effort {effort}` after the prompt argument; "Default" omits both flags and the tab starts at the default model and effort. The choice is not written back to the task. A dispatch that fails is named with its reason in step 9, and the next task is dispatched. Keep the slash command inside one quoted argument so it reaches claude as one argument:
+8. **Dispatch** each selected task into its workspace, running `/task-run`, in frontier order. Use the suggested model and effort of step 6 for every selected task, without asking, and state them in one line before dispatching it: model, effort and the cue behind them. They become `--model {model} --effort {effort}` after the prompt argument. A wrong pick is fixed with `/model` in the dispatched tab. The pick is not written back to the task. A dispatch that fails is named with its reason in step 9, and the next task is dispatched. Keep the slash command inside one quoted argument so it reaches claude as one argument:
    - **Workspace `vault`**, or an overlay `~/.claude/overlays/{repo-key}.md` whose `## Workflow` says `worktree: no`: the tab starts in that checkout (the vault root for `vault`):
      ```bash
      bash ~/.claude/scripts/claude-tab.sh "{ID}" "{checkout}" "/task-run {ID}" --model {model} --effort {effort}
@@ -63,7 +63,7 @@ Vault paths here (`projects/…`, the plan note, task files) are relative to the
      ```
      `make-worktree.sh` refuses a repo with uncommitted changes; report that to the user rather than working around it
    `claude-tab.sh` opens a Git Bash tab and refuses from WSL. From WSL, say so and print the lines of every task for the user to run from a Windows shell
-9. **Stop there.** Report one line per dispatched task: its ID, the branch, the worktree path (or the checkout), and the model and effort the tab started with (or "default"). Then name the held-back tasks with the checkout they share, and the failed dispatches with the reason. The dispatched `/task-run` sets each task `in-progress`; do not set it here
+9. **Stop there.** Report one line per dispatched task: its ID, the branch, the worktree path (or the checkout), and the model and effort the tab started with. Then name the held-back tasks with the checkout they share, and the failed dispatches with the reason. The dispatched `/task-run` sets each task `in-progress`; do not set it here
 
 ## Examples
 
