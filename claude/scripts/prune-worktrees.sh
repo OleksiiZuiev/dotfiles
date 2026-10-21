@@ -48,6 +48,13 @@ if [[ -n "$log" ]]; then
     exec >> "$log" 2>&1
 fi
 
+# A scheduled run starts without the SSH agent an interactive shell loads (see ~/.bashrc), and must
+# fail rather than wait on a passphrase or credential prompt no one can answer.
+if [[ -z "$SSH_AUTH_SOCK" && -r "$HOME/.ssh/agent.env" ]]; then
+    . "$HOME/.ssh/agent.env" > /dev/null
+fi
+export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes}" GIT_TERMINAL_PROMPT=0
+
 native_path() {
     if command -v cygpath > /dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi
 }
@@ -130,8 +137,9 @@ prune_repo() { # $1 repo path
         return
     fi
     main=$(dirname "$main")
-    if ! git -C "$main" fetch -q origin 2> /dev/null; then
-        report skipped "$name" "fetch from origin failed"
+    local fetch_error
+    if ! fetch_error=$(git -C "$main" fetch -q origin 2>&1); then
+        report skipped "$name" "fetch from origin failed: $(head -1 <<< "$fetch_error" | tr -d '\r')"
         return
     fi
 
