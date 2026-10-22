@@ -49,11 +49,12 @@ if [[ -n "$log" ]]; then
 fi
 
 # A scheduled run starts without the SSH agent an interactive shell loads (see ~/.bashrc), and must
-# fail rather than wait on a passphrase or credential prompt no one can answer.
+# fail rather than wait on a passphrase or credential prompt no one can answer. Git Credential
+# Manager ignores GIT_TERMINAL_PROMPT and opens a sign-in window for an HTTPS remote.
 if [[ -z "$SSH_AUTH_SOCK" && -r "$HOME/.ssh/agent.env" ]]; then
     . "$HOME/.ssh/agent.env" > /dev/null
 fi
-export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes}" GIT_TERMINAL_PROMPT=0
+export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes}" GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never
 
 native_path() {
     if command -v cygpath > /dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi
