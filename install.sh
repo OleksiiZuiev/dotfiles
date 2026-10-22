@@ -199,6 +199,25 @@ ensure_git_include() {
     echo "  Git include added: $target -> $include_path"
 }
 
+# Git for Windows ships its own ssh, which cannot reach the Windows OpenSSH agent
+# service that bash.d/ssh-agent.sh loads keys into. Set per home rather than in
+# shared.gitconfig because the WSL home keeps its own ssh.
+ensure_windows_ssh_command() {
+    local ssh_exe="C:/Windows/System32/OpenSSH/ssh.exe"
+    local target="$TARGET_HOME/.gitconfig"
+
+    command -v cygpath >/dev/null 2>&1 || return 0
+    [ -e "$(cygpath -u "$ssh_exe")" ] || return 0
+
+    if [ "$(git config --file "$target" --get core.sshCommand)" = "$ssh_exe" ]; then
+        echo "  Skip (already set): core.sshCommand"
+        return 0
+    fi
+
+    git config --file "$target" core.sshCommand "$ssh_exe"
+    echo "  Git core.sshCommand set: $ssh_exe"
+}
+
 # Install Claude files
 echo "Installing Claude configuration..."
 mkdir -p "$TARGET_HOME/.claude"
@@ -252,6 +271,7 @@ fi
 echo ""
 echo "Installing git configuration..."
 ensure_git_include
+ensure_windows_ssh_command
 
 # Install bash.d files
 echo ""

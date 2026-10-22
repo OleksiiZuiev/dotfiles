@@ -48,13 +48,14 @@ if [[ -n "$log" ]]; then
     exec >> "$log" 2>&1
 fi
 
-# A scheduled run starts without the SSH agent an interactive shell loads (see ~/.bashrc), and must
-# fail rather than wait on a passphrase or credential prompt no one can answer. Git Credential
-# Manager ignores GIT_TERMINAL_PROMPT and opens a sign-in window for an HTTPS remote.
-if [[ -z "$SSH_AUTH_SOCK" && -r "$HOME/.ssh/agent.env" ]]; then
+# A scheduled run never sources ~/.bashrc, and must fail rather than wait on a passphrase or
+# credential prompt no one can answer. On Windows it reaches the OpenSSH agent service through the
+# ssh git is configured with (bash.d/ssh-agent.sh); elsewhere through an agent.env a shell left.
+# Git Credential Manager ignores GIT_TERMINAL_PROMPT and opens a sign-in window for an HTTPS remote.
+if [[ -z "$SSH_AUTH_SOCK" && -r "$HOME/.ssh/agent.env" ]] && ! command -v cygpath > /dev/null 2>&1; then
     . "$HOME/.ssh/agent.env" > /dev/null
 fi
-export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes}" GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never
+export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-$(git config --global --get core.sshCommand || echo ssh) -o BatchMode=yes}" GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never
 
 native_path() {
     if command -v cygpath > /dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi
