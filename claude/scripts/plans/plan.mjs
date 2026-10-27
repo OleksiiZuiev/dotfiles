@@ -118,8 +118,8 @@ function vaultStatus(plan) {
   const members = ids.map((id) => {
     const task = find(id);
     return task
-      ? { id, status: task.status, title: task.title, blockers: task.blockers, plan: task.plan }
-      : { id, status: 'missing', title: '', blockers: [], plan: null };
+      ? { id, status: task.status, title: task.title, blockers: task.blockers, workspace: task.workspace, plan: task.plan }
+      : { id, status: 'missing', title: '', blockers: [], workspace: null, plan: null };
   });
   const drift = [];
   for (const member of members) {
@@ -136,6 +136,17 @@ function vaultStatus(plan) {
   return { members: members.map(({ plan: _plan, ...member }) => member), drift };
 }
 
+// A task can start early when every open blocker is under way in another workspace: it builds
+// against the blocker's agreed contract and only its merge waits. A blocker in the same workspace
+// would need the dependent branch stacked on the blocker's, so it keeps the task waiting.
+function earlyStart(members) {
+  const byId = new Map(members.map((m) => [m.id, m]));
+  return members.filter((m) => m.status === 'todo' && m.workspace && m.blockers.length > 0 && m.blockers.every((b) => {
+    const blocker = byId.get(b.id);
+    return ['in-progress', 'in-review'].includes(b.status) && blocker?.workspace && blocker.workspace !== m.workspace;
+  })).map((m) => m.id);
+}
+
 async function statusOf(plan) {
   const { members, drift } = plan.home === 'linear-doc' ? await linearDocStatus(plan) : vaultStatus(plan);
   return {
@@ -147,6 +158,7 @@ async function statusOf(plan) {
     remaining: members.filter((m) => ['todo', 'in-progress', 'missing'].includes(m.status)).length,
     members,
     frontier: members.filter((m) => m.status === 'todo' && m.blockers.length === 0).map((m) => m.id),
+    earlyStart: earlyStart(members),
     drift,
   };
 }
@@ -164,6 +176,7 @@ async function status(args) {
   printTable(result.members.map((m) => [m.id, m.status, m.title,
     m.blockers.map((b) => `blocked by ${b.id} (${b.status})`).join(', ')]));
   console.log(`frontier: ${result.frontier.join(', ') || 'none'}`);
+  console.log(`early start: ${result.earlyStart.join(', ') || 'none'}`);
   if (result.drift.length) console.log(['drift:', ...result.drift.map((line) => `  ${line}`)].join('\n'));
 }
 

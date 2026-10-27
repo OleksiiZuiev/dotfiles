@@ -19,6 +19,10 @@ function planSlugId(description) {
   return documentSlugId(description?.match(/^Plan:(.*)$/m)?.[1]);
 }
 
+function workspace(description) {
+  return description?.match(/^Workspace:(.*)$/m)?.[1].trim() || null;
+}
+
 async function readDocument(url) {
   const slugId = documentSlugId(url);
   if (!slugId) throw new Error(`not a Linear document URL: ${url}`);
@@ -53,12 +57,13 @@ export async function linearDocStatus(plan) {
 
   const members = ids.map((id) => {
     const ticket = tickets.get(id);
-    if (!ticket) return { id, status: 'missing', title: '', blockers: [], planSlugId: null };
+    if (!ticket) return { id, status: 'missing', title: '', blockers: [], workspace: null, planSlugId: null };
     const blockers = ticket.inverseRelations.nodes
       .filter((relation) => relation.type === 'blocks')
       .map((relation) => ({ id: relation.issue.identifier, status: ticketStatus(relation.issue.state) }))
       .filter((blocker) => blocker.status !== 'done');
-    return { id, status: ticketStatus(ticket.state), title: ticket.title, blockers, planSlugId: planSlugId(ticket.description) };
+    return { id, status: ticketStatus(ticket.state), title: ticket.title, blockers,
+      workspace: workspace(ticket.description), planSlugId: planSlugId(ticket.description) };
   });
   const drift = [];
   for (const member of members) {

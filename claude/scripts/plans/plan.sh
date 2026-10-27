@@ -23,9 +23,13 @@ The registry of plans; the registry row says where a plan lives and whether it i
   list      Every registered plan: slug, status, home, title.
   status    The plan's members with their statuses, how many are done, in review and remaining
             (todo, in-progress or missing), the frontier (todo members whose blockers are all
-            done) and any drift between the "## Tasks" list and the members' links back. Drift is
-            reported, never repaired.
-            --json prints {slug, title, status, done, inReview, remaining, members, frontier, drift}.
+            done), the early start (todo members whose open blockers are all members in progress
+            or in review in another workspace: they can be built now and merged after their
+            blockers) and any drift between the "## Tasks" list and the members' links back.
+            Drift is reported, never repaired. A member's workspace is its task's workspace, or
+            the "Workspace:" line of its ticket.
+            --json prints {slug, title, status, done, inReview, remaining, members, frontier,
+            earlyStart, drift}.
   close     Ends an active plan: sets its status, closed_at and close_reason (from --reason).
             closed is refused while a member under "## Tasks" is todo, in-progress, in-review or
             missing; cancelled is not. The members are left as they are — cancel or detach them

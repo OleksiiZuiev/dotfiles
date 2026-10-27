@@ -148,6 +148,23 @@ check "close closed -> status closed, no reason" \
 out=$(plan close unknown closed 2>&1); code=$?
 check "close an unregistered slug -> fails" "$code" 1
 
+# --- early start ---
+early_note="projects/ve/work-notes/2026-01-01-early-plan.md"
+task new ve contract --workspace svc --plan 2026-01-01-early-plan --status in-progress > /dev/null   # VE-9
+task new ve consumer --workspace app --blocked-by VE-9 --plan 2026-01-01-early-plan > /dev/null     # VE-10
+task new ve same-repo --workspace svc --blocked-by VE-9 --plan 2026-01-01-early-plan > /dev/null    # VE-11
+task new ve waiting --workspace svc --plan 2026-01-01-early-plan > /dev/null                        # VE-12
+task new ve after-waiting --workspace app --blocked-by VE-9 VE-12 --plan 2026-01-01-early-plan > /dev/null   # VE-13
+printf -- '---\ntype: plan\n---\n\n# Early plan\n\n## Tasks\n\n- [[VE-9]]\n- [[VE-10]]\n- [[VE-11]]\n- [[VE-12]]\n- [[VE-13]]\n' > "$root/$early_note"
+plan register early "$early_note" > /dev/null
+out=$(plan status early --json)
+check "early start -> the todo task whose only blocker is in progress in another workspace" "$(field "$out" 's.earlyStart.join(",")')" VE-10
+check "early start -> members carry their workspace" "$(field "$out" 's.members.map((m) => m.workspace).join(",")')" "svc,app,svc,svc,app"
+check "early start -> the frontier still waits for done blockers" "$(field "$out" 's.frontier.join(",")')" VE-12
+check "early start -> text names it" "$(has "$(plan status early)" "early start: VE-10")" yes
+task set VE-9 status in-review
+check "early start -> a blocker in review counts as started" "$(field "$(plan status early --json)" 's.earlyStart.join(",")')" VE-10
+
 # --- Linear document plans ---
 # A fake Linear that answers like the real one: a document by its slugId, issues by aliased
 # identifier (an unknown identifier nulls the whole `data` and is named by its alias in `errors`),
@@ -254,6 +271,13 @@ check "state duplicate -> cancelled" "$(state_of '{"type": "duplicate", "name": 
 write_linear "$tasks_lines" "$(two_tickets '{"type": "started", "name": "In Review"}')"
 out=$(plan status doc --json)
 check "linear in-review blocker -> its dependent is not on the frontier" "$(field "$out" 's.frontier.length')" 0
+check "linear in-review blocker in the same workspace -> no early start" "$(field "$out" 's.earlyStart.length')" 0
+write_linear "$tasks_lines" "$(printf '{"INT-1": %s, "INT-2": %s}' \
+  "$(ticket "First ticket" '{"type": "started", "name": "In Progress"}' "Workspace: svc\nPlan: $doc_url")" \
+  "$(ticket "Second ticket" "$todo" "$plan_line" '[{"id": "INT-1"}]')")"
+out=$(plan status doc --json)
+check "linear blocker in progress in another workspace -> early start" "$(field "$out" 's.earlyStart.join(",")')" INT-2
+check "linear members -> workspace from the Workspace: line" "$(field "$out" 's.members.map((m) => m.workspace).join(",")')" "svc,dotfiles"
 write_linear "$tasks_lines" "$(two_tickets '{"type": "completed", "name": "Done"}')"
 out=$(plan status doc --json)
 check "linear done blocker -> its dependent reaches the frontier" "$(field "$out" 's.frontier.join(",")')" INT-2
