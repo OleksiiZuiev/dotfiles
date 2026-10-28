@@ -1,6 +1,6 @@
 ---
-description: Address review comments on a PR — merit-assessed one-by-one, one commit per fix, replies deferred until the SHAs settle. Flags: +temp-worktree (isolate in a throwaway worktree and fold back)
-allowed-tools: Bash, Read, Write, Edit, Grep, Glob, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion
+description: Address review comments and mutation-testing survivors on a PR — comments merit-assessed one-by-one, survivors triaged by a sub-agent, one commit per fix, replies deferred until the SHAs settle. Flags: +temp-worktree (isolate in a throwaway worktree and fold back)
+allowed-tools: Bash, Read, Write, Edit, Grep, Glob, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion, Agent, SendMessage
 argument-hint: [+temp-worktree] [<pr-number>]
 ---
 
@@ -8,6 +8,12 @@ You are addressing human review comments on a pull request: fetch the comments, 
 merit (thinking-buddy posture), implement the approved fixes, reply to the threads, push, and
 update the PR description when the diff has outrun it — with the replies deferred to the end so
 they always cite the SHA that actually landed.
+
+When the PR carries a mutation-testing report, its survivors are handled alongside the comments
+by a **survivor sub-agent**: it judges each survivor with the `mutation-testing-triage` skill, adds
+a proven test where one brings value, and records the ones it leaves. The user is not in the loop
+for that judgement — only a survivor whose right response is a **behaviour change** to product
+code reaches them, as a decision card like any review comment.
 
 By default the fixes are made **in the current checkout**. The `+temp-worktree` flag switches on
 an isolation lifecycle: the implementation (file edits + commits) happens in a **private
@@ -89,20 +95,23 @@ mandatory and runs in order either way — the tools only make it visible.
 > wherever you are keeping it. Never skip a step because a tool is missing, and never narrate
 > which tracking tools this build has — just track the checklist and carry on.
 
-Create these items (all `pending`). Items 4, 6 and 7 are **temp-worktree mode only — omit them
-entirely in default mode**:
-1. `📥 Fetch review comments + thread IDs` — Steps 0.1–2
-2. `🧭 Scope assessment + triage` — Steps 3–4
-3. `📝 Plan phase: per-comment assessment + approval` — Step 5
-4. `🌳 Create isolated worktree` — Step 6 *(temp-worktree mode only)*
-5. `🔧 Implement approved fixes (one commit per fix)` — Step 7
-6. `🔀 Fold-back onto feature branch` — Step 8 *(temp-worktree mode only)*
-7. `🧹 Remove throwaway worktree` — Step 9 *(temp-worktree mode only)*
-8. `🚀 Push (fetch → rebase → push)` — Step 10
-9. `💬 Post all replies (fixed / skipped / dismissed)` — Step 11
-10. `📄 Update PR description` — Step 12
-11. `📝 Update ticket context` — Step 12.5
-12. `✅ Final summary` — Step 13
+Create these items (all `pending`). Items 5, 8 and 9 are **temp-worktree mode only — omit them
+entirely in default mode**. Items 2 and 7 are **survivors only** — create them only once Step 1
+finds survivors:
+1. `📥 Fetch review comments + thread IDs + survivors` — Steps 0.1–2
+2. `🧬 Triage mutation survivors (sub-agent)` — Step 2.5 *(survivors only)*
+3. `🧭 Scope assessment + triage` — Steps 3–4
+4. `📝 Plan phase: per-comment assessment + approval` — Step 5
+5. `🌳 Create isolated worktree` — Step 6 *(temp-worktree mode only)*
+6. `🔧 Implement approved fixes (one commit per fix)` — Step 7
+7. `🧪 Add survivor tests (sub-agent)` — Step 7.5 *(survivors only)*
+8. `🔀 Fold-back onto feature branch` — Step 8 *(temp-worktree mode only)*
+9. `🧹 Remove throwaway worktree` — Step 9 *(temp-worktree mode only)*
+10. `🚀 Push (fetch → rebase → push)` — Step 10
+11. `💬 Post all replies (fixed / skipped / dismissed) + triage comment` — Step 11
+12. `📄 Update PR description` — Step 12
+13. `📝 Update ticket context` — Step 12.5
+14. `✅ Final summary` — Step 13
 
 ### Step 0.1: Detect PR and Feature Branch
 
@@ -157,14 +166,93 @@ Store `PR_NUMBER`, `F`, and the base branch for the rest of the session.
   ```
 - Filter for comments that need action (not resolved, not outdated).
 
+#### Mutation-testing survivors
+
+The mutation-testing platform posts one comment on the PR conversation (not a review thread) and
+edits it in place on every run; its body starts with `<!-- mutation-testing-platform:pr-comment -->`.
+Its "Survivors worth reviewing" table gives file, severity and description; the hidden
+`<!-- mut-state-v2: {…} -->` JSON gives the lines. Both are built from one list in one order (the
+platform's `score-and-gate.sh`), so row N pairs with line N:
+
+```bash
+gh api --paginate "repos/{owner}/{repo}/issues/{PR_NUMBER}/comments" --jq '
+  .[] | select(.body | startswith("<!-- mutation-testing-platform:pr-comment -->")) | .body
+  | . as $b
+  | (capture("<!-- mut-state-v2: (?<s>[{].*[}]) -->").s | fromjson | .survivors) as $lines
+  | ($b | split("### Survivors worth reviewing")[1] | split("\n") | map(select(startswith("| `")))
+      | map(split(" | ") | {file: (.[0] | ltrimstr("| `") | rtrimstr("`")),
+                            severity: (.[1] | gsub("[*]"; "")),
+                            description: (.[2:] | join(" | ") | rtrimstr(" |"))})) as $rows
+  | [range(0; $rows | length) as $i | $rows[$i] + {line: $lines[$i].line, lineFile: $lines[$i].file}]'
+```
+
+(`gh`'s built-in `--jq` is used because `jq` is not installed everywhere; regex escapes like `\{`
+are mangled on the way through Git Bash, hence the `[{]` character classes.)
+
+- Each element is a **survivor item** `{file, line, severity, description}`. It has no thread ID.
+- If any element's `lineFile` differs from its `file`, the pairing is broken: drop `line` from
+  every item and say so — the sub-agent can still locate the mutant from the description.
+- A description of the form ``Mutation `<category>` at `<file>:<line>` survived testing.`` is the
+  platform's verdict-cache template — it names only the mutator category, so the mutant has to be
+  rebuilt from that category and the code at the line.
+- Also collect the body of every earlier comment whose body starts with
+  `<!-- ds:polish-pr:mutation-triage -->` — the records this command posted in earlier rounds.
+- **No platform comment, or an empty survivors table → there are no survivors**, and every
+  survivor step below (2.5, the end of 5, 7.5, 11d) is skipped.
+
 ### Step 2: Display Comments Summary
 
 - Show the total number of unresolved comments.
 - Group comments by file/location for better context.
 - Note how many threads have existing replies (candidates for auto-skip triage).
+- On a separate line, show the survivor count by severity (or "no mutation report").
 - Prepare to process each comment one-by-one.
 
+### Step 2.5: Launch Survivor Triage (sub-agent, background)
+
+**Survivors only.** Mark `🧬 Triage mutation survivors` as `in_progress`.
+
+Launch **one** `Agent` call (`subagent_type: "general-purpose"`, `name: "survivor-triage"`, model
+inherited — this is judgement work) and carry on with Step 3 without waiting; you are notified
+when it returns. The prompt:
+
+> You are triaging surviving mutants from a mutation-testing run on PR #{PR_NUMBER} (base
+> `{base}`, feature branch `{F}`) in `{current dir}`. **Read-only: do not modify any file and do
+> not commit** — a later message may ask you to implement what you plan here.
+>
+> Apply the `mutation-testing-triage` skill to every survivor: judge whether the injected change
+> maps to a realistic, harmful regression, not whether a test could kill it.
+>
+> Survivors (file, line, severity, description): {survivor items}
+> Records from earlier triage rounds: {earlier triage comment bodies, or "none"}
+>
+> For each survivor:
+> 1. Read the code at file:line and rebuild the mutant as a concrete edit. A description of the
+>    form ``Mutation `<category>` at … survived testing.`` names only the mutator category — find
+>    the change of that category at that line.
+> 2. If an earlier record covers the same mutant (same file, nearby line, same change — lines
+>    drift and descriptions get rewritten between runs), return `already-triaged`.
+> 3. Otherwise decide:
+>    - `test` — plausible harm, and the code is right but unprotected. Plan the test: the test
+>      file named for the subject (find the existing one — `git diff origin/{base}...HEAD
+>      --name-only` lists the PR's test files), the test name and what it asserts (an observable
+>      behaviour of your own contract, never a dependency's), and the exact re-injection edit.
+>    - `leave` — with `category` `equivalent`, `redundant` (name the test that already covers it)
+>      or `un-killable` (killing it would pin an implementation detail or reach into a
+>      dependency), and a one-sentence `reason`.
+>    - `behaviour-fix` — the survivor shows the **code itself is wrong** (the mutant is no worse,
+>      or is better, than what ships), so a test would pin a bug. Say what is wrong and the
+>      proposed code change.
+>
+> Return only a JSON array, one entry per survivor:
+> `{file, line, severity, description, verdict, mutant, plan?, category?, reason?, problem?, fix?}`.
+
+When it returns, validate the JSON (one entry per survivor item); on malformed output, ask the
+agent once via `SendMessage` to return the array again. Mark the item `completed`.
+
 ### Step 3: Scope Assessment
+
+Steps 3 and 4 cover **review comments only** — survivors are triaged inside the Step 2.5 sub-agent.
 
 Assess the overall effort of unresolved comments to determine whether to process all at once
 or split into rounds.
@@ -297,15 +385,32 @@ f. **Handle Skipped Comments** — if "Skip", ask for rationale via `AskUserQues
 g. **Handle Dismissed Comments** — if "Dismiss", use your thinking-buddy assessment as the
    rationale automatically (no extra prompt). Record it for the reply phase.
 
+h. **Survivors, after the last review comment** *(survivors only)* — wait for the Step 2.5
+   sub-agent if it has not returned yet. Then:
+   1. Print its verdicts as one table — `file:line | severity | verdict | test planned / leave
+      category + reason` — with no question attached: `test`, `leave` and `already-triaged` are
+      the agent's decisions, and the table only shows what will happen.
+   2. For each `behaviour-fix` verdict, print a decision card and ask, exactly as for a review
+      comment (sub-steps b–g). The card's heading is
+      `### Survivor {n} — {path}:{line} ({severity})`; the description is quoted where a
+      reviewer's body would go, and the Analysis gives the rebuilt mutant, what is wrong with the
+      shipped code, and the proposed change. On the decisions:
+      - **Approve fix** → an approved fix like any other, identified by `file:line` instead of a
+        thread ID; Step 7 implements it with a test that fails before the change.
+      - **Other** reading as "only add a test" → re-classify it as a `test` survivor.
+      - **Skip / Dismiss** → recorded with the rationale, for the triage comment.
+
 **Output of this phase** (carry into implementation) — every in-scope comment ends in exactly
 one of these three states; a "Discuss" round produces no output of its own:
-- **Approved fixes** — an ordered list; each entry records its **thread ID**, target file(s),
-  and the intended change.
+- **Approved fixes** — an ordered list; each entry records its **thread ID** (or `file:line` for
+  an approved behaviour fix), target file(s), and the intended change.
 - **Skipped** comments (+ rationale).
 - **Dismissed** comments (+ rationale).
+- *(survivors only)* **Survivor tests** — the `test` verdicts, for Step 7.5; and the **left**
+  survivors (`leave`, `already-triaged`, skipped or dismissed behaviour fixes), for Step 11d.
 
-**Zero-fix guard:** if there are **no approved code fixes** (everything was skipped/dismissed),
-skip Steps 6–10 entirely (nothing to implement, fold back or push) and jump straight to
+**Zero-fix guard:** if there are **no approved code fixes and no survivor tests** (everything was
+skipped/dismissed/left), skip Steps 6–10 entirely (nothing to implement, fold back or push) and jump straight to
 **Step 11** to post the skip/dismiss replies, then Steps 12.5 and 13. Mark whichever of the
 implementation/worktree/fold-back/push items you created as not applicable.
 
@@ -388,6 +493,37 @@ For **each** approved fix:
 Keep the ordered mapping `thread → WT_SHA` (and the commit order) for fold-back. In a
 pattern batch approved in one go, each fix is still its own commit (so each thread maps to its
 own SHA). Mark the item `completed` when all fixes are committed.
+
+### Step 7.5: Add Survivor Tests (sub-agent)
+
+**Survivors only, and only when there are survivor tests.** Mark `🧪 Add survivor tests` as
+`in_progress`. This runs after every Step 7 commit, so the sub-agent and this session never edit
+`WT` at the same time.
+
+Continue the `survivor-triage` agent with `SendMessage` — it keeps the triage context:
+
+> Implement the `test` verdicts in `{WT}`, one at a time, in this order: {survivor tests}.
+> Git runs as `git -C "{WT}" …`, edits use absolute paths under `{WT}`, and you do not push.
+> {temp-worktree mode: "This is a fresh worktree — sync dependencies first (see the Step 7 list)."}
+> For each:
+> 1. Write the planned test and run it — it must pass.
+> 2. Apply the re-injection edit to the source file and run the test — it must **fail**.
+> 3. Revert the source file and confirm `git -C "{WT}" diff -- <source file>` is empty.
+> 4. Commit only the test file: subject `Address mutation survivor: <description>`, body naming
+>    the mutant, trailer `{the Co-Authored-By line from Step 7}`.
+>
+> If the test still passes against the mutant, it has not killed it: discard the test, leave the
+> source reverted, commit nothing, and record `not-killed` with the reason. Never commit an
+> unproven test.
+>
+> Return only a JSON array, in commit order: `{file, line, status: "committed" | "not-killed",
+> sha?, test?, reason?}`.
+
+Append each `committed` SHA to the commit-order list as `WT_SHA[file:line]` — Steps 8 and 10 then
+treat it like any fix-commit. A `not-killed` survivor joins the left survivors as
+`left — a test attempt did not kill the mutant: {reason}`. Check `git -C "{WT}" diff -- <source
+file>` is empty for every survivor's source file — a leftover re-injected mutant must never reach
+the push. Mark the item `completed`.
 
 ### Step 8: Fold-Back onto the Feature Branch
 
@@ -484,9 +620,9 @@ integrate the remote.
      git log --reverse --format=%H "origin/{F}..HEAD"
      ```
      taken **after** the successful rebase. These are your N fix-commits in the same order you
-     committed them — map them positionally onto the ordered approved-fix list to rebuild
-     `FINAL_SHA[thread]`. (A clean `git push` is a fast-forward and does not change SHAs, so
-     these are final.)
+     committed them — map them positionally onto the commit-order list (the approved fixes, then
+     the Step 7.5 survivor tests) to rebuild `FINAL_SHA[thread]` and `FINAL_SHA[file:line]`.
+     (A clean `git push` is a fast-forward and does not change SHAs, so these are final.)
 
 Mark the item `completed`.
 
@@ -495,7 +631,8 @@ Mark the item `completed`.
 Mark `💬 Post all replies` as `in_progress`. Now that `FINAL_SHA` is settled, post every deferred
 reply. Use the **thread ID** (`PRRT_*`), never the comment ID (`PRRC_*`).
 
-a. **Addressed fixes** — for each, reference its `FINAL_SHA[thread]`:
+a. **Addressed fixes** — for each, reference its `FINAL_SHA[thread]` (an approved behaviour fix
+   for a survivor has no thread; it is reported in part d instead):
    ```bash
    gh api graphql -f query='
    mutation {
@@ -511,6 +648,26 @@ a. **Addressed fixes** — for each, reference its `FINAL_SHA[thread]`:
 b. **Skipped comments** — "Won't address in this PR. **Reason:** <rationale from user>" + attribution.
 
 c. **Dismissed comments** — "Won't be changing this. **Reason:** <rationale>" + attribution.
+
+d. **Mutation triage comment** *(survivors only)* — survivors have no thread, so their record is
+   one **new** comment on the PR conversation per round (earlier rounds' comments stay as they
+   are; the next run reads them all in Step 1). Omit `already-triaged` survivors — their record
+   exists. Post nothing when every survivor was already triaged.
+   ```bash
+   gh pr comment {PR_NUMBER} --body-file - <<'EOF'
+   <!-- ds:polish-pr:mutation-triage -->
+   ## 🧬 Mutation survivors — triage
+
+   - `{file}:{line}` — {description} → test added in {FINAL_SHA}
+   - `{file}:{line}` — {description} → behaviour fixed in {FINAL_SHA}
+   - `{file}:{line}` — {description} → left — {category}: {reason}
+   - `{file}:{line}` — {description} → skipped: {rationale}
+
+   The next mutation run re-tests these files.
+
+   🤖 Generated with [Claude Code](https://claude.ai/claude-code)
+   EOF
+   ```
 
 Mark the item `completed`. (Skipped entirely if fold-back was blocked.)
 
@@ -583,7 +740,9 @@ and Discuss outcomes are recorded nowhere else.
      template's `Branch` (`F`) and `Repository` lines.
    - **`#### Accomplished`:** one line — `<A> addressed, <S> skipped, <D> dismissed, <R> deferred`,
      then the push outcome (`pushed` / `not pushed — deferred` / `not pushed — fold-back blocked`
-     / `not pushed — rebase conflict`).
+     / `not pushed — rebase conflict`). With survivors, a second line —
+     `Mutation survivors: <T> tested, <B> behaviour fixed, <L> left (agent-decided), <P> already triaged`
+     — then one bullet per left survivor with its category and reason.
    - **`#### Key Decisions`:** one bullet per comment where the human steered, as
      `- <file:line> — {decision}: {rationale}`:
      - **Modify** (typed into "Other"): the user's intent, close to their words.
@@ -593,6 +752,8 @@ and Discuss outcomes are recorded nowhere else.
      - **Approve** that overrode your "disagree" or "not worth it" assessment: what the user chose
        over your objection.
      - **Discuss** that changed the fix: what changed and why.
+     - **Behaviour-fix survivor** — whatever the user decided on its card, under the same rules.
+       The agent's `test` and `leave` verdicts are not steering; they go under Accomplished.
 
      Leave out plain approvals of a fix you agreed with — no steering happened there. Omit the
      section when nothing qualifies.
@@ -613,6 +774,9 @@ Auto-skipped (already addressed): <list with reasons>
 Skipped (reply posted): <list with rationale>
 Dismissed (reply posted): <list with rationale>
 Deferred to next round: <list with effort> — run /ds:polish-pr again
+Mutation survivors: <T> tested, <B> behaviour fixed, <L> left, <P> already triaged — triage comment posted / n-a
+  - <file>:<line> — not killed by the test attempt: <reason>   [one line per not-killed survivor]
+                                                      [omit both lines when there was no mutation report]
 Worktree: {WT} → removed / kept (fold-back blocked)   [omit this line in default mode]
 Fold-back: clean / conflict resolved / blocked        [omit this line in default mode]
 Pushed: yes ({F}) / no (deferred) / no (fold-back blocked)
@@ -663,8 +827,15 @@ Remind the user to **manually resolve** the conversations after reviewing the ch
   pre-push SHA — because a push-time rebase (and, in temp-worktree mode, the cherry-pick)
   rewrites SHAs.
 - **Never `--force`**: push integrates via fetch → rebase → retry only.
-- **Zero-fix guard**: if all comments are skipped/dismissed, skip implementation, fold-back and
-  push, and go straight to posting skip/dismiss replies.
+- **Zero-fix guard**: if all comments are skipped/dismissed and there are no survivor tests, skip
+  implementation, fold-back and push, and go straight to posting skip/dismiss replies and the
+  triage comment.
+- **Survivors are agent-judged**: a survivor is a hint, not a defect. The sub-agent decides `test`
+  or `leave` on its own; only a `behaviour-fix` — product code that is wrong, not just untested —
+  reaches the user as a card.
+- **Proven or not committed**: a survivor test is committed only after it failed against the
+  re-injected mutant and the source was reverted.
+- **One writer at a time**: Step 7.5 runs after every Step 7 commit, never alongside it.
 
 **Temp-worktree mode only (`+temp-worktree`):**
 - **Worktree is sacred**: no current-dir `Edit`/`Write`/mutating `git` before Step 8. All
