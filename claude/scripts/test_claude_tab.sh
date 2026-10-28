@@ -140,6 +140,18 @@ else
     fail "expected claude launched with no arguments, got: $(grep '^ARG:' "$launched" 2>/dev/null | tr '\n' ' ')"
 fi
 
+# 6b. --then runs its command once claude has exited, from $HOME: the fake has already written its
+# arguments when the command copies them, and the tab's directory is no longer its current one.
+rm -f "$launched"
+then_out="$test_root/then-out"
+claude_tab --then "pwd > $(printf %q "$then_out"); cat $(printf %q "$launched") >> $(printf %q "$then_out")" \
+    "INT-4" "$test_root" --resume abc-123
+if [[ "$(head -n 1 "$then_out" 2>/dev/null)" == "$HOME" ]] && grep -Fxq "ARG:--resume" "$then_out"; then
+    pass "--then runs after claude exits, from \$HOME"
+else
+    fail "--then: expected \$HOME then claude's arguments, got: $(tr '\n' ' ' < "$then_out" 2>/dev/null)"
+fi
+
 # --- --wsl: a tab in the WSL distro ---
 # The WSL side's claude-bin.sh, which the launcher sources inside the tab.
 wsl_home="$test_root/wsl-home"

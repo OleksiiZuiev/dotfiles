@@ -8,9 +8,11 @@
 # session advertise its parent's named pipe as its own address, so the whole set
 # is dropped here and the tab starts as an ordinary top-level session.
 #
-# Usage: claude-tab.sh [--wsl] <title> <dir> [<claude-arg>...]
-#   --wsl  <dir> is a path in the WSL distro, and the tab runs there. Without it
-#          the tab is a Git Bash one, opened from Git Bash only.
+# Usage: claude-tab.sh [--wsl] [--then <command>] <title> <dir> [<claude-arg>...]
+#   --wsl             <dir> is a path in the WSL distro, and the tab runs there.
+#                     Without it the tab is a Git Bash one, opened from Git Bash only.
+#   --then <command>  Run <command> in the tab once claude exits, from $HOME: Windows
+#                     cannot delete a directory that is a live process's current one.
 
 # Injected by Claude Code into every Bash subprocess. CLAUDECODE and
 # CLAUDE_CODE_ENTRYPOINT are left alone: claude sets both for itself.
@@ -26,16 +28,19 @@ CLAUDE_TAB_INHERITED_ENV=(
 )
 
 claude_tab() {
-    local wsl=""
-    if [[ "$1" == "--wsl" ]]; then
-        wsl=1
-        shift
-    fi
+    local wsl="" then=""
+    while [[ "$1" == --* ]]; do
+        case "$1" in
+            --wsl) wsl=1; shift ;;
+            --then) then="$2"; shift 2 ;;
+            *) break ;;
+        esac
+    done
     local title="$1" dir="$2"
     local claude_args=("${@:3}")
 
     if [[ -z "$title" || -z "$dir" ]]; then
-        echo "Usage: claude-tab.sh [--wsl] <title> <dir> [<claude-arg>...]" >&2
+        echo "Usage: claude-tab.sh [--wsl] [--then <command>] <title> <dir> [<claude-arg>...]" >&2
         return 1
     fi
     if [[ -z "$wsl" && -n "$WSL_DISTRO_NAME" ]]; then
@@ -61,7 +66,8 @@ claude_tab() {
         printf 'rm -f -- "$0"\n'
         # A WSL tab resolves claude on its own side: the Windows binary means nothing there.
         [[ -n "$wsl" ]] && printf 'source "$HOME/.bash.d/claude-bin.sh"\n'
-        printf 'exec env'
+        [[ -z "$then" ]] && printf 'exec '
+        printf 'env'
         printf ' -u %q' "${CLAUDE_TAB_INHERITED_ENV[@]}"
         if [[ -n "$wsl" ]]; then
             printf ' "$(claude_bin)"'
@@ -70,6 +76,7 @@ claude_tab() {
         fi
         printf ' %q' "${claude_args[@]}"
         printf '\n'
+        [[ -n "$then" ]] && printf 'cd "$HOME"\n%s\n' "$then"
     } > "$launcher"
 
     if [[ -n "$wsl" ]]; then

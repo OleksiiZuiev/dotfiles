@@ -1,7 +1,7 @@
 ---
 description: Seven-dimension review of the current PR — code quality plus reliability, operability, configuration and efficacy, with every finding tiered by user impact.
-allowed-tools: Bash(git *), Bash(gh *), Bash(ls *), Bash(find *), Read, Write, Edit, Grep, Glob, Agent, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion, mcp__claude_ai_Linear__get_issue
-argument-hint: [+comment] [+ask] [<pr-number>] [--to <file>] [--bar low|medium|high]
+allowed-tools: Bash(git *), Bash(gh *), Bash(bash ~/.claude/scripts/review-pr-tab.sh *), Bash(ls *), Bash(find *), Read, Write, Edit, Grep, Glob, Agent, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion, mcp__claude_ai_Linear__get_issue
+argument-hint: [+comment] [+ask] [<pr-number> | <PR URL>] [--to <file>] [--bar low|medium|high]
 ---
 
 You are performing a substantive review of a pull request. The goal is to absorb the mechanical reviewer effort on bigger PRs by surfacing the issues a thoughtful human reviewer would actually raise across seven dimensions: **simplicity & readability, performance, consistency/conventions/duplication, test coverage, reliability & operability, configuration & capacity, and efficacy & claims**.
@@ -17,6 +17,8 @@ The command never touches the working tree — no edits, no commits, no pushes. 
 
 **`+ask`** puts the human back in the loop, and does nothing on its own: with `+comment` it restores the two gates — each smell triaged one-by-one with `AskUserQuestion` (Step 6), then one confirmation on the whole payload (Step 7c), the same in-the-loop posture `/ds:polish-pr` uses. The confident/smell split still decides the *voice* of every draft — assertion for a confident finding, question for a smell — on both paths; under `+ask` it additionally decides which findings need a per-item decision.
 
+**`<PR URL>`** in place of a PR number reviews a PR whose branch you do not have checked out: the review opens in a new tab, in a detached worktree of the PR's head, and the worktree is removed when that session exits (Step 0).
+
 **`--bar low|medium|high`** (default `medium`) sets the **reporting bar** — how high a finding has to clear to be shown. Full semantics in Step 3.2; the short version is that a higher bar means fewer findings, that a `user-facing` finding is never filtered, and that an `efficacy` finding is filtered only when its severity is `low`.
 
 **Distinction from siblings:**
@@ -28,13 +30,19 @@ The command never touches the working tree — no edits, no commits, no pushes. 
 
 ### Step 0: Detect PR & Gather Inputs
 
-0. **Parse arguments.** `$ARGUMENTS` may contain an optional `+comment` flag, an optional `+ask` flag, an optional PR number, an optional `--to <file>` flag and an optional `--bar <level>` flag, in any order:
+0. **Parse arguments.** `$ARGUMENTS` may contain an optional `+comment` flag, an optional `+ask` flag, an optional PR number or PR URL, an optional `--to <file>` flag and an optional `--bar <level>` flag, in any order:
    - `POST_COMMENTS` = `on` if the text contains `+comment`, else `off`.
    - `ASK` = `on` if the text contains `+ask`, else `off`.
    - **Strip the `+comment` and `+ask` tokens before parsing anything else** — otherwise either is mistaken for the PR number. (The `+` prefix, as in `/ds:polish-pr`'s `+temp-worktree`, stops the Claude CLI consuming them as CLI flags.)
    - `OUT_FILE` = the token following `--to` (the findings file to write findings into), else empty. When set, Step 3.6 appends the findings to it as shared-format item blocks.
    - `BAR` = the token following `--bar`, else `medium`. Accepts `low`, `medium`, `high`. Anything else is not fatal — print `> Unknown bar '<value>' — using medium.` and continue with `medium`.
    - `PR_ARG` = the first bare token that is **not** `--to` or `--bar`, and not the value of either, else empty. **Both flag values must be excluded**, or `/ds:review --bar high` reads `high` as the PR number.
+
+   **A `PR_ARG` that is a GitHub PR URL** (`https://github.com/<owner>/<repo>/pull/<N>`) **ends this run here.** Hand the setup to the script, passing every other token of `$ARGUMENTS` through so the flags apply in the tab:
+   ```bash
+   bash ~/.claude/scripts/review-pr-tab.sh "<PR URL>" <every other token>
+   ```
+   It resolves the clone from the repo map, makes (or reuses) a detached worktree of the PR head, and opens a tab there running `/ds:review <N> <flags>` (`review-pr-tab.sh --help` has the details). Print its output — the one-line error on failure — and stop; the review itself runs in the tab. A relative `--to` path would resolve inside that worktree and go with it, so make it absolute before passing it on.
 
    `ASK=on` with `POST_COMMENTS=off` is not fatal — print `> +ask has no effect without +comment — nothing is posted, so there is nothing to confirm.` and continue.
 
@@ -668,7 +676,7 @@ Mark `✅ Final summary` as `completed`.
 
 ## Important Notes
 
-- **Never touches the working tree**: this command does not edit files, commit, or push, in any mode, with or without `+comment`. The single outward write it can make is posting comments to the PR, and only under `+comment` — unprompted by default, or behind the Step 6 triage and the Step 7c confirmation when `+ask` is set. What still holds on both paths: only shown findings post, a stale local head refuses to post at all, and the dedup guard drops what is already on the PR.
+- **Never touches the working tree**: this command does not edit files, commit, or push, in any mode, with or without `+comment`. Given a PR URL it makes a separate worktree of the PR head and leaves the current one alone. The single outward write it can make is posting comments to the PR, and only under `+comment` — unprompted by default, or behind the Step 6 triage and the Step 7c confirmation when `+ask` is set. What still holds on both paths: only shown findings post, a stale local head refuses to post at all, and the dedup guard drops what is already on the PR.
 - **Sub-agents are read-only and drafting is not their job**: the core brief tells analysis sub-agents not to modify files. They also do not write PR comments — Step 4 drafts from the findings they return, because a draft written in a sub-agent has to be ingested and reprinted anyway, and most drafts are never posted.
 - **The ladder must stay nested**: shown-at-`high` ⊆ shown-at-`medium` ⊆ shown-at-`low`. The tier rescue is what guarantees it, and it is why the rescue applies at *every* rung rather than only at `high` — rescuing `user-facing` at `high` alone would let a raised bar *reveal* a `user-facing` · `low` finding that `medium` had hidden, and every "re-run with `--bar low` to see them" line in this command assumes the opposite. Do not restrict the rescue to the top rung.
 - **The `medium` floor on the `efficacy` rescue is deliberate**: it is the one narrowing the rescue carries, and it exists because `efficacy` covers any claim the code does not support — including a stale phrase in a docstring, which is a nit. Without the floor no bar could filter that nit, since a rescue beats every rung. The floor costs the nesting nothing: an `efficacy` · `medium` finding clears the `medium` rung on severity alone, so it shows at `medium` whether or not it is rescued. Do not lift the floor to make the two tiers symmetric — `user-facing` needs no floor because a request that got slower is sized before it can claim the tier at all.
