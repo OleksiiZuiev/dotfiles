@@ -304,101 +304,36 @@ After triage, display how many threads were auto-skipped and why.
 were NOT auto-skipped in triage. **This phase records decisions but makes NO edits and creates
 NO commits** — all reads are against the current dir.
 
-For each comment:
+For each comment, decide it through the `polish-triage` skill, interactive: assess it, print the
+decision card, ask, and handle Approve, Discuss, Skip, Dismiss and Other as the skill describes. This
+command never uses the skill's auto decision, and Step 7 commits, not the skill's commit rule. Where
+the skill says "finding", read "comment", with these specifics:
 
-a. **Read and Assess** — read the code at the comment's location, then work through the
-   thinking-buddy assessment. Nothing is shown yet; this is the material for the decision card.
-   - **Evaluate merit**: does the suggestion actually improve the code? Valid concern or style
-     preference? Real problem?
-   - **Price the fix**: name what it adds — a concept, a cache, a memo, an indirection, a new
-     invariant someone has to keep — set against what it removes. A fix that strictly removes code
-     or work is free: say so and move on. A fix that adds a concept has to buy something you can
-     size, so if the comment offers a multiplier ("once per row", "N times per render") rather than
-     a cost, that is not a size — work out what the operation already costs before you agree.
-     Check too that every branch of the proposed fix can actually execute; a fallback that can
-     never run is complexity bought for nothing.
-   - **Flag disagreements**: if the suggested approach has downsides or the existing code was
-     correct, say so with reasoning.
-   - **Suggest alternatives**: if there's a better way to address the underlying concern, propose it.
-   - **Categorize**: "strong agree", "agree with modifications", "minor/style preference",
-     "not worth it — the problem is real, the fix costs more than it buys", or
-     "disagree — here's why".
-   - **Propose a specific fix** (may differ from what the reviewer suggested if you have a better
-     idea). If you disagree, still propose what you would do if asked.
+- **Card heading**: `### Comment {n} of {total} — {path}:{line} (@{author})`; the quoted block is
+  headed `**Original comment**` and holds the reviewer's body verbatim.
+- **Question text**: `Comment {n} of {total} — {path}:{line}: decision?`.
+- **Skip rationale**: ask with `AskUserQuestion` ("Not applicable" / "Will address later" /
+  "Disagree with suggestion"); the automatic "Other" is a custom explanation, recorded as typed.
+- **Repeating pattern after Approve**: the follow-up question names the N similar comments, with
+  "Yes — apply to all N" / "No — just this one".
 
-b. **Print the Decision Card** — as chat text, in the same message and **before** the
-   `AskUserQuestion` call. The user decides from this card alone: an assessment that stays in your
-   reasoning is invisible to them, and a question with no card in front of it cannot be answered on
-   merit. Never ask about a comment whose card is not on screen.
+Wait for a terminal decision — Approve, Modify-via-Other, Skip or Dismiss — before moving to the next
+comment. Record each Skip and Dismiss with its rationale for the reply phase.
 
-   ````
-   ### Comment {n} of {total} — {path}:{line} (@{author})
-
-   **Original comment**
-   > {the reviewer's body, verbatim — every line quoted}
-
-   ```{lang}
-   {the code the comment points at, with a few lines of context}
-   ```
-
-   **Analysis** — {merit; what the fix adds set against what it removes; any disagreement or
-   better alternative}
-   Stance: {category}
-
-   **Recommendation** — {the concrete fix: what changes, in which files, how it is tested. For a
-   "disagree" or "not worth it" stance: why no change, and what you would do if asked}
-   ````
-
-c. **Get User Decision** — use `AskUserQuestion`. The card carries the substance, so the question
-   is short: `Comment {n} of {total} — {path}:{line}: decision?`. The tool caps explicit options at
-   **4**, then appends its own "Other" as the free-text slot, so present exactly these four:
-   - **"Approve fix"** — proceed with this specific fix
-   - **"Discuss"** — ask a question or push back; no decision recorded yet
-   - **"Skip this comment"** — don't address now (deal with later)
-   - **"Dismiss comment"** — agree with your assessment that no change is warranted
-
-   The automatic **"Other"** is **Modify approach**: the user types the change they want
-   instead. Treat that text as the new intent, restate the revised fix, and re-ask this
-   comment's decision.
-
-   Wait for a terminal decision — Approve, Modify-via-Other, Skip or Dismiss — before moving
-   to the next comment.
-
-d. **Handle "Approve fix"** — if a repeating pattern is detected across the remaining
-   comments, follow up with a second `AskUserQuestion` naming the N similar comments:
-   "Yes — apply to all N" / "No — just this one". Each batched fix is still its own commit.
-   With no pattern, record the approval and move on.
-
-e. **Handle "Discuss"** — record **no** decision for this comment:
-   - Answer the question, or engage with the pushback, in plain chat. Stay **read-only** —
-     this is still the Plan Phase, so no edits and no commits.
-   - If the discussion changed the fix, re-print the card's **Recommendation** with the revision.
-   - Re-ask this same comment's decision with the same four options, and repeat until it
-     reaches a terminal decision.
-   - **Never advance to the next comment on a "Discuss".**
-
-f. **Handle Skipped Comments** — if "Skip", ask for rationale via `AskUserQuestion`
-   ("Not applicable" / "Will address later" / "Disagree with suggestion"). The automatic
-   **"Other"** is the custom explanation: record the typed text as the rationale. Record the
-   skipped comment + rationale for the reply phase.
-
-g. **Handle Dismissed Comments** — if "Dismiss", use your thinking-buddy assessment as the
-   rationale automatically (no extra prompt). Record it for the reply phase.
-
-h. **Survivors, after the last review comment** *(survivors only)* — wait for the Step 2.5
-   sub-agent if it has not returned yet. Then:
-   1. Print its verdicts as one table — `file:line | severity | verdict | test planned / leave
-      category + reason` — with no question attached: `test`, `leave` and `already-triaged` are
-      the agent's decisions, and the table only shows what will happen.
-   2. For each `behaviour-fix` verdict, print a decision card and ask, exactly as for a review
-      comment (sub-steps b–g). The card's heading is
-      `### Survivor {n} — {path}:{line} ({severity})`; the description is quoted where a
-      reviewer's body would go, and the Analysis gives the rebuilt mutant, what is wrong with the
-      shipped code, and the proposed change. On the decisions:
-      - **Approve fix** → an approved fix like any other, identified by `file:line` instead of a
-        thread ID; Step 7 implements it with a test that fails before the change.
-      - **Other** reading as "only add a test" → re-classify it as a `test` survivor.
-      - **Skip / Dismiss** → recorded with the rationale, for the triage comment.
+**Survivors, after the last review comment** *(survivors only)* — wait for the Step 2.5
+sub-agent if it has not returned yet. Then:
+1. Print its verdicts as one table — `file:line | severity | verdict | test planned / leave
+   category + reason` — with no question attached: `test`, `leave` and `already-triaged` are
+   the agent's decisions, and the table only shows what will happen.
+2. For each `behaviour-fix` verdict, print a decision card and ask, exactly as for a review
+   comment (the same `polish-triage` decision). The card's heading is
+   `### Survivor {n} — {path}:{line} ({severity})`; the description is quoted where a
+   reviewer's body would go, and the Analysis gives the rebuilt mutant, what is wrong with the
+   shipped code, and the proposed change. On the decisions:
+   - **Approve fix** → an approved fix like any other, identified by `file:line` instead of a
+     thread ID; Step 7 implements it with a test that fails before the change.
+   - **Other** reading as "only add a test" → re-classify it as a `test` survivor.
+   - **Skip / Dismiss** → recorded with the rationale, for the triage comment.
 
 **Output of this phase** (carry into implementation) — every in-scope comment ends in exactly
 one of these three states; a "Discuss" round produces no output of its own:
