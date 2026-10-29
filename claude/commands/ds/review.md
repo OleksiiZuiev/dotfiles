@@ -10,7 +10,7 @@ Every finding is categorized at capture time as either **confident** (concrete p
 
 The command never touches the working tree — no edits, no commits, no pushes. It surfaces findings in chat for the user to read and act on selectively in follow-up prompts. The one thing it can write is the PR itself, and only behind the `+comment` flag. The mode-aware behavior:
 
-- **`MODE=own`** (PR author == you): print the categorized report and write an audit entry to ticket context.
+- **`MODE=own`** (PR author == you, or the branch has no PR): print the categorized report and write an audit entry to ticket context. With no PR there is no audit entry.
 - **`MODE=draft-comments`** (PR author ≠ you): print the categorized report and additionally render copy-paste-ready `Draft comment:` blocks for **confident findings only**. Smells appear in the report for your private read but are not drafted as PR comments. No ticket-context writes.
 
 **`+comment`** (either mode) posts the findings to the PR as one inline review instead of leaving you to copy-paste. Every shown finding posts, confident and smell alike, and **nothing is confirmed first** — the payload is previewed so the transcript records what went out, then submitted. `--bar` is the only filter on what reaches the PR. So with the flag on, a smell *can* reach the PR; without it, the no-post default above still holds.
@@ -61,8 +61,9 @@ The command never touches the working tree — no edits, no commits, no pushes. 
    ```bash
    gh pr view --json number --jq '.number'
    ```
-   - **If failed** (no PR for current branch): inform the user and stop:
-     > No PR found for branch `<branch-name>`. Create one first with `/ds:create-pr` (or `gh pr create`), or pass the number directly: `/ds:review <pr-number>`.
+   - **If failed** (no PR for current branch): set `NO_PR=on` and review the branch against the remote's default branch (steps 3 to 5). `NO_PR` is `off` whenever a PR number was resolved.
+   - **`NO_PR=on` with `POST_COMMENTS=on`** has no PR to post to; stop:
+     > +comment needs a pull request to post to — none found for branch `<branch-name>`. Create one first with `/ds:create-pr`, or drop +comment.
 
 2. **Extract ticket ID from branch name** (same pattern as `/ds:work-on`):
    - Run `git branch --show-current`
@@ -75,14 +76,22 @@ The command never touches the working tree — no edits, no commits, no pushes. 
    ```
    Capture: `PR_TITLE`, `PR_BODY`, `PR_URL`, `PR_AUTHOR=.author.login`, `BASE=.baseRefName`.
 
-4. **Mode detection** — auto-decides whether this is your own PR or someone else's:
+   **With `NO_PR=on`** there is no PR to read. Take the remote's default branch instead and name the branch in place of the title:
    ```bash
-   gh api user --jq '.login'   # ME
+   git symbolic-ref --short refs/remotes/origin/HEAD   # origin/<BASE>
    ```
+   `BASE` = that output without the `origin/` prefix, `PR_TITLE` = `Branch <branch-name>`; `PR_BODY` and `PR_URL` are empty.
+
+4. **Mode detection** — auto-decides whether this is your own PR or someone else's. `repo-gh` runs gh as the account the repo's overlay names, so the answer is the account that owns the repo's work, not whichever account is active:
+   ```bash
+   repo-gh api user --jq '.login'   # ME
+   ```
+   - `NO_PR=on` → `MODE=own`.
    - If `PR_AUTHOR == ME` → `MODE=own` (analysis → report → ticket-context audit).
    - Else → `MODE=draft-comments` (analysis → report → draft PR comments for confident findings; no ticket-context write).
 
    Print a one-liner so the mode is visible up front:
+   - `NO_PR=on`: `> Mode: own (no PR for <branch-name> — reviewing origin/<BASE>...HEAD) — report will be printed; no ticket-context audit.`
    - `MODE=own`: `> Mode: own (PR authored by <ME>) — report will be printed and ticket context updated.`
    - `MODE=draft-comments`: `> Mode: draft-comments (PR authored by <PR_AUTHOR>, you are <ME>) — report plus draft PR comments for confident findings will be printed; nothing else is written.`
 
@@ -101,6 +110,12 @@ The command never touches the working tree — no edits, no commits, no pushes. 
    If the diff is empty, stop:
    > No changes on this PR. Nothing to review.
 
+   (With `NO_PR=on`: `> No changes against origin/<BASE>. Nothing to review.`)
+
+6. **Reviewed range** — the commits this review covers, recorded in the findings-file heading (Step 3.6):
+   - `MODE=own`: `BASE_SHA` = `git merge-base origin/<BASE> HEAD`, `HEAD_SHA` = `git rev-parse HEAD`, each abbreviated with `git rev-parse --short`.
+   - `MODE=draft-comments`: the local checkout is not the PR head, so take `HEAD_SHA` from `gh pr view <pr-number> --json headRefOid` and `BASE_SHA` from `repo-gh api repos/{owner}/{repo}/compare/<BASE>...<HEAD_SHA> --jq '.merge_base_commit.sha'`, each abbreviated to the same length.
+
 ### Step 0.5: Pre-Seed the Checklist
 
 Before doing anything else, create the checklist. The seed list mirrors what will actually run so the multi-step flow survives a long session — same pattern as the pre-seed step in `/ds:work-on` (Step 0.5). When the `Task*` tools (`TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate`) are available, mirror the checklist into them so it stays visible to the user; otherwise keep it in your own messages. Never narrate which tracking tools this build has.
@@ -112,7 +127,7 @@ Before doing anything else, create the checklist. The seed list mirrors what wil
 5. `🎯 Anchor findings to diff lines` — *`POST_COMMENTS=on` only*
 6. `🙋 Triage smells (in-the-loop)` — *`POST_COMMENTS=on` **and** `ASK=on` only*
 7. `🚀 Preview & post review to PR` — *`POST_COMMENTS=on` only*
-8. `📝 Update ticket context` — *`MODE=own` only*
+8. `📝 Update ticket context` — *`MODE=own` with `NO_PR=off` only*
 9. `✅ Final summary`
 
 ### Step 1: Load Shared Context
@@ -165,7 +180,7 @@ These become the **brief** that the analysis sub-agents receive, so they all sta
 Print a brief "Review context loaded" summary so the user sees what the reviewers will see:
 
 ```
-Reviewing PR #<N>: <PR title>
+Reviewing PR #<N>: <PR title>        (or "Reviewing branch <name> (no PR)" when NO_PR=on)
 Ticket: <TICKET_ID> — <ticket title>  (or "no ticket detected")
 Base: origin/<base>
 Diff: <files-changed> files, +<additions>/-<deletions>
@@ -402,7 +417,7 @@ Append the findings to `OUT_FILE` as shared-format item blocks so `/polish-findi
 1. **File shape:**
    - If `OUT_FILE` does not exist, create it with a skeleton — title, an empty Inbox, then the `---` that separates Inbox from thread:
      ```
-     # Findings — <PR_TITLE> (PR #<N>)
+     # Findings — <PR_TITLE> (PR #<N>)        (with NO_PR=on: # Findings — <branch-name> (no PR))
      <!-- shared findings file · written by /ds:review & /ds:analyze-pr · triaged by /polish-findings -->
 
      ## Inbox
@@ -412,7 +427,7 @@ Append the findings to `OUT_FILE` as shared-format item blocks so `/polish-findi
      ```
    - If it exists, append below its existing content (the thread zone lives below the first `---`).
 2. **Next id:** scan the file for `### F<n> · ` headings; `next = max(n) + 1` (start at `F1` if none). Continue the same counter across findings so review + analyze-pr never collide.
-3. **One item block per finding**, under a `## /ds:review — <YYYY-MM-DD>` group heading. Map each finding's existing fields:
+3. **One item block per finding**, under a `## /ds:review — <YYYY-MM-DD> · <BASE_SHA>..<HEAD_SHA>` group heading (the reviewed range from Step 0). Map each finding's existing fields:
    - heading → `### F<next++> · review:<dimension> · <category>` — `<dimension>` ∈ simplicity-readability | performance | consistency-duplication | test-coverage | reliability-operability | configuration | efficacy; `<category>` = the finding's `confident`/`smell`
    - `- **Status:** open`
    - `- **Item:**` ← the finding's one-line summary
@@ -624,6 +639,7 @@ Mark `🚀 Preview & post review to PR` as `completed`.
 
 ### Mode branch
 
+- **If `NO_PR=on`:** skip to **Step 9**. The only caller without a PR is the `/task-run` review loop, which records the run itself and keeps every finding in the findings file; no audit entry is written.
 - **If `MODE=own`:** proceed to **Step 8**.
 - **If `MODE=draft-comments`:** skip to **Step 9**. Reviewing someone else's PR is not your ticket work; no audit entry is written.
 
@@ -652,7 +668,7 @@ Mark `📝 Update ticket context` as `completed`.
 Mark `✅ Final summary` as `in_progress`.
 
 ```
-/ds:review — PR #<N> (<title>)                       [+ " (draft-comments mode)" when MODE=draft-comments]
+/ds:review — PR #<N> (<title>)                       [+ " (draft-comments mode)" when MODE=draft-comments; "/ds:review — branch <name> (no PR)" when NO_PR=on]
 PR author: <PR_AUTHOR>   You: <ME>                    [draft-comments mode only]
 Findings: <T> shown — <C> confident, <S> smells — across <L> lanes (H high, M medium, L low)
 Lanes skipped: <lane> (<reason>), …
@@ -660,7 +676,7 @@ Bar: <BAR> — held back: <HELD_S> smells, <HELD_C> confident findings
 Impact: <U> user-facing, <E> efficacy, <M> maintenance
 Drafted as PR comments: <C> (confident only — smells excluded)    [draft-comments mode, POST_COMMENTS=off]
 Posted to PR: <P> comments (<I> inline, <B> in review body) — <review-url>    [POST_COMMENTS=on]
-Ticket context updated: yes / no — <reason if no>     [MODE=own only]
+Ticket context updated: yes / no — <reason if no>     [MODE=own only; "no — skipped, no PR" when NO_PR=on]
 ```
 
 Include the `Lanes skipped:` line only when a lane was skipped, and the `Bar:` line only when `HELD` > 0. When `POST_COMMENTS=on` but nothing was posted, say why in place of the counts: `none (nothing eligible)`, `none (local HEAD differs from PR head — push and re-run)`, or — reachable only under `ASK=on`, the one path with a gate to cancel at — `none (cancelled)`. In `MODE=draft-comments` close with `No changes were made to the branch, PR, or ticket context.` — or, when comments were posted, `No changes were made to the branch or ticket context.`, because the first claim is then false.
@@ -670,8 +686,8 @@ Suggest next steps:
 - Re-run at `--bar low` to read the <HELD> held-back findings — <HELD_C> of them are concrete fixes. *(Only when `HELD` > 0; drop the trailing clause when `HELD_C` is 0.)*
 - Engage with individual findings in chat (reference by `#N`) to discuss, dismiss, or act on them.
 - Re-run `/ds:review` after addressing the major findings if more rounds are needed. With `+comment`, the dedup guard means a re-run adds only what is new.
-- Re-run with `+comment` to post the findings you want on the record for your reviewers — add `+ask` to read each smell and confirm the payload before any of it lands. *(Skip when `POST_COMMENTS=on` already ran.)*
-- Proceed to human review (mark PR ready with `gh pr ready` if it's a draft). *(`MODE=own` only.)*
+- Re-run with `+comment` to post the findings you want on the record for your reviewers — add `+ask` to read each smell and confirm the payload before any of it lands. *(Skip when `POST_COMMENTS=on` already ran, or when `NO_PR=on`.)*
+- Proceed to human review (mark PR ready with `gh pr ready` if it's a draft). *(`MODE=own` with `NO_PR=off` only.)*
 
 Mark `✅ Final summary` as `completed`.
 

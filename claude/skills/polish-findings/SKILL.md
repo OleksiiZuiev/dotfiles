@@ -18,7 +18,7 @@ Review comments from a human on a pull request are `/ds:polish-pr`'s job, not th
 - **Inbox** (above it): free bullets the user writes (questions for `/ds:analyze-pr`, notes). This skill
   never touches the Inbox.
 - **Thread** (below it): item blocks, usually grouped under dated producer headings
-  (`## /ds:review — DATE`, `## /ds:analyze-pr — DATE`). This is what the skill reads and updates.
+  (`## /ds:review — DATE · BASE..HEAD`, which records the reviewed range, and `## /ds:analyze-pr — DATE`). This is what the skill reads and updates.
 
 **Item block:**
 ```
