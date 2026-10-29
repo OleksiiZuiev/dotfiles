@@ -33,6 +33,17 @@ EOF
 cat > "$scripts/tasks/task.sh" <<'EOF'
 task() { printf '%s\n' "$@" > "$TASK_ARGS"; }
 EOF
+# git is stubbed on PATH for the base branch's fetch.
+stub_bin="$test_root/bin"
+git_args="$test_root/git-args"
+mkdir -p "$stub_bin"
+cat > "$stub_bin/git" <<'EOF'
+#!/bin/bash
+printf '%s\n' "$@" > "$GIT_ARGS"
+[[ -n "$GIT_FETCH_FAILS" ]] && { echo "fatal: couldn't find remote ref" >&2; exit 1; }
+exit 0
+EOF
+chmod +x "$stub_bin/git"
 printf '## Workflow\nworktree: no\n' > "$fake_home/.claude/overlays/shared.md"
 printf '## Workflow\nworktree: yes\n' > "$fake_home/.claude/overlays/app.md"
 
@@ -48,14 +59,14 @@ cat > "$repo_map" <<'EOF'
 EOF
 
 vault="C:/vault"
-export WORKTREE_ARGS="$worktree_args" TAB_ARGS="$tab_args" TASK_ARGS="$task_args"
+export WORKTREE_ARGS="$worktree_args" TAB_ARGS="$tab_args" TASK_ARGS="$task_args" GIT_ARGS="$git_args"
 export CLAUDE_REPO_MAP="$repo_map" CLAUDE_VAULT_DIR="$vault"
-unset WSL_DISTRO_NAME MAKE_WORKTREE_FAILS
+unset WSL_DISTRO_NAME MAKE_WORKTREE_FAILS GIT_FETCH_FAILS
 
 # Runs the script with the fixture home; sets $out, $err and $status.
 dispatch() {
-    rm -f "$worktree_args" "$tab_args" "$task_args"
-    out="$(HOME="$fake_home" bash "$SCRIPT" "$@" 2> "$test_root/stderr")"
+    rm -f "$worktree_args" "$tab_args" "$task_args" "$git_args"
+    out="$(HOME="$fake_home" PATH="$stub_bin:$PATH" bash "$SCRIPT" "$@" 2> "$test_root/stderr")"
     status=$?
     err="$(cat "$test_root/stderr")"
 }
@@ -152,6 +163,22 @@ if [[ $status -eq 0 && "$(sed -n 3p "$tab_args")" == "/task-run VE-7 $note" \
     pass "--context is appended to the prompt as one argument"
 else
     fail "status $status, tab '$(recorded "$tab_args")', err '$err'"
+fi
+
+# 12. --base: the base branch is fetched and the worktree is cut from origin/<base>
+dispatch VE-7 acme/app --branch feat/ve-7-thing --base feat/ve-6-parent
+if [[ $status -eq 0 && "$(recorded "$git_args")" == "-C /repos/acme/app fetch origin feat/ve-6-parent "     && "$(recorded "$worktree_args")" == "/repos/acme/app feat/ve-7-thing origin/feat/ve-6-parent " ]]; then
+    pass "--base fetches the base branch and cuts the worktree from it"
+else
+    fail "status $status, git '$(recorded "$git_args")', worktree '$(recorded "$worktree_args")', err '$err'"
+fi
+
+# 13. --base whose fetch fails: no worktree, no tab
+GIT_FETCH_FAILS=1 dispatch VE-7 acme/app --branch feat/ve-7-thing --base feat/ve-6-gone
+if [[ $status -ne 0 && "$err" == *"feat/ve-6-gone"* && ! -e "$worktree_args" && ! -e "$tab_args" ]]; then
+    pass "a base branch that cannot be fetched stops before the worktree"
+else
+    fail "status $status, stderr '$err', worktree '$(recorded "$worktree_args")', tab '$(recorded "$tab_args")'"
 fi
 
 echo ""

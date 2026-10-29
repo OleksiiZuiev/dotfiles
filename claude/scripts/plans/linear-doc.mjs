@@ -50,13 +50,13 @@ export async function linearDocStatus(plan) {
 
   const members = ids.map((id) => {
     const ticket = tickets.get(id);
-    if (!ticket) return { id, status: 'missing', title: '', blockers: [], workspace: null, planSlugId: null };
+    if (!ticket) return { id, status: 'missing', title: '', blockers: [], workspace: null, branch: null, planSlugId: null };
     const blockers = ticket.inverseRelations.nodes
       .filter((relation) => relation.type === 'blocks')
       .map((relation) => ({ id: relation.issue.identifier, status: ticketStatus(relation.issue.state) }))
       .filter((blocker) => blocker.status !== 'done');
     return { id, status: ticketStatus(ticket.state), title: ticket.title, blockers,
-      workspace: workspace(ticket.description), planSlugId: planSlugId(ticket.description) };
+      workspace: workspace(ticket.description), branch: null, planSlugId: planSlugId(ticket.description) };
   });
   const drift = [];
   for (const member of members) {

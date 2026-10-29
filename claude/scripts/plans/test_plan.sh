@@ -232,6 +232,8 @@ write_linear "$tasks_lines" "$(two_tickets '{"type": "started", "name": "In Revi
 out=$(plan status doc --json)
 check "linear in-review blocker -> its dependent is not on the frontier" "$(field "$out" 's.frontier.length')" 0
 check "linear in-review blocker in the same workspace -> no early start" "$(field "$out" 's.earlyStart.length')" 0
+check "linear in-review blocker in the same workspace -> stack start, no branch recorded" \
+  "$(field "$out" 's.stackStart.map((c) => [c.id, c.on, String(c.branch)].join(":")).join(",")')" "INT-2:INT-1:null"
 write_linear "$tasks_lines" "$(printf '{"INT-1": %s, "INT-2": %s}' \
   "$(ticket "First ticket" '{"type": "started", "name": "In Progress"}' "Workspace: svc\nPlan: $doc_url")" \
   "$(ticket "Second ticket" "$todo" "$plan_line" '[{"id": "INT-1"}]')")"
@@ -285,6 +287,32 @@ check "external blocker not started -> no early start" "$(field "$out" 's.earlyS
 check "external blocker not started -> not on the frontier" "$(field "$out" 's.frontier.length')" 0
 write_linear "$tasks_lines" "$(two_tickets '{"type": "completed", "name": "Done"}')"
 check "external blocker done -> its dependent reaches the frontier" "$(field "$(plan status ext --json)" 's.frontier.join(",")')" VE-14
+
+# --- stack start ---
+stack_note="projects/ve/work-notes/2026-01-01-stack-plan.md"
+task new ve base --workspace svc --plan 2026-01-01-stack-plan --status in-progress > /dev/null                 # VE-15
+task new ve stacked --workspace svc --blocked-by VE-15 --plan 2026-01-01-stack-plan > /dev/null               # VE-16
+task new ve second-base --workspace svc --plan 2026-01-01-stack-plan --status in-progress > /dev/null          # VE-17
+task new ve two-parents --workspace svc --blocked-by VE-15 VE-17 --plan 2026-01-01-stack-plan > /dev/null     # VE-18
+task new ve app-base --workspace app --plan 2026-01-01-stack-plan --status in-progress > /dev/null             # VE-19
+task new ve mixed --workspace svc --blocked-by VE-15 VE-19 --plan 2026-01-01-stack-plan > /dev/null           # VE-20
+task new ve unstarted-base --workspace svc --plan 2026-01-01-stack-plan > /dev/null                            # VE-21
+task new ve waits --workspace svc --blocked-by VE-21 --plan 2026-01-01-stack-plan > /dev/null                 # VE-22
+printf -- '---\ntype: plan\n---\n\n# Stack plan\n\n## Tasks\n\n' > "$root/$stack_note"
+for n in 15 16 17 18 19 20 21 22; do printf -- '- [[VE-%s]]\n' "$n" >> "$root/$stack_note"; done
+plan register stack "$stack_note" > /dev/null
+out=$(plan status stack --json)
+check "stack start -> one started blocker in the same workspace, any others started elsewhere" \
+  "$(field "$out" 's.stackStart.map((c) => c.id + " on " + c.on).join(",")')" "VE-16 on VE-15,VE-20 on VE-15"
+check "stack start -> no branch recorded on the blocker" "$(field "$out" 's.stackStart[0].branch')" null
+check "stack start -> not also an early start" "$(field "$out" 's.earlyStart.length')" 0
+check "stack start -> text names it" "$(has "$(plan status stack)" "stack start: VE-16 on VE-15, VE-20 on VE-15")" yes
+task set VE-15 branch feat/ve-15-base > /dev/null
+task set VE-15 status in-review > /dev/null
+out=$(plan status stack --json)
+check "stack start -> the blocker's recorded branch" "$(field "$out" 's.stackStart[0].branch')" feat/ve-15-base
+check "stack start -> a blocker in review counts as started" "$(field "$out" 's.stackStart.length')" 2
+check "stack start -> members carry their branch" "$(field "$out" 's.members[0].branch')" feat/ve-15-base
 
 rm "$root/api-key"
 out=$(plan status doc --json 2>&1); code=$?

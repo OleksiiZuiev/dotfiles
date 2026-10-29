@@ -25,11 +25,14 @@ The registry of plans; the registry row says where a plan lives and whether it i
             (todo, in-progress or missing), the frontier (todo members whose blockers are all
             done), the early start (todo members whose open blockers are all members in progress
             or in review in another workspace: they can be built now and merged after their
-            blockers) and any drift between the "## Tasks" list and the members' links back.
-            Drift is reported, never repaired. A member's workspace is its task's workspace, or
-            the "Workspace:" line of its ticket.
+            blockers), the stack start (the same, except exactly one open blocker is in the same
+            workspace: the task's branch is cut from that blocker's branch) and any drift between
+            the "## Tasks" list and the members' links back. Drift is reported, never repaired.
+            A member's workspace is its task's workspace, or the "Workspace:" line of its ticket.
             --json prints {slug, title, status, done, inReview, remaining, members, frontier,
-            earlyStart, drift}.
+            earlyStart, stackStart, drift}; a stackStart entry is {id, on, branch}: the blocker
+            it stacks on and that blocker's recorded branch (null when none is recorded, and
+            always for a ticket).
             A vault task's blocker may be a Linear ticket outside the plan (see `task --help`).
             Started, it counts as work in another workspace, so the task is an early start.
   close     Ends an active plan: sets its status, closed_at and close_reason (from --reason).

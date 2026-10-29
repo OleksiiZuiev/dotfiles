@@ -119,8 +119,8 @@ async function vaultStatus(plan) {
   for (const id of ids) {
     const task = await find(id);
     members.push(task
-      ? { id, status: task.status, title: task.title, blockers: task.blockers, workspace: task.workspace, plan: task.plan }
-      : { id, status: 'missing', title: '', blockers: [], workspace: null, plan: null });
+      ? { id, status: task.status, title: task.title, blockers: task.blockers, workspace: task.workspace, branch: task.branch, plan: task.plan }
+      : { id, status: 'missing', title: '', blockers: [], workspace: null, branch: null, plan: null });
   }
   const drift = [];
   for (const member of members) {
@@ -137,18 +137,36 @@ async function vaultStatus(plan) {
   return { members: members.map(({ plan: _plan, ...member }) => member), drift };
 }
 
-// A task can start early when every open blocker is under way in another workspace: it builds
-// against the blocker's agreed contract and only its merge waits. A blocker in the same workspace
-// would need the dependent branch stacked on the blocker's, so it keeps the task waiting. A Linear
-// ticket outside the plan (`external`) is someone else's work, so it counts as another workspace.
-function earlyStart(members) {
+// A task can start before its blockers are done when every open blocker is under way. A blocker in
+// another workspace leaves the task to build against the blocker's agreed contract (early start). A
+// blocker in the same workspace needs the dependent branch stacked on the blocker's, and a branch
+// has one parent, so at most one such blocker is allowed (stack start). A Linear ticket outside the
+// plan (`external`) is someone else's work, so it counts as another workspace. Only the merge waits.
+function startedBlockers(members, member) {
+  if (member.status !== 'todo' || !member.workspace || member.blockers.length === 0) return null;
+  if (!member.blockers.every((b) => ['in-progress', 'in-review'].includes(b.status))) return null;
   const byId = new Map(members.map((m) => [m.id, m]));
-  return members.filter((m) => m.status === 'todo' && m.workspace && m.blockers.length > 0 && m.blockers.every((b) => {
-    if (!['in-progress', 'in-review'].includes(b.status)) return false;
-    if (b.external) return true;
+  const sameWorkspace = [];
+  for (const b of member.blockers) {
+    if (b.external) continue;
     const blocker = byId.get(b.id);
-    return blocker?.workspace && blocker.workspace !== m.workspace;
-  })).map((m) => m.id);
+    if (!blocker?.workspace) return null;
+    if (blocker.workspace === member.workspace) sameWorkspace.push(blocker);
+  }
+  return sameWorkspace;
+}
+
+function earlyStart(members) {
+  return members.filter((m) => startedBlockers(members, m)?.length === 0).map((m) => m.id);
+}
+
+function stackStart(members) {
+  return members.flatMap((m) => {
+    const sameWorkspace = startedBlockers(members, m);
+    if (sameWorkspace?.length !== 1) return [];
+    const [parent] = sameWorkspace;
+    return [{ id: m.id, on: parent.id, branch: parent.branch ?? null }];
+  });
 }
 
 async function statusOf(plan) {
@@ -163,6 +181,7 @@ async function statusOf(plan) {
     members,
     frontier: members.filter((m) => m.status === 'todo' && m.blockers.length === 0).map((m) => m.id),
     earlyStart: earlyStart(members),
+    stackStart: stackStart(members),
     drift,
   };
 }
@@ -181,6 +200,7 @@ async function status(args) {
     m.blockers.map((b) => `blocked by ${b.id} (${b.status})`).join(', ')]));
   console.log(`frontier: ${result.frontier.join(', ') || 'none'}`);
   console.log(`early start: ${result.earlyStart.join(', ') || 'none'}`);
+  console.log(`stack start: ${result.stackStart.map((c) => `${c.id} on ${c.on}`).join(', ') || 'none'}`);
   if (result.drift.length) console.log(['drift:', ...result.drift.map((line) => `  ${line}`)].join('\n'));
 }
 
