@@ -102,6 +102,25 @@ else
     fail "history is: $(cat "$CLAUDE_REPOS_FILE" 2> /dev/null)"
 fi
 
+# 6b. The main checkout's local Claude settings reach a new worktree
+mkdir -p "$repo/.claude"
+echo '{"env":{"A":"main"}}' > "$repo/.claude/settings.local.json"
+bash "$SCRIPT" "$repo" feat/with-settings > /dev/null 2>&1
+if [[ "$(cat "$worktrees/with-settings/.claude/settings.local.json" 2> /dev/null)" == '{"env":{"A":"main"}}' ]]; then
+    pass "local Claude settings are copied into a new worktree"
+else
+    fail "worktree settings: '$(cat "$worktrees/with-settings/.claude/settings.local.json" 2>&1)'"
+fi
+
+# 6c. A worktree's own local Claude settings are kept on reuse
+echo '{"env":{"A":"worktree"}}' > "$worktrees/with-settings/.claude/settings.local.json"
+bash "$SCRIPT" "$repo" feat/with-settings > /dev/null 2>&1
+if [[ "$(cat "$worktrees/with-settings/.claude/settings.local.json")" == '{"env":{"A":"worktree"}}' ]]; then
+    pass "a worktree's own local Claude settings are not overwritten"
+else
+    fail "worktree settings overwritten: '$(cat "$worktrees/with-settings/.claude/settings.local.json")'"
+fi
+
 # 7. Uncommitted changes: refuses without creating a worktree
 echo dirty > "$repo/tracked.txt"
 git -C "$repo" add tracked.txt

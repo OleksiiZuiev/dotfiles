@@ -56,6 +56,14 @@ else
     git -C "$repo" worktree add --no-track -b "$branch" "$worktree_dir" "$base" >&2 || exit 1
 fi
 
+# Gitignored, so a new worktree would otherwise start without the main
+# checkout's machine-local Claude settings (such as its env).
+local_settings=".claude/settings.local.json"
+if [[ -f "$repo_root/$local_settings" && ! -e "$worktree_dir/$local_settings" ]]; then
+    mkdir -p "$worktree_dir/.claude"
+    cp "$repo_root/$local_settings" "$worktree_dir/$local_settings"
+fi
+
 bash "$HOME/.claude/scripts/record-repo.sh" "$worktree_dir" >&2
 
 echo "$worktree_dir"
