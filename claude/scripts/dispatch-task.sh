@@ -7,11 +7,12 @@
 # `worktree: no` are shared checkouts: the tab opens in the checkout itself and --branch is unused.
 # Any other workspace needs --branch for its worktree; --record-branch then records it on the vault
 # task with `task set <ID> branch`. Every tab outside the vault gets the vault as an added directory.
+# --context <text> follows the ID in the prompt, as `/task-run`'s extra context.
 #
 # Usage: dispatch-task.sh <ID> <workspace> [--branch <name>] [--record-branch]
-#                         [--model <model>] [--effort <effort>]
+#                         [--context <text>] [--model <model>] [--effort <effort>]
 
-usage="Usage: dispatch-task.sh <ID> <workspace> [--branch <name>] [--record-branch] [--model <model>] [--effort <effort>]"
+usage="Usage: dispatch-task.sh <ID> <workspace> [--branch <name>] [--record-branch] [--context <text>] [--model <model>] [--effort <effort>]"
 
 # Prints the Path column of the repo map row matching <workspace>.
 repo_path() {
@@ -30,11 +31,12 @@ dispatch_task() {
         return 1
     fi
     shift 2
-    local branch="" record_branch="" model_args=()
+    local branch="" record_branch="" context="" model_args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --branch) branch="$2"; shift 2 ;;
             --record-branch) record_branch=1; shift ;;
+            --context) context="$2"; shift 2 ;;
             --model | --effort) model_args+=("$1" "$2"); shift 2 ;;
             *) echo "dispatch-task.sh: unknown argument '$1'" >&2; echo "$usage" >&2; return 1 ;;
         esac
@@ -72,7 +74,7 @@ dispatch_task() {
         fi
     fi
 
-    bash "$scripts/claude-tab.sh" "$id" "$dir" "/task-run $id" "${model_args[@]}" "${add_dir[@]}" || return 1
+    bash "$scripts/claude-tab.sh" "$id" "$dir" "/task-run $id${context:+ $context}" "${model_args[@]}" "${add_dir[@]}" || return 1
     echo "$dir"
 }
 

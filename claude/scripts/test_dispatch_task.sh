@@ -144,6 +144,16 @@ else
     fail "status $status, worktree '$(recorded "$worktree_args")', tab '$(recorded "$tab_args")'"
 fi
 
+# 11. --context joins the prompt as one argument, ahead of the model flags and the added vault
+note="main already fails X; don't \"fix\" it"
+dispatch VE-7 acme/app --branch feat/ve-7-thing --context "$note" --model sonnet --effort high
+if [[ $status -eq 0 && "$(sed -n 3p "$tab_args")" == "/task-run VE-7 $note" \
+    && "$(tail -n +4 "$tab_args" | tr '\n' ' ')" == "--model sonnet --effort high --add-dir $vault " ]]; then
+    pass "--context is appended to the prompt as one argument"
+else
+    fail "status $status, tab '$(recorded "$tab_args")', err '$err'"
+fi
+
 echo ""
 if [[ "$failures" -eq 0 ]]; then
     echo "All tests passed."
