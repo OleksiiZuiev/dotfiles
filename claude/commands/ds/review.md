@@ -323,7 +323,7 @@ Mark `📋 Findings report` as `in_progress`.
 
    **How much detail the body carries depends on `OUT_FILE`:**
    - **`OUT_FILE` not set** — the chat report is the only copy. Print every shown finding in full under its dimension.
-   - **`OUT_FILE` set** — Step 3.6 is about to write every finding in full to that file, and `/ds:polish` re-displays each block when it triages. Printing full detail twice buys nothing. Print full detail for `user-facing` and `efficacy` findings only; give each `maintenance` finding its one-line entry in the impact summary plus a `detail → <OUT_FILE> F<n>` pointer, and say so once under the summary.
+   - **`OUT_FILE` set** — Step 3.6 is about to write every finding in full to that file, and `/polish-findings` re-displays each block when it triages. Printing full detail twice buys nothing. Print full detail for `user-facing` and `efficacy` findings only; give each `maintenance` finding its one-line entry in the impact summary plus a `detail → <OUT_FILE> F<n>` pointer, and say so once under the summary.
 
    ```
    ## /ds:review findings — PR #<N> (<title>) · bar: <BAR>
@@ -395,15 +395,15 @@ Runs in **both** modes. If `OUT_FILE` is empty, skip this step.
 
 Mark `📄 Write findings to <OUT_FILE>` as `in_progress`.
 
-Append the findings to `OUT_FILE` as shared-format item blocks so `/ds:polish <OUT_FILE>` can act on them later. The format is owned by `/ds:polish` (see that command for the full spec); the **writer slice** is:
+Append the findings to `OUT_FILE` as shared-format item blocks so `/polish-findings <OUT_FILE>` can act on them later. The format is owned by the `polish-findings` skill (see it for the full spec); the **writer slice** is:
 
-**Only the shown findings are written.** A finding held back by the bar does not reach the findings file, smell or confident — a finding you never read turning up in your `/ds:polish` queue is the same noise, just moved downstream. To capture the held-back tail in a file, re-run with `--bar low --to <file>`.
+**Only the shown findings are written.** A finding held back by the bar does not reach the findings file, smell or confident — a finding you never read turning up in your `/polish-findings` queue is the same noise, just moved downstream. To capture the held-back tail in a file, re-run with `--bar low --to <file>`.
 
 1. **File shape:**
    - If `OUT_FILE` does not exist, create it with a skeleton — title, an empty Inbox, then the `---` that separates Inbox from thread:
      ```
      # Findings — <PR_TITLE> (PR #<N>)
-     <!-- shared findings file · written by /ds:review & /ds:analyze-pr · triaged by /ds:polish -->
+     <!-- shared findings file · written by /ds:review & /ds:analyze-pr · triaged by /polish-findings -->
 
      ## Inbox
      <!-- your questions/notes; only this zone is read by /ds:analyze-pr -->
@@ -417,6 +417,7 @@ Append the findings to `OUT_FILE` as shared-format item blocks so `/ds:polish <O
    - `- **Status:** open`
    - `- **Item:**` ← the finding's one-line summary
    - `- **Impact:**` ← the finding's `Impact`
+   - `- **Severity:**` ← the finding's `Severity`
    - `- **Location:**` ← the finding's `file:line` (omit the line if absent)
    - `- **Detail:**` ← the finding's `Why`
    - `- **Counter-argument:**` ← the finding's `Counter-argument`
@@ -424,7 +425,7 @@ Append the findings to `OUT_FILE` as shared-format item blocks so `/ds:polish <O
    - `- **Resolution:** —`
    - then the finding's `Code context:` fenced block verbatim
 4. **Write:** `Read` the current file, append the new group (plus the skeleton if newly created), `Write` it back — preserving existing content verbatim (Read+Write, not Edit; robust on multi-line markdown).
-5. Print: `> Wrote <T> findings to <OUT_FILE> (ids F<a>–F<b>). Run /ds:polish <OUT_FILE> to act on them.`
+5. Print: `> Wrote <T> findings to <OUT_FILE> (ids F<a>–F<b>). Run /polish-findings <OUT_FILE> to act on them.`
 
 Mark `📄 Write findings to <OUT_FILE>` as `completed`.
 

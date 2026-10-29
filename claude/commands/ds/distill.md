@@ -22,7 +22,7 @@ work: the same corrections get re-spent next session.
   - `## Plan directives (plan self-check)` — structural rules folded into the Step 2.7 plan self-check.
 
 **Hard rules:**
-- **Never auto-apply.** Every candidate goes through the one-by-one triage gate (the `/ds:polish`
+- **Never auto-apply.** Every candidate goes through the one-by-one triage gate (the `polish-triage` skill's
   posture). The user decides Approve / Modify / Skip / Dismiss and confirms the destination.
 - **Distill rules, not requirements.** Drop anything that's a one-off scope/requirement change; keep
   only generalizable *how-to-build* corrections.
@@ -175,7 +175,7 @@ raw material (commit diffs, comments, decisions) and the dedup targets. This ext
 
 If it returns zero candidates, report "no new rules distilled" and skip to the summary.
 
-### Step 3: TRIAGE (one-by-one — the `/ds:polish` gate)
+### Step 3: TRIAGE (one-by-one — the `polish-triage` gate)
 
 Mark `⚖️ Triage` `in_progress`. Process candidates **ONE AT A TIME**. For each:
 
