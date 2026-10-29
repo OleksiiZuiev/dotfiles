@@ -35,7 +35,7 @@ The planning conversation stays human: this command starts once a design is agre
 6. **Show one diff**:
    - the plan note or document in full, or for a work-note in place, each edit as before and after text
    - the exact calls, in dependency order — a blocker before the tasks that wait on it. A value not known until an earlier call returns is written as a placeholder (`<A>` for a task's ID, `<document URL>`):
-     - vault: `task new {project-name} {slug} --title "{title}" --plan {note name} [--blocked-by <A>...]`
+     - vault: `task new {project-name} {slug} --title "{title}" --plan {note name} [--blocked-by <A>...]`. A `--blocked-by` may also name a Linear ticket outside the plan (`INT-955`) that the design depends on: `/plan-next` reads it live and lets the task start early once the ticket is under way
      - Linear document: `save_document` creating the document, a `save_issue` per ticket with `blockedBy: [<A>...]`, then the `save_document` patch that lists the real IDs under `## Tasks`
    - each task's body text
    - `plan register {slug} {note path relative to the vault | <document URL>}`

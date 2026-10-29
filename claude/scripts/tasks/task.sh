@@ -21,20 +21,24 @@ blocked-by, plan, workspace and branch in frontmatter.
         vault); without it the task inherits `workspace:` from the project file.
   set   Changes a task's status, or replaces its whole blocked-by list; no IDs clears it. A
         blocked-by ID must be a task of the same project, not the task itself, and must not
-        already be blocked by it, directly or through other tasks (a cycle). Nothing is written
-        when a check fails. `set <ID> plan` clears the plan: link; a plan is only ever
-        given with `new --plan`. `set <ID> branch <name>` records the git branch the task's
-        work is on; no name clears it.
+        already be blocked by it, directly or through other tasks (a cycle) — or a Linear
+        ticket outside the vault (an ID whose prefix is no project's id-prefix), which Linear
+        must know. Nothing is written when a check fails. `set <ID> plan` clears the plan:
+        link; a plan is only ever given with `new --plan`. `set <ID> branch <name>` records the
+        git branch the task's work is on; no name clears it.
   list  The project's todo, in-progress and in-review tasks by ID, one per line, tab-separated: ID, status,
         title (the task's heading), and its blockers — the blocked-by tasks not yet done, as
-        "VE-3 (todo), VE-7 (cancelled)"; empty when the task is unblocked.
-        --json prints an array of {id, status, title, path, blockers: [{id, status}], workspace, branch},
-        where workspace is the task's own or else the project's, null when neither names one, and
-        branch is null when unset.
+        "VE-3 (todo), VE-7 (cancelled)"; empty when the task is unblocked. A Linear ticket's
+        status is read live, in one request, and mapped as for a Linear document plan (see
+        `plan --help`); it is "unknown" when Linear cannot be reached, and stays open.
+        --json prints an array of {id, status, title, path, blockers: [{id, status, external?}], workspace, branch},
+        where external is true for a Linear ticket, workspace is the task's own or else the project's,
+        null when neither names one, and branch is null when unset.
 
 Statuses: todo, in-progress, in-review, done, cancelled. in-review is work delivered as a pull
 request that has not merged; it stays an open blocker until it is done.
 The vault is $CLAUDE_VAULT_DIR, by default C:/work/github/OleksiiZuiev/projects-obsidian.
+Linear is read with the API key in $CLAUDE_LINEAR_KEY_FILE, by default ~/.config/linear/api-key.
 The scripts are read from $CLAUDE_SCRIPTS_DIR, by default ~/.claude/scripts.
 
 Options:

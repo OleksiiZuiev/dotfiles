@@ -100,34 +100,35 @@ function linkedNote(planValue) {
   return planValue?.match(/\[\[([^\]|#]+)/)?.[1].split('/').at(-1) ?? null;
 }
 
-function vaultStatus(plan) {
+async function vaultStatus(plan) {
   const noteName = basename(plan.locator, '.md');
   const ids = memberIds(readFileSync(join(VAULT, plan.locator), 'utf8'));
 
   const project = plan.locator.match(/^projects\/([^/]+)\//)?.[1];
   const tasksByProject = new Map();
-  const tasksOf = (name) => {
-    if (!tasksByProject.has(name)) tasksByProject.set(name, readTasks(name));
+  const tasksOf = async (name) => {
+    if (!tasksByProject.has(name)) tasksByProject.set(name, await readTasks(name));
     return tasksByProject.get(name);
   };
-  const find = (id) => {
+  const find = async (id) => {
     const owner = projectForId(id);
-    return owner ? tasksOf(owner).find((task) => task.id === id) : undefined;
+    return owner ? (await tasksOf(owner)).find((task) => task.id === id) : undefined;
   };
 
-  const members = ids.map((id) => {
-    const task = find(id);
-    return task
+  const members = [];
+  for (const id of ids) {
+    const task = await find(id);
+    members.push(task
       ? { id, status: task.status, title: task.title, blockers: task.blockers, workspace: task.workspace, plan: task.plan }
-      : { id, status: 'missing', title: '', blockers: [], workspace: null, plan: null };
-  });
+      : { id, status: 'missing', title: '', blockers: [], workspace: null, plan: null });
+  }
   const drift = [];
   for (const member of members) {
     if (member.status === 'missing') drift.push(`${member.id} is listed under ## Tasks but has no task`);
     else if (linkedNote(member.plan) !== noteName) drift.push(`${member.id} is listed under ## Tasks but does not link back with plan:`);
   }
   if (project) {
-    for (const task of tasksOf(project)) {
+    for (const task of await tasksOf(project)) {
       if (linkedNote(task.plan) === noteName && !ids.includes(task.id)) {
         drift.push(`${task.id} links to the plan but is not listed under ## Tasks`);
       }
@@ -138,17 +139,20 @@ function vaultStatus(plan) {
 
 // A task can start early when every open blocker is under way in another workspace: it builds
 // against the blocker's agreed contract and only its merge waits. A blocker in the same workspace
-// would need the dependent branch stacked on the blocker's, so it keeps the task waiting.
+// would need the dependent branch stacked on the blocker's, so it keeps the task waiting. A Linear
+// ticket outside the plan (`external`) is someone else's work, so it counts as another workspace.
 function earlyStart(members) {
   const byId = new Map(members.map((m) => [m.id, m]));
   return members.filter((m) => m.status === 'todo' && m.workspace && m.blockers.length > 0 && m.blockers.every((b) => {
+    if (!['in-progress', 'in-review'].includes(b.status)) return false;
+    if (b.external) return true;
     const blocker = byId.get(b.id);
-    return ['in-progress', 'in-review'].includes(b.status) && blocker?.workspace && blocker.workspace !== m.workspace;
+    return blocker?.workspace && blocker.workspace !== m.workspace;
   })).map((m) => m.id);
 }
 
 async function statusOf(plan) {
-  const { members, drift } = plan.home === 'linear-doc' ? await linearDocStatus(plan) : vaultStatus(plan);
+  const { members, drift } = plan.home === 'linear-doc' ? await linearDocStatus(plan) : await vaultStatus(plan);
   return {
     slug: plan.slug,
     title: plan.title,

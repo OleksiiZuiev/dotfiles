@@ -166,48 +166,8 @@ task set VE-9 status in-review
 check "early start -> a blocker in review counts as started" "$(field "$(plan status early --json)" 's.earlyStart.join(",")')" VE-10
 
 # --- Linear document plans ---
-# A fake Linear that answers like the real one: a document by its slugId, issues by aliased
-# identifier (an unknown identifier nulls the whole `data` and is named by its alias in `errors`),
-# and issues whose description contains a text. It reads $root/linear.json on every request, so a
-# test changes Linear by rewriting that file.
-cat > "$root/fake-linear.mjs" <<'EOF'
-import { createServer } from 'node:http';
-import { readFileSync, writeFileSync } from 'node:fs';
-const [fixture, portFile] = process.argv.slice(2);
-const server = createServer((req, res) => {
-  let body = '';
-  req.on('data', (chunk) => (body += chunk));
-  req.on('end', () => {
-    const { query, variables = {} } = JSON.parse(body);
-    const { documents, issues } = JSON.parse(readFileSync(fixture, 'utf8'));
-    const toIssue = (id) => ({
-      identifier: id,
-      title: issues[id].title,
-      description: issues[id].description,
-      state: issues[id].state,
-      inverseRelations: { nodes: (issues[id].blockedBy ?? []).map((blocker) =>
-        ({ type: blocker.type ?? 'blocks', issue: { identifier: blocker.id, state: issues[blocker.id].state } })) },
-    });
-    let reply;
-    if (/document\(id:/.test(query)) {
-      const doc = documents[variables.id];
-      reply = doc ? { data: { document: doc } } : { data: null, errors: [{ message: 'Entity not found: Document' }] };
-    } else if (/issues\(/.test(query)) {
-      const ids = Object.keys(issues).filter((id) => issues[id].description.includes(variables.text));
-      reply = { data: { issues: { nodes: ids.map(toIssue) } } };
-    } else {
-      const aliases = [...query.matchAll(/(\w+): issue\(id: "([^"]+)"\)/g)];
-      const unknown = aliases.filter(([, , id]) => !issues[id]);
-      reply = unknown.length
-        ? { data: null, errors: unknown.map(([, alias]) => ({ message: 'Entity not found: Issue', path: [alias] })) }
-        : { data: Object.fromEntries(aliases.map(([, alias, id]) => [alias, toIssue(id)])) };
-    }
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify(reply));
-  });
-});
-server.listen(0, '127.0.0.1', () => writeFileSync(portFile, String(server.address().port)));
-EOF
+# The fake Linear (lib/fake-linear.mjs) reads $root/linear.json on every request, so a test changes
+# Linear by rewriting that file.
 doc_url="https://linear.app/acme/document/ladder-doc-abc123def456"
 todo='{"type": "unstarted", "name": "Todo"}'
 write_linear() { # $1 the ## Tasks lines  $2 the issues as a JSON object
@@ -228,7 +188,7 @@ two_tickets() { # $1 INT-1 state JSON  [$2 INT-2 state JSON]
 tasks_lines='- [INT-1](https://linear.app/acme/issue/INT-1/first-ticket)\n- [INT-2](https://linear.app/acme/issue/INT-2/second-ticket)\n'
 write_linear "$tasks_lines" "$(two_tickets "$todo")"
 
-node "$(cygpath -w "$root/fake-linear.mjs")" "$(cygpath -w "$root/linear.json")" "$(cygpath -w "$root/linear.port")" &
+node "$(cygpath -w "$SCRIPT_DIR/../lib/fake-linear.mjs")" "$(cygpath -w "$root/linear.json")" "$(cygpath -w "$root/linear.port")" &
 linear_pid=$!
 trap 'kill "$linear_pid" 2> /dev/null; rm -rf "$root"' EXIT
 for _ in $(seq 50); do [[ -s "$root/linear.port" ]] && break; sleep 0.1; done
@@ -306,6 +266,25 @@ check "linear drift -> the known tickets still read when one ID is unknown" \
 check "linear drift -> four lines, nothing about the tickets that agree" "$(field "$out" 's.drift.length')" 4
 
 check "vault status -> unchanged beside a Linear plan" "$(field "$(plan status ladder --json)" 's.members.map((m) => m.id).join(",")')" "VE-1,VE-2,VE-8"
+
+# --- a vault plan with a Linear ticket outside it as a blocker ---
+ext_note="projects/ve/work-notes/2026-01-01-ext-plan.md"
+write_linear "$tasks_lines" "$(two_tickets '{"type": "started", "name": "In Progress"}')"
+task new ve ext-consumer --workspace app --blocked-by INT-1 --plan 2026-01-01-ext-plan > /dev/null   # VE-14
+printf -- '---\ntype: plan\n---\n\n# Ext plan\n\n## Tasks\n\n- [[VE-14]]\n' > "$root/$ext_note"
+plan register ext "$ext_note" > /dev/null
+out=$(plan status ext --json)
+check "external blocker -> read from Linear, marked external" \
+  "$(field "$out" 's.members[0].blockers.map((b) => [b.id, b.status, b.external].join(":")).join(",")')" "INT-1:in-progress:true"
+check "external blocker in progress -> early start" "$(field "$out" 's.earlyStart.join(",")')" VE-14
+check "external blocker in progress -> not on the frontier" "$(field "$out" 's.frontier.length')" 0
+check "external blocker -> text names it" "$(has "$(plan status ext)" "blocked by INT-1 (in-progress)")" yes
+write_linear "$tasks_lines" "$(two_tickets "$todo")"
+out=$(plan status ext --json)
+check "external blocker not started -> no early start" "$(field "$out" 's.earlyStart.length')" 0
+check "external blocker not started -> not on the frontier" "$(field "$out" 's.frontier.length')" 0
+write_linear "$tasks_lines" "$(two_tickets '{"type": "completed", "name": "Done"}')"
+check "external blocker done -> its dependent reaches the frontier" "$(field "$(plan status ext --json)" 's.frontier.join(",")')" VE-14
 
 rm "$root/api-key"
 out=$(plan status doc --json 2>&1); code=$?

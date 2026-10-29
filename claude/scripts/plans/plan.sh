@@ -30,6 +30,8 @@ The registry of plans; the registry row says where a plan lives and whether it i
             the "Workspace:" line of its ticket.
             --json prints {slug, title, status, done, inReview, remaining, members, frontier,
             earlyStart, drift}.
+            A vault task's blocker may be a Linear ticket outside the plan (see `task --help`).
+            Started, it counts as work in another workspace, so the task is an early start.
   close     Ends an active plan: sets its status, closed_at and close_reason (from --reason).
             closed is refused while a member under "## Tasks" is todo, in-progress, in-review or
             missing; cancelled is not. The members are left as they are — cancel or detach them

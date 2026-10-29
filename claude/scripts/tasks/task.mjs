@@ -12,6 +12,7 @@
 // removed, so a deleted task's ID is never handed out again.
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fetchIssues, ticketStatus } from '../lib/linear.mjs';
 
 const VAULT = process.env.CLAUDE_VAULT_DIR ?? 'C:/work/github/OleksiiZuiev/projects-obsidian';
 const STATUSES = ['todo', 'in-progress', 'in-review', 'done', 'cancelled'];
@@ -62,11 +63,28 @@ export function claimId(idsDir, prefix, from = nextNumber(idsDir, prefix)) {
   }
 }
 
+// A blocker whose prefix is no vault project's id-prefix is a Linear ticket outside the vault.
+function isExternal(id) {
+  return !projectForId(id);
+}
+
+async function checkExternal(label, ids) {
+  const external = ids.filter(isExternal);
+  if (external.length === 0) return;
+  let tickets;
+  try {
+    tickets = await fetchIssues(external, 'identifier');
+  } catch (error) {
+    fail(`${label} ${external.join(' ')}: cannot ask Linear about it (${error.message})`);
+  }
+  for (const id of external) if (!tickets.get(id)) fail(`${label} ${id}: Linear has no such ticket`);
+}
+
 function checkStatus(status) {
   if (!STATUSES.includes(status)) fail(`status must be one of ${STATUSES.join(', ')}; got ${status}`);
 }
 
-function newTask(args) {
+async function newTask(args) {
   const [project, slug, ...rest] = args;
   if (!project || !slug || slug.startsWith('--')) fail('usage: task new <project> <slug> [options]');
   const options = { title: slug, blockedBy: [], plan: null, status: 'todo', workspace: null };
@@ -87,9 +105,10 @@ function newTask(args) {
   if (!prefix) fail(`projects/${project}/${project}.md has no id-prefix in its frontmatter`);
   const tasksDir = join(VAULT, 'projects', project, 'tasks');
   const idsDir = join(tasksDir, '.ids');
-  for (const blocker of options.blockedBy) {
+  for (const blocker of options.blockedBy.filter((id) => !isExternal(id))) {
     if (!taskExists(project, blocker)) fail(`--blocked-by ${blocker}: no such task in ${project}`);
   }
+  await checkExternal('--blocked-by', options.blockedBy);
   const template = readFileSync(join(VAULT, 'templates', 'task.md'), 'utf8').replace(/\r\n/g, '\n');
 
   mkdirSync(idsDir, { recursive: true });
@@ -131,15 +150,18 @@ function blockedThrough(from, target, seen = new Set()) {
   return path !== null && blockedByIds(readFileSync(path, 'utf8')).some((next) => blockedThrough(next, target, seen));
 }
 
-function checkBlockers(id, project, blockers) {
+// A Linear ticket cannot be blocked by a vault task, so only vault blockers can make a cycle.
+async function checkBlockers(id, project, blockers) {
   for (const blocker of blockers) {
     if (blocker === id) fail(`${id} cannot be blocked by itself`);
+    if (isExternal(blocker)) continue;
     if (!taskExists(project, blocker)) fail(`blocked-by ${blocker}: no such task in ${project}`);
     if (blockedThrough(blocker, id)) fail(`blocked-by ${blocker}: ${blocker} is already blocked by ${id}, which would make a cycle`);
   }
+  await checkExternal('blocked-by', blockers);
 }
 
-function setField(args) {
+async function setField(args) {
   const [id, field, ...values] = args;
   if (!id || !field) fail('usage: task set <ID> status <status> | task set <ID> blocked-by [<ID>...] | task set <ID> plan | task set <ID> branch [<name>]');
   if (!['status', 'blocked-by', 'plan', 'branch'].includes(field)) fail(`only status, blocked-by, plan and branch can be set; got ${field}`);
@@ -165,7 +187,7 @@ function setField(args) {
     const withoutOld = block[0].replace(/^branch:.*\r?\n/m, '');
     frontmatter = values.length ? withoutOld.replace(/(\r?\n)---$/, `$1branch: ${values[0]}$1---`) : withoutOld;
   } else {
-    checkBlockers(id, projectForId(id), values);
+    await checkBlockers(id, projectForId(id), values);
     const line = values.length ? `blocked-by: [${values.map((blocker) => `"[[${blocker}]]"`).join(', ')}]` : null;
     const withoutOld = block[0].replace(/^blocked-by:.*\r?\n/m, '');
     frontmatter = line ? withoutOld.replace(/^status:.*$/m, (status) => `${status}\n${line}`) : withoutOld;
@@ -173,22 +195,44 @@ function setField(args) {
   writeFileSync(path, frontmatter + text.slice(block[0].length));
 }
 
+// Each Linear ticket's status, in one request. A ticket Linear cannot be asked about stays an open
+// blocker, as `unknown`.
+async function ticketStatuses(ids) {
+  const statuses = new Map(ids.map((id) => [id, 'unknown']));
+  if (ids.length === 0) return statuses;
+  try {
+    for (const [id, ticket] of await fetchIssues(ids, 'state { name type }')) {
+      statuses.set(id, ticket ? ticketStatus(ticket.state) : 'missing');
+    }
+  } catch {
+    // Linear unreachable, or no API key: every ticket stays unknown.
+  }
+  return statuses;
+}
+
 // Every task of the project, whatever its status, by ID. A blocker stays open until it is done: a
-// cancelled one is listed so the dependent gets a look. `plan` is the raw frontmatter value;
-// `workspace` is the task's own, else the project's.
-export function readTasks(project) {
+// cancelled one is listed so the dependent gets a look. A Linear ticket blocker is marked
+// `external`. `plan` is the raw frontmatter value; `workspace` is the task's own, else the project's.
+export async function readTasks(project) {
   const projectFile = join(VAULT, 'projects', project, `${project}.md`);
   const defaultWorkspace = existsSync(projectFile) ? frontmatterValue(readFileSync(projectFile, 'utf8'), 'workspace') : undefined;
   const tasksDir = join(VAULT, 'projects', project, 'tasks');
   if (!existsSync(tasksDir)) fail(`no tasks folder ${tasksDir} (projects/${project})`);
 
-  return readdirSync(tasksDir)
+  const files = readdirSync(tasksDir)
     .filter((name) => /^[A-Z]+-\d+ .*\.md$/.test(name))
     .map((name) => {
       const path = join(tasksDir, name);
-      const text = readFileSync(path, 'utf8');
+      return { name, path, text: readFileSync(path, 'utf8') };
+    });
+  const external = new Set(files.flatMap(({ text }) => blockedByIds(text)).filter(isExternal));
+  const tickets = await ticketStatuses([...external]);
+
+  return files
+    .map(({ name, path, text }) => {
       const blockers = blockedByIds(text)
         .map((id) => {
+          if (external.has(id)) return { id, status: tickets.get(id), external: true };
           const blockerPath = taskPath(id);
           return { id, status: blockerPath ? frontmatterValue(readFileSync(blockerPath, 'utf8'), 'status') : 'missing' };
         })
@@ -207,10 +251,10 @@ export function readTasks(project) {
     .sort((a, b) => Number(a.id.match(/\d+$/)[0]) - Number(b.id.match(/\d+$/)[0]));
 }
 
-function listTasks(args) {
+async function listTasks(args) {
   const [project, ...rest] = args;
   if (!project || project.startsWith('--')) fail('usage: task list <project> [--json]');
-  const tasks = readTasks(project)
+  const tasks = (await readTasks(project))
     .filter((task) => ['todo', 'in-progress', 'in-review'].includes(task.status))
     .map(({ plan, ...task }) => task);
 
@@ -226,8 +270,8 @@ function listTasks(args) {
 
 if (import.meta.main) {
   const [command, ...args] = process.argv.slice(2);
-  if (command === 'new') newTask(args);
-  else if (command === 'set') setField(args);
-  else if (command === 'list') listTasks(args);
+  if (command === 'new') await newTask(args);
+  else if (command === 'set') await setField(args);
+  else if (command === 'list') await listTasks(args);
   else fail('usage: task new|set|list ... (see task --help)');
 }

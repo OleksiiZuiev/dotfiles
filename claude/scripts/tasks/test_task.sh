@@ -300,5 +300,52 @@ printf -- '---\ncreated: 2026-01-01\nid-prefix: BA\n---\n\n# Bare\n' > "$root/pr
 task new bare plain > /dev/null
 check "list --json -> no project default and no override is null" "$(node -e 'console.log(JSON.parse(process.argv[1])[0].workspace)' "$(task list bare --json)")" null
 
+# --- external blockers: Linear tickets outside the vault ---
+# The fake Linear (lib/fake-linear.mjs) logs every request to $root/linear.log.
+printf '{"documents": {}, "issues": {%s, %s}}\n' \
+  '"INT-1": {"title": "Contract", "description": "", "state": {"type": "started", "name": "In Progress"}}' \
+  '"INT-2": {"title": "Landed", "description": "", "state": {"type": "completed", "name": "Done"}}' > "$root/linear.json"
+node "$(cygpath -w "$SCRIPT_DIR/../lib/fake-linear.mjs")" "$(cygpath -w "$root/linear.json")" "$(cygpath -w "$root/linear.port")" "$(cygpath -w "$root/linear.log")" &
+linear_pid=$!
+trap 'kill "$linear_pid" 2> /dev/null; rm -rf "$root"' EXIT
+for _ in $(seq 50); do [[ -s "$root/linear.port" ]] && break; sleep 0.1; done
+export CLAUDE_LINEAR_API="http://127.0.0.1:$(cat "$root/linear.port")"
+printf 'test-key\n' > "$root/api-key"
+export CLAUDE_LINEAR_KEY_FILE="$(cygpath -w "$root/api-key")"
+dead_linear="http://127.0.0.1:1"
+
+: > "$root/linear.log"
+task list ve > /dev/null
+check "list with only vault blockers -> asks Linear nothing" "$(wc -c < "$root/linear.log")" 0
+
+e=$(task new ve on-a-ticket --blocked-by INT-1 | head -1); code=$?
+check "new --blocked-by a Linear ticket -> exit 0" "$code" 0
+check "new --blocked-by a Linear ticket -> written as a vault blocker is" "$(blocked_by "$e")" 'blocked-by: ["[[INT-1]]"]'
+
+before=$(ls -A "$tasks" "$tasks/.ids")
+out=$(task new ve x --blocked-by INT-404 2>&1); code=$?
+check "new --blocked-by a ticket Linear does not know -> exit 1" "$code" 1
+check "new --blocked-by a ticket Linear does not know -> names it" "$(has "$out" INT-404)" yes
+check "new --blocked-by a ticket Linear does not know -> nothing written" "$(ls -A "$tasks" "$tasks/.ids")" "$before"
+
+task set "$e" blocked-by INT-1 INT-2 VE-3; code=$?
+check "set blocked-by Linear tickets and a task -> exit 0" "$code" 0
+before=$(cat "$(file_of "$e")")
+out=$(CLAUDE_LINEAR_API="$dead_linear" task set "$e" blocked-by INT-1 2>&1); code=$?
+check "set blocked-by a ticket with Linear unreachable -> exit 1" "$code" 1
+check "set blocked-by a ticket with Linear unreachable -> file unchanged" "$(cat "$(file_of "$e")")" "$before"
+
+: > "$root/linear.log"
+json=$(task list ve --json)
+check "list --json -> a ticket's status read from Linear, marked external; a done ticket drops out" \
+  "$(row "$e" 'JSON.stringify(r.blockers)')" '[{"id":"INT-1","status":"in-progress","external":true},{"id":"VE-3","status":"todo"}]'
+check "list -> the tickets of every task in one Linear request" "$(wc -l < "$root/linear.log")" 1
+check "list -> names the ticket with its status" "$(grep "^$e" <<< "$(task list ve)" | cut -f4)" "INT-1 (in-progress), VE-3 (todo)"
+
+json=$(CLAUDE_LINEAR_API="$dead_linear" task list ve --json); code=$?
+check "list with Linear unreachable -> exit 0" "$code" 0
+check "list with Linear unreachable -> the ticket stays an open blocker, status unknown" \
+  "$(row "$e" 'JSON.stringify(r.blockers[0])')" '{"id":"INT-1","status":"unknown","external":true}'
+
 echo
 if [[ $fails -eq 0 ]]; then echo "All tests passed"; else echo "$fails test(s) failed"; exit 1; fi

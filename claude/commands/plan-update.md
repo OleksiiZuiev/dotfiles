@@ -26,7 +26,7 @@ Vault paths here (`projects/…`, the plan note, task files) are relative to the
    - prose: the "as built" paragraph, open questions, and any section the work made untrue
 4. **Show one diff** covering everything, and write nothing yet:
    - note edits in full, as the before and after text; never a summary of an edit
-   - task changes as the exact calls: `task new <project> <slug> --title ... --plan <note name> [--blocked-by ...]`, `task set <ID> status <status>`, `task set <ID> blocked-by [<ID>...]`
+   - task changes as the exact calls: `task new <project> <slug> --title ... --plan <note name> [--blocked-by ...]`, `task set <ID> status <status>`, `task set <ID> blocked-by [<ID>...]` (a blocker may be a Linear ticket outside the plan, by its ID)
    - for a Linear document plan, the document edits as `save_document` patches and the ticket changes as `save_issue` calls, each with its arguments; a new ticket's body in full, ending with its `Workspace:` and `Plan:` lines
    - when there is nothing to change, say so and stop
 5. **Confirm**: one `AskUserQuestion` offering apply all, apply some (then ask which), or apply none. Nothing is written before the answer; for a Linear document plan this is not skippable, since every write is visible to the org

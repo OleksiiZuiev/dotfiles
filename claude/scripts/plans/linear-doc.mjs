@@ -1,7 +1,7 @@
 // A plan whose home is a Linear document, read live through lib/linear.mjs. The document's `## Tasks`
 // section lists the member tickets; each ticket links back with a `Plan: <document URL>` line in its
 // body. The writing side is ~/.claude/skills/plan-homes/linear-doc.md.
-import { fetchIssues, linearRequest } from '../lib/linear.mjs';
+import { fetchIssues, linearRequest, ticketStatus } from '../lib/linear.mjs';
 
 // A plan's status is read on demand, not while a list is drawn, so a slow answer beats a failed one.
 const TIMEOUT_MS = 15000;
@@ -33,13 +33,6 @@ async function readDocument(url) {
 
 export async function documentTitle(url) {
   return (await readDocument(url)).title;
-}
-
-export function ticketStatus(state) {
-  if (state.type === 'started') return state.name.toLowerCase() === 'in review' ? 'in-review' : 'in-progress';
-  if (state.type === 'completed') return 'done';
-  if (state.type === 'canceled' || state.type === 'duplicate') return 'cancelled';
-  return 'todo';
 }
 
 function memberIds(content) {

@@ -59,6 +59,14 @@ async function post(key, query, variables = {}, timeoutMs = TIMEOUT_MS) {
   return response.json();
 }
 
+// A ticket's workflow state as a vault task status: the statuses `task --help` lists.
+export function ticketStatus(state) {
+  if (state.type === 'started') return state.name.toLowerCase() === 'in review' ? 'in-review' : 'in-progress';
+  if (state.type === 'completed') return 'done';
+  if (state.type === 'canceled' || state.type === 'duplicate') return 'cancelled';
+  return 'todo';
+}
+
 // The `data` of one query. Throws without a key, when Linear cannot be reached, or on any error.
 export async function linearRequest(query, variables, { timeoutMs } = {}) {
   const { data, errors } = await post(requireKey(), query, variables, timeoutMs);
