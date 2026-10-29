@@ -1,6 +1,6 @@
 ---
 name: uplink-wsl-devcontainer
-description: How to actually run UpLink's tooling on this machine, where Claude runs in the WSL shell but the Python toolchain lives only inside the dev container. Covers the `docker exec` bridge, `up-tools test` instead of raw pytest, running ruff from WSL, committing through the pre-commit hook, and the traps (root-owned files, the shared `.venv`, non-persistent container config). Use whenever work in `~/work/github/datasnipper-enterprise/UpLink` needs pytest, up-tools, basedpyright, terraform, a commit, or an answer to "why can't I run this here".
+description: WSL only. How to actually run UpLink's tooling from the WSL shell, where Claude runs in WSL but the Python toolchain lives only inside the dev container. Covers the `docker exec` bridge, `up-tools test` instead of raw pytest, running ruff from WSL, committing through the pre-commit hook, and the traps (root-owned files, the shared `.venv`, non-persistent container config). Use whenever work in the WSL clone `~/work/github/datasnipper-enterprise/UpLink` needs pytest, up-tools, basedpyright, terraform, a commit, or an answer to "why can't I run this here". Not for the Windows clone at `C:\work\github\datasnipper-enterprise\UpLink`, which runs `uplink-ui` natively.
 ---
 
 # Running UpLink tooling from WSL

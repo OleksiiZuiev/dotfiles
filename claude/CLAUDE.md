@@ -36,7 +36,7 @@
 
 Repos are stored at `C:\work\github\{org}\{repo-name}`.
 
-**Exception — UpLink.** It lives on ext4 in WSL at `~/work/github/datasnipper-enterprise/UpLink`; there is no Windows clone. A Windows shell cannot usefully edit it, so each OS keeps its own map: `~/.claude/repo-map.md` in WSL, `/c/work/claude-data/repo-map.md` on Windows (Windows repos only).
+**Exception — UpLink has two clones.** The WSL one, on ext4 at `~/work/github/datasnipper-enterprise/UpLink`, is where the dev container and the Python toolchain run (the `uplink-wsl-devcontainer` skill). The Windows one, at `C:\work\github\datasnipper-enterprise\UpLink`, builds and tests `uplink-ui` natively; its `.claude/settings.local.json` sets the Node flag the Vitest suite needs, and the backend toolchain on Windows has not been checked. Each OS keeps its own map, listing its own clone: `~/.claude/repo-map.md` in WSL, `/c/work/claude-data/repo-map.md` on Windows.
 
 **Resolution steps** (follow in order for every repo/library mention):
 1. **Exact `org/repo`**: resolve directly to `C:\work\github\{org}\{repo}` and READ from that path
