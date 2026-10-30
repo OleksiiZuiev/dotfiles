@@ -57,7 +57,7 @@ The session starts inside the task's workspace repo, on a branch that carries th
     Commit: {sha}   PR: {url} (draft) | pushed to origin/main | none
     Review: {applied} applied · {dismissed} dismissed · {escalated} escalated · {rounds} round(s)
     {one line per finding: {id} applied|modified ({sha}) — {resolution} | dismissed — {reason} | escalated → {decision}}
-    Findings file: {path}
+    Findings file: {file}
     Review failed: {reason}
     Main checkout: fast-forwarded | left: {reason}
     Delivery failed: {reason}
