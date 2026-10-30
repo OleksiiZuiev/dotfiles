@@ -18,4 +18,4 @@ Nothing to write: Linear's own status follows the pull request.
 
 ## Record
 
-Launch a subagent (`model: haiku`) that appends a session entry to the context file, or creates the file from the `ticket-context` skill's template when it does not exist. Give it the ticket ID, the file path, the branch, the repository name, what was accomplished, the files changed, and each decision with its rationale (the option chosen, the main alternative rejected, the reason) — a decision without a known rationale is passed alone, never with an invented one.
+Launch a subagent (`model: haiku`) that appends a session entry to the context file, or creates the file from the `ticket-context` skill's template when it does not exist. Give it the ticket ID, the file path, the branch, the repository name, what was accomplished, the files changed, the findings file path (when the review ran), and each decision with its rationale (the option chosen, the main alternative rejected, the reason) — a decision without a known rationale is passed alone, never with an invented one.
