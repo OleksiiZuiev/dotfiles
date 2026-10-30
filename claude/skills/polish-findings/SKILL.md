@@ -69,8 +69,9 @@ item signature and are ignored.
 3. **A path that does not exist** ends the run with one line saying so.
 4. **Parse** every item block below the first `---`, capturing id, source, category, `Status`,
    `Impact`, `Severity`, `Location` and the full block text.
-5. **Queue** the items whose `Status` is `open`, `skipped` or `escalated`, in file order. With an empty
-   queue, print the resolved items (id, source, status) and stop: `Nothing to polish — all N findings in
+5. **Queue** the items whose `Status` is `open`, `skipped` or `escalated`, in file order; under `+auto`
+   only the `open` ones, since a `skipped` item is the user's deferral and an `escalated` one is already
+   decided as far as auto mode goes. With an empty queue, print the resolved items (id, source, status) and stop: `Nothing to polish — all N findings in
    <file> are resolved. (Set a finding's Status back to open to re-address it.)`
 
 Mirror this checklist into the `Task*` tools when they are available, otherwise keep it in your
@@ -125,5 +126,5 @@ Under `+auto`, the summary ends with each escalated finding as its id, `Item`, `
 - **The file is the source of truth.** The skill never invents findings and never edits the Inbox.
 - **No implementation without a decision.** Interactive: the user's approval. `+auto`: the routing
   table; a finding the table does not mark applied is never implemented.
-- **Re-runnable.** `open`, `skipped` and `escalated` items are processed on every run; resolved items
-  are left alone. Setting a resolved finding's `Status` back to `open` re-addresses it.
+- **Re-runnable.** `open`, `skipped` and `escalated` items are processed on every interactive run, `open`
+  ones on every `+auto` run; resolved items are left alone. Setting a resolved finding's `Status` back to `open` re-addresses it.
