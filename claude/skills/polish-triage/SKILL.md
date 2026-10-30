@@ -80,7 +80,7 @@ bottom; the first match wins.
 | # | Finding | Decision |
 |---|---|---|
 | 1 | category `question` | escalated |
-| 2 | `Location` lies on lines last changed by an earlier applied fix (overlap rule below) | escalated |
+| 2 | `Location` lies on lines last changed by a fix applied in an earlier run (overlap rule below) | escalated |
 | 3 | `Impact: user-facing`, stance strong agree, agree with modifications or minor | applied |
 | 4 | `Impact: user-facing`, any other stance | escalated |
 | 5 | `confident`, stance strong agree, agree with modifications or minor | applied |
@@ -96,9 +96,12 @@ bottom; the first match wins.
   take) so the interactive card can show it.
 
 **Overlap rule.** Collect the commit SHAs in the file's `applied (<sha>)` and `modified (<sha>)`
-statuses, plus the ones this run commits. Before editing for the finding, run
-`git blame --porcelain -L <first>,<last> -- <path>` on its `Location`. When a blamed commit is in that set, the finding sits on lines a fix already
-touched: the loop is circling, so escalate. A finding with no line number, or on a path that does not
+statuses as they stand when the run starts; the fixes this run commits are not in the set, because a
+finding raised against the same review is assessed against the code as those fixes left it. Before
+editing for the finding, run `git blame --porcelain -L <first>,<last> -- <path>` on its `Location`.
+When a blamed commit is in that set, the finding sits on lines an earlier run's fix already touched:
+the loop is circling, so escalate. A `Location` that lists several lines or ranges is blamed
+range by range, and any hit escalates. A finding with no line number, or on a path that does not
 exist, has no overlap.
 
 ## Commit rule

@@ -86,8 +86,8 @@ stale. For each, apply `polish-triage`:
 
 - **Interactive**: the card, then the question.
 - **`+auto`**: the routing table. `AskUserQuestion` is never called. Record the decision and the
-  assessment, then implement before the next finding, so the overlap rule sees every fix this run has
-  committed.
+  assessment, then implement before the next finding, so the next assessment reads the code as the
+  earlier fixes left it.
 
 ## Implement
 
