@@ -16,7 +16,7 @@ tab released removes the worktree.
 
 Arguments:
   <PR URL>          https://github.com/<owner>/<repo>/pull/<N>
-  <review-arg>      Passed on to /ds:review in the tab (+comment, --bar, --to)
+  <review-arg>      Passed on to /ds:review in the tab (+comment, --bar, --to, --since)
 
 Environment:
   CLAUDE_REPO_MAP   Repo map to resolve the clone from (default: per OS, see ~/.bash.d/repo-roots.sh)

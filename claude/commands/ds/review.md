@@ -1,7 +1,7 @@
 ---
 description: Seven-dimension review of the current PR — code quality plus reliability, operability, configuration and efficacy, with every finding tiered by user impact.
 allowed-tools: Bash(git *), Bash(gh *), Bash(bash ~/.claude/scripts/review-pr-tab.sh *), Bash(ls *), Bash(find *), Read, Write, Edit, Grep, Glob, Agent, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion, mcp__claude_ai_Linear__get_issue
-argument-hint: [+comment] [+ask] [<pr-number> | <PR URL>] [--to <file>] [--bar low|medium|high]
+argument-hint: [+comment] [+ask] [<pr-number> | <PR URL>] [--to <file>] [--bar low|medium|high] [--since <sha>]
 ---
 
 You are performing a substantive review of a pull request. The goal is to absorb the mechanical reviewer effort on bigger PRs by surfacing the issues a thoughtful human reviewer would actually raise across seven dimensions: **simplicity & readability, performance, consistency/conventions/duplication, test coverage, reliability & operability, configuration & capacity, and efficacy & claims**.
@@ -21,6 +21,8 @@ The command never touches the working tree — no edits, no commits, no pushes. 
 
 **`--bar low|medium|high`** (default `medium`) sets the **reporting bar** — how high a finding has to clear to be shown. Full semantics in Step 3.2; the short version is that a higher bar means fewer findings, that a `user-facing` finding is never filtered, and that an `efficacy` finding is filtered only when its severity is `low`.
 
+**`--since <sha>`** reviews only the commits after `<sha>`: every lane gets `<sha>..HEAD` as the diff under review and the full branch diff as read-only context, and a finding must be caused by and anchored in that range. `<sha>` must be an ancestor of the head, else the run stops. It replaces the merge-base in the reviewed range (Step 0), so the findings-file heading records `<sha>..<head-sha>`. `--bar` is unaffected. It works in both modes.
+
 **Distinction from siblings:**
 - `/ds:work-on` Step 3.5 — the mechanical convention check on the freshly written code, before the commit. Auto-applies; owns the mechanical lane, but only on runs that passed `+checks`. Without it the lane falls to this command's Consistency reviewer.
 - `/ds:polish-pr` — addresses *human* reviewer comments already posted on the PR.
@@ -30,13 +32,14 @@ The command never touches the working tree — no edits, no commits, no pushes. 
 
 ### Step 0: Detect PR & Gather Inputs
 
-0. **Parse arguments.** `$ARGUMENTS` may contain an optional `+comment` flag, an optional `+ask` flag, an optional PR number or PR URL, an optional `--to <file>` flag and an optional `--bar <level>` flag, in any order:
+0. **Parse arguments.** `$ARGUMENTS` may contain an optional `+comment` flag, an optional `+ask` flag, an optional PR number or PR URL, an optional `--to <file>` flag, an optional `--bar <level>` flag and an optional `--since <sha>` flag, in any order:
    - `POST_COMMENTS` = `on` if the text contains `+comment`, else `off`.
    - `ASK` = `on` if the text contains `+ask`, else `off`.
    - **Strip the `+comment` and `+ask` tokens before parsing anything else** — otherwise either is mistaken for the PR number. (The `+` prefix, as in `/ds:polish-pr`'s `+temp-worktree`, stops the Claude CLI consuming them as CLI flags.)
    - `OUT_FILE` = the token following `--to` (the findings file to write findings into), else empty. When set, Step 3.6 appends the findings to it as shared-format item blocks.
    - `BAR` = the token following `--bar`, else `medium`. Accepts `low`, `medium`, `high`. Anything else is not fatal — print `> Unknown bar '<value>' — using medium.` and continue with `medium`.
-   - `PR_ARG` = the first bare token that is **not** `--to` or `--bar`, and not the value of either, else empty. **Both flag values must be excluded**, or `/ds:review --bar high` reads `high` as the PR number.
+   - `SINCE` = the token following `--since`, else empty.
+   - `PR_ARG` = the first bare token that is **not** `--to`, `--bar` or `--since`, and not the value of any of them, else empty. **Every flag value must be excluded**, or `/ds:review --bar high` reads `high` as the PR number.
 
    **A `PR_ARG` that is a GitHub PR URL** (`https://github.com/<owner>/<repo>/pull/<N>`) **ends this run here.** Hand the setup to the script, passing every other token of `$ARGUMENTS` through so the flags apply in the tab:
    ```bash
@@ -95,26 +98,35 @@ The command never touches the working tree — no edits, no commits, no pushes. 
    - `MODE=own`: `> Mode: own (PR authored by <ME>) — report will be printed and ticket context updated.`
    - `MODE=draft-comments`: `> Mode: draft-comments (PR authored by <PR_AUTHOR>, you are <ME>) — report plus draft PR comments for confident findings will be printed; nothing else is written.`
 
-5. **Diff** (mode-aware — `MODE=own` reads the local working tree, `MODE=draft-comments` pulls directly from GitHub so you can be on any branch):
+5. **Reviewed range** — the commits this review covers, recorded in the findings-file heading (Step 3.6):
+   - `MODE=own`: `BASE_SHA` = `git merge-base origin/<BASE> HEAD`, `HEAD_SHA` = `git rev-parse HEAD`, each abbreviated with `git rev-parse --short`.
+   - `MODE=draft-comments`: the local checkout is not the PR head, so take `HEAD_SHA` from `gh pr view <pr-number> --json headRefOid` and `BASE_SHA` from `repo-gh api repos/{owner}/{repo}/compare/<BASE>...<HEAD_SHA> --jq '.merge_base_commit.sha'`, each abbreviated to the same length.
+   - **With `SINCE` set**, check that it is an ancestor of the head, then let it replace `BASE_SHA` (abbreviated the same way). `MODE=own`: `git merge-base --is-ancestor <SINCE> HEAD`. `MODE=draft-comments`: `repo-gh api repos/{owner}/{repo}/compare/<SINCE>...<HEAD_SHA> --jq '.status'` must print `ahead` or `identical`. Any other result, an unknown sha included, stops the run:
+     > --since <SINCE> is not an ancestor of <HEAD_SHA> — nothing reviewed.
+
+     Otherwise print `> --since <SINCE> — reviewing <BASE_SHA>..<HEAD_SHA> only; earlier commits are read-only context.`
+
+6. **Diff** (mode-aware — `MODE=own` reads the local working tree, `MODE=draft-comments` pulls directly from GitHub so you can be on any branch):
    - **If `MODE=own`:**
      ```bash
-     git diff origin/<BASE>...HEAD --stat
-     git diff origin/<BASE>...HEAD
+     git diff <BASE_SHA>..HEAD --stat
+     git diff <BASE_SHA>..HEAD
      ```
    - **If `MODE=draft-comments`:**
      ```bash
      gh pr diff <pr-number> --name-only   # files-changed list for the context banner
      gh pr diff <pr-number>               # the full unified diff body
      ```
+     With `SINCE` set, read the range from the compare endpoint instead:
+     ```bash
+     repo-gh api repos/{owner}/{repo}/compare/<SINCE>...<HEAD_SHA> --jq '.files[].filename'
+     repo-gh api -H 'Accept: application/vnd.github.diff' repos/{owner}/{repo}/compare/<SINCE>...<HEAD_SHA>
+     ```
 
    If the diff is empty, stop:
    > No changes on this PR. Nothing to review.
 
-   (With `NO_PR=on`: `> No changes against origin/<BASE>. Nothing to review.`)
-
-6. **Reviewed range** — the commits this review covers, recorded in the findings-file heading (Step 3.6):
-   - `MODE=own`: `BASE_SHA` = `git merge-base origin/<BASE> HEAD`, `HEAD_SHA` = `git rev-parse HEAD`, each abbreviated with `git rev-parse --short`.
-   - `MODE=draft-comments`: the local checkout is not the PR head, so take `HEAD_SHA` from `gh pr view <pr-number> --json headRefOid` and `BASE_SHA` from `repo-gh api repos/{owner}/{repo}/compare/<BASE>...<HEAD_SHA> --jq '.merge_base_commit.sha'`, each abbreviated to the same length.
+   (With `NO_PR=on`: `> No changes against origin/<BASE>. Nothing to review.` With `SINCE` set: `> No changes in <BASE_SHA>..<HEAD_SHA>. Nothing to review.`)
 
 ### Step 0.5: Pre-Seed the Checklist
 
@@ -138,9 +150,9 @@ These become the **brief** that the analysis sub-agents receive, so they all sta
 
 2. **Sibling-file inventory** — the unchanged files that the changed files sit beside. A file that *should* have changed and did not cannot be found in a diff, by definition; this inventory is the only thing that makes it reachable. One listing per **directory**, not per changed file.
 
-   Steps 1 and 2 share one script (in `MODE=draft-comments`, swap the first line for `gh pr diff <pr-number> --name-only`):
+   Steps 1 and 2 share one script (in `MODE=draft-comments`, swap the first line for `gh pr diff <pr-number> --name-only`, or with `SINCE` set for the compare file list from the Reviewed range step):
    ```bash
-   CHANGED=$(git diff origin/<BASE>...HEAD --name-only)
+   CHANGED=$(git diff <BASE_SHA>..HEAD --name-only)
    echo '--- conventions ---'
    echo "$CHANGED" | while read -r f; do
      d=$(dirname "$f")
@@ -183,7 +195,7 @@ Print a brief "Review context loaded" summary so the user sees what the reviewer
 Reviewing PR #<N>: <PR title>        (or "Reviewing branch <name> (no PR)" when NO_PR=on)
 Ticket: <TICKET_ID> — <ticket title>  (or "no ticket detected")
 Base: origin/<base>
-Diff: <files-changed> files, +<additions>/-<deletions>
+Diff: <files-changed> files, +<additions>/-<deletions>   (with SINCE: of <BASE_SHA>..<HEAD_SHA>)
 Context file: loaded / not found / no ticket
 Conventions: <N> files — <paths, most→least specific>  (or "none found")
 Mechanical conventions: enforced by /ds:work-on Step 3.5 (<value>) / not checked
@@ -220,8 +232,10 @@ Launch the reviewers below **in a single message with one parallel `Agent` tool 
 >
 > **Diff to review:**
 > ```diff
-> <full diff against origin/base>
+> <full diff against origin/base; with --since, the diff of <BASE_SHA>..<HEAD_SHA>>
 > ```
+>
+> **Reviewed range** (only when `--since` is set): you review only the commits `<BASE_SHA>..<HEAD_SHA>`. The full branch diff is read-only context, fetched on demand with `git diff origin/<BASE>...HEAD` (`gh pr diff <N>` in draft-comments mode). A finding must be caused by and anchored in the range: a line the range changes, or an unchanged line the range's change breaks or falsifies. A problem that was already there before the range is out of scope. This narrows the rule below about findings outside the changed lines.
 >
 > **Output contract — end your response with this exact block:**
 >
