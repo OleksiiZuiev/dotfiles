@@ -97,14 +97,15 @@ bottom; the first match wins.
 
 **Overlap rule.** The caller passes the finding's **reviewed head**, the commit its review ran
 against, and the commit SHAs in the file's `applied (<sha>)` and `modified (<sha>)` statuses. Before
-editing for the finding, run `git blame --porcelain -L <first>,<last> -- <path>` on its `Location`.
-When a blamed commit is one of those SHAs and an ancestor of the reviewed head
-(`git merge-base --is-ancestor <blamed> <reviewed head>`), the review already saw that fix and still
-found something on the same lines: the loop is circling, so escalate. A fix committed after the
-reviewed head is not what the review saw, so it is no overlap; the assessment reads the code as it is
-now. A finding with no reviewed head compares against the SHAs recorded when the run starts. A
-`Location` that lists several lines or ranges is blamed range by range, and any hit escalates. A
-finding with no line number, or on a path that does not exist, has no overlap.
+editing for the finding, run `git blame --porcelain <reviewed head> -L <first>,<last> -- <path>` on
+its `Location`: the line numbers were recorded against that commit, and blaming there shows who last
+changed the lines as the review saw them, whatever this run has since edited. When a blamed commit is
+one of those SHAs, the review already saw that fix and still found something on the same lines: the
+loop is circling, so escalate. A fix committed after the reviewed head is not in that blame, so it is
+no overlap; the assessment reads the code as it is now. A finding with no reviewed head is blamed at
+`HEAD` against the SHAs recorded when the run starts. A `Location` that lists several lines or ranges
+is blamed range by range, and any hit escalates. A finding with no line number, or on a path that does
+not exist at the reviewed head, has no overlap.
 
 ## Commit rule
 
