@@ -72,9 +72,12 @@ item signature and are ignored.
    `BASE..HEAD` range in its group heading (none when the heading carries no range).
 5. **Queue** the items whose `Status` is `open`, `skipped` or `escalated`, in file order. Under `+auto`
    queue only the `open` ones: a `skipped` item is the user's deferral, and an `escalated` one waits for
-   the user. With an empty queue, print the resolved items (id, source, status) and stop:
+   the user.
+   With an empty queue, print the items (id, source, status) and stop. Interactive:
    `Nothing to polish — all N findings in <file> are resolved. (Set a finding's Status back to open to
-   re-address it.)`
+   re-address it.)` Under `+auto`, when `skipped` or `escalated` items remain:
+   `Nothing to auto-decide — E escalated and S skipped finding(s) in <file> are left for the user. This
+   is not an error.` Under `+auto` with none left, the interactive message applies.
 
 Mirror this checklist into the `Task*` tools when they are available, otherwise keep it in your
 messages: decide each actionable finding, implement the approved fixes, write the resolutions back,
