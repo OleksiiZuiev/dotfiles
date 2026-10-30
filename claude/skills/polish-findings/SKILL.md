@@ -44,8 +44,8 @@ An optional fenced code or diff block may follow the fields.
 | Status | Meaning | Actionable on a run? |
 |---|---|---|
 | `open` | awaiting a decision (the producer's default) | yes |
-| `skipped` | deferred to a later run; `Resolution` says why | yes |
-| `escalated` | auto mode left it for the user; `Resolution` holds the assessment | yes |
+| `skipped` | deferred to a later run; `Resolution` says why | interactive runs only |
+| `escalated` | auto mode left it for the user; `Resolution` holds the assessment | interactive runs only |
 | `applied (<sha>)` | fix implemented and committed | no |
 | `modified (<sha>)` | implemented with an altered approach | no |
 | `dismissed` | considered, no change warranted; `Resolution` holds the reasoning | no |
@@ -113,7 +113,7 @@ updated and everything else (Inbox, other items, every other field) verbatim.
 ```
 polish-findings — <file>
 Applied: <A> (commits: <sha>, <sha>, …)
-Skipped: <S>  (still actionable on the next run)
+Skipped: <S>  (still actionable on the next interactive run)
 Escalated: <E>
 Dismissed/answered: <D>
 Resolutions written back to <file>. Nothing was pushed.
