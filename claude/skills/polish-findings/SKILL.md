@@ -68,7 +68,8 @@ item signature and are ignored.
    or a file missing there, ends the run with one line naming what was looked for.
 3. **A path that does not exist** ends the run with one line saying so.
 4. **Parse** every item block below the first `---`, capturing id, source, category, `Status`,
-   `Impact`, `Severity`, `Location` and the full block text.
+   `Impact`, `Severity`, `Location`, the full block text and the reviewed head, the `HEAD` of the
+   `BASE..HEAD` range in its group heading (none when the heading carries no range).
 5. **Queue** the items whose `Status` is `open`, `skipped` or `escalated`, in file order. Under `+auto`
    queue only the `open` ones: a `skipped` item is the user's deferral, and an `escalated` one waits for
    the user. With an empty queue, print the resolved items (id, source, status) and stop:
