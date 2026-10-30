@@ -1,5 +1,5 @@
 ---
-description: Run one task from the vault or from Linear in its workspace — plan, implement, deliver, record. Flag: +auto-plan
+description: Run one task from the vault or from Linear in its workspace — plan, implement, review, deliver, record. Flag: +auto-plan
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, Skill, AskUserQuestion, EnterPlanMode
 argument-hint: "[task-ID] [+auto-plan] [extra context]"
 ---
