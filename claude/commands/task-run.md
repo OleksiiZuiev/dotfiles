@@ -44,7 +44,7 @@ The session starts inside the task's workspace repo, on a branch that carries th
       2. `git push origin HEAD:main` (never `--force`). A rejected push fetches, rebases and pushes once more, then stops.
       3. Fast-forward the main checkout (the parent of `--git-common-dir`) under the fast-forward rule of `~/.claude/commands/plan-next.md` (step 2, Close merged tasks). A main checkout it leaves is not a failed delivery; the summary names the reason.
 
-      The commit reported and recorded is the rebased one.
+      The commits reported and recorded are the rebased ones: right after the rebase, the first commit of `origin/main..HEAD` is the implementation commit, and each applied finding's sha is found there by the finding id in its commit message.
     - `direct` in the main checkout (the vault included): the change is already where it belongs.
 11. **Finish the task** through the adapter, once step 10 succeeded: with `delivery: pr` it waits for its merge (vault: `task set {ID} status in-review`), with `delivery: direct` it is done (`task set {ID} status done`); `cancelled` if the work showed it should not be done.
 12. **Plan**, only for a task with a registered plan link (the adapter says whether it has one): run the `/plan-update {slug}` flow only when this run added or cancelled a task, changed a `blocked-by`, or proved a premise wrong; it proposes and applies nothing before the user confirms its diff. Otherwise end with one line: `Plan {slug} unchanged`. Never write an "as built" paragraph; a decision goes in the run record first.
