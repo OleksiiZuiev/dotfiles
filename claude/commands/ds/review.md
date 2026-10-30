@@ -1,7 +1,7 @@
 ---
 description: Seven-dimension review of the current PR — code quality plus reliability, operability, configuration and efficacy, with every finding tiered by user impact.
 allowed-tools: Bash(git *), Bash(gh *), Bash(bash ~/.claude/scripts/review-pr-tab.sh *), Bash(ls *), Bash(find *), Read, Write, Edit, Grep, Glob, Agent, TaskCreate, TaskGet, TaskList, TaskUpdate, AskUserQuestion, mcp__claude_ai_Linear__get_issue
-argument-hint: [+comment] [+ask] [<pr-number> | <PR URL>] [--to <file>] [--bar low|medium|high] [--since <sha>]
+argument-hint: "[+comment] [+ask] [<pr-number> | <PR URL>] [--to <file>] [--bar low|medium|high] [--since <sha>]"
 ---
 
 You are performing a substantive review of a pull request. The goal is to absorb the mechanical reviewer effort on bigger PRs by surfacing the issues a thoughtful human reviewer would actually raise across seven dimensions: **simplicity & readability, performance, consistency/conventions/duplication, test coverage, reliability & operability, configuration & capacity, and efficacy & claims**.
@@ -239,7 +239,7 @@ Launch the reviewers below **in a single message with one parallel `Agent` tool 
 >
 > **Output contract — end your response with this exact block:**
 >
-> ```
+> ````
 > ## Findings — <Your Dimension>
 >
 > 1. `path/to/file:line-range` — <one-line summary>
@@ -255,7 +255,7 @@ Launch the reviewers below **in a single message with one parallel `Agent` tool 
 >    ```
 >
 > 2. ...
-> ```
+> ````
 >
 > If clean, return exactly: `## Findings — <Your Dimension>\n\nNo issues found.`
 >
@@ -354,7 +354,7 @@ Mark `📋 Findings report` as `in_progress`.
    - **`OUT_FILE` not set** — the chat report is the only copy. Print every shown finding in full under its dimension.
    - **`OUT_FILE` set** — Step 3.6 is about to write every finding in full to that file, and `/polish-findings` re-displays each block when it triages. Printing full detail twice buys nothing. Print full detail for `user-facing` and `efficacy` findings only; give each `maintenance` finding its one-line entry in the impact summary plus a `detail → <OUT_FILE> F<n>` pointer, and say so once under the summary.
 
-   ```
+   ````
    ## /ds:review findings — PR #<N> (<title>) · bar: <BAR>
 
    ### Impact summary
@@ -404,7 +404,7 @@ Mark `📋 Findings report` as `in_progress`.
    **Totals:** <T> shown — <C> confident, <S> smells — across <L> lanes (H high, M medium, L low).
    > Lanes skipped: <lane> (<reason>), …
    > Bar: <BAR> — held back: <HELD_S> smells, <HELD_C> confident findings. Re-run with `--bar low` to see them.
-   ```
+   ````
 
    Within each impact tier, order by severity (high → low). Omit an impact tier's heading entirely when it has no findings. Omit the **Confident** or **Smells** subsection header for any dimension where that subsection is empty, and omit a dimension's `###` heading entirely when it returned no findings — a report with empty sections is harder to read than a short one. Omit the `Lanes skipped:` line when every lane ran, and the `Bar:` line when `HELD` is 0 (always the case at `--bar low`). When only one of the two held counts is 0, still print both, so the zero is stated rather than inferred from a missing clause.
 
