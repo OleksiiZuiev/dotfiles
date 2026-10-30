@@ -56,7 +56,7 @@ The session starts inside the task's workspace repo, on a branch that carries th
     Change: {one line}   Files: {count}
     Commit: {sha}   PR: {url} (draft) | pushed to origin/main | none
     Review: {applied} applied · {dismissed} dismissed · {escalated} escalated · {rounds} round(s)
-    {one line per finding: {id} applied|modified ({sha}) — {resolution} | dismissed — {reason} | escalated → {decision}}
+    {one line per finding: {id} applied|modified ({sha}, round 1 | round 2 | interactive) — {resolution} | dismissed — {reason} | escalated → applied | dismissed | skipped | undecided}
     Findings file: {file}
     Review failed: {reason}
     Main checkout: fast-forwarded | left: {reason}
@@ -64,7 +64,7 @@ The session starts inside the task's workspace repo, on a branch that carries th
     Plan: {slug} unchanged | updated | none | skipped
     Run recorded: {where} | skipped
     ```
-    `Commit` is the implementation commit. The `Review` lines are absent for the vault, `Findings file` also when no round wrote a file, `Review failed` appears only when step 9 stopped, `Main checkout` only for `direct` from a worktree, `Delivery failed` only when step 10 stopped.
+    `Commit` is the implementation commit. A fix tagged `round 2` or `interactive` is delivered without a further review. The `Review` lines are absent for the vault, `Findings file` also when no round wrote a file, `Review failed` appears only when step 9 stopped, `Main checkout` only for `direct` from a worktree, `Delivery failed` only when step 10 stopped.
 
 ## Examples
 
