@@ -12,7 +12,6 @@ The command has two modes, auto-detected from `$ARGUMENTS`:
 - **File mode** — `$ARGUMENTS` is a path to a markdown file that contains bulleted questions/tasks. The command plans groupings, fans out one parallel sub-agent per group, aggregates, and **appends the analysis back into the same file** below a `---` separator. The original bullets are preserved untouched. Alongside the narrative answers it also emits **shared-format item blocks** for the actionable items (a hybrid output), so `/polish-findings <file>` can triage and apply them. The format is owned by the `polish-findings` skill.
 
 **Distinction from siblings:**
-- `/ds:work-on` Step 3.5 — mechanical convention pass on the freshly written code, before the commit.
 - `/ds:review` — opinionated seven-dimension substantive audit. Fixed output shape.
 - `/ds:analyze-pr` (this command) — answers *the user's* questions about a PR. Open-ended shape driven by the questions.
 
@@ -37,7 +36,7 @@ The command has two modes, auto-detected from `$ARGUMENTS`:
    If this fails (no PR for current branch), stop:
    > No PR found for branch `<branch>`. Create one first with `/ds:create-pr` (or `gh pr create`).
 
-4. **Ticket ID extraction** (same pattern as `/ds:review`, `/ds:work-on`):
+4. **Ticket ID extraction** (same pattern as `/ds:review`):
    - Run `git branch --show-current`.
    - Strip everything before the first `/`, take the first two `-`-separated segments, uppercase (e.g. `feat/int-419-foo` → `INT-419`).
    - If the branch does not match the pattern, set `TICKET_ID=null` and continue without Linear/ticket-context lookups. NOT a fatal error.

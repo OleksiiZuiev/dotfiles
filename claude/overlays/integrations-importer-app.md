@@ -1,13 +1,13 @@
 # Steering overlay — integrations-importer-app
 
 Personal user-level steering for this repo. Maintained by /ds:distill;
-consumed by /ds:work-on (Step 2.7 → Plan directives, Step 3.5 → Enforced).
+consumed by /task-run (step 6 → Plan directives).
 
 ## Enforced (post-gen check)
-<!-- Mechanical, recurring rules the Step 3.5 post-gen check enforces hard. -->
+<!-- Mechanical, recurring rules for a post-generation check to enforce hard. -->
 
 ## Plan directives (plan self-check)
-<!-- Structural rules folded into the Step 2.7 plan self-check. -->
+<!-- Structural rules /task-run folds into its plan. -->
 
 ## Distill ledger
 <!-- /ds:distill bookkeeping for re-run dedup. No consumer reads this section. -->

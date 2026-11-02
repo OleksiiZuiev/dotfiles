@@ -10,7 +10,6 @@ This is **not** a review. It explains; it does not audit. Obvious smells get a q
 
 **Distinction from siblings:**
 - `/ds:create-pr` — creates the PR.
-- `/ds:work-on` Step 3.5 — mechanical convention pass on the freshly written code, before the commit.
 - `/ds:review` — opinionated seven-dimension substantive audit (fixed output shape).
 - `/ds:analyze-pr` — answers *the user's* specific questions about a PR.
 - `/ds:polish-pr` — addresses human reviewer comments already posted on the PR.

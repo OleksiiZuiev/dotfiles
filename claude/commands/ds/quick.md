@@ -110,15 +110,15 @@ bash ~/.claude/scripts/record-repo.sh "{worktree-path}"
 
 ### Step 6: Launch Implementation Tab
 
-Open a new Windows Terminal tab pointing to the worktree, running `/ds:work-on +auto-plan`.
+Open a new Windows Terminal tab pointing to the worktree, running `/task-run {TICKET_ID} +auto-plan`.
 
 Run this as a **single Bash command**, substituting `{TICKET_ID}` and `{worktree-path}` (the Unix-style worktree path from Step 5):
 
 ```bash
-bash ~/.claude/scripts/claude-tab.sh "{TICKET_ID}" "{worktree-path}" "/ds:work-on +auto-plan"
+bash ~/.claude/scripts/claude-tab.sh "{TICKET_ID}" "{worktree-path}" "/task-run {TICKET_ID} +auto-plan"
 ```
 
-**Important**: keep `/ds:work-on +auto-plan` inside one set of quotes so it reaches claude as **one argument** — split, `+auto-plan` becomes a separate argument and the auto-plan flag is silently lost. The script drops the parent session's environment, which this Bash call carries, so the new tab keeps its own transcript.
+**Important**: keep `/task-run {TICKET_ID} +auto-plan` inside one set of quotes so it reaches claude as **one argument** — split, `+auto-plan` becomes a separate argument and the auto-plan flag is silently lost. The script drops the parent session's environment, which this Bash call carries, so the new tab keeps its own transcript.
 
 ### Step 7: Summary
 
@@ -128,7 +128,7 @@ Quick setup complete:
   Branch:   {branch-name}
   Worktree: {worktree-path}
   History:  added to cd-repo/lclaude picker
-  Tab:      launched with /ds:work-on +auto-plan
+  Tab:      launched with /task-run {TICKET_ID} +auto-plan
 
 Switch to the new tab (Ctrl+Tab) to monitor implementation.
 ```

@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   end_reason TEXT
 ) STRICT`;
 
-// Same rule as /ds:work-on: {type}/{prefix-number}-{slug}.
+// Same rule as /task-run step 1: {type}/{prefix-number}-{slug}.
 const BRANCH_PATTERN = /^[^/]+\/([a-z]+-\d+)(?:-(.*))?$/i;
 
 // /ds:refine runs before a branch exists, and a /work-on task run has none, so their ticket comes from

@@ -1,15 +1,15 @@
 # Steering overlay — agents-and-tools
 
 Personal user-level steering for this repo. Maintained by /ds:distill;
-consumed by /ds:work-on (Step 2.7 → Plan directives, Step 3.5 → Enforced).
+consumed by /task-run (step 6 → Plan directives).
 
 ## Enforced (post-gen check)
-<!-- Mechanical, recurring rules the Step 3.5 post-gen check enforces hard. -->
+<!-- Mechanical, recurring rules for a post-generation check to enforce hard. -->
 - Gate and branch on typed constants (an enum value, a command's `.id`), never on bare string literals.            (src: eacb2e67, b542ffdc; AGENTS.md-backed)
 - Never log user-identifiable data (PII). Application logs flow to Grafana and are retained beyond our policy window; MLflow trace data is fine (kept ~1 day). The risk is the Grafana sink, not MLflow.            (src: 75ce56ca, 265f961d; PR #645 retention correction)
 
 ## Plan directives (plan self-check)
-<!-- Structural rules folded into the Step 2.7 plan self-check. -->
+<!-- Structural rules /task-run folds into its plan. -->
 - Model contracts tightly: return a concrete type and raise on a genuine miss rather than handing back `Optional` or an empty sentinel; make a parameter required when the contract guarantees its presence — then delete the now-dead defensive branches at the call sites.            (src: 938c722f, 395e011d, ba6f932c)
 - Define a shared pattern, regex, constant, or helper once in its owning module and import it; never redefine it per consumer — copies drift. Keep an extracted helper's contract narrow (it takes pre-built domain types; callers keep their own adapter/build logic).            (src: 4c958389, 1ccf104f)
 - Keep LLM guidance / system prompts lean: state the gist; drop MANDATORY/FORBIDDEN scaffolding and defensive "ignore your heuristic" paragraphs; don't dictate narration the tool's own instructions already govern.            (src: 40ec3a11; PR #645)

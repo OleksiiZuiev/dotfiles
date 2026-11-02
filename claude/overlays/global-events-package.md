@@ -1,15 +1,15 @@
 # Steering overlay — global-events-package
 
 Personal user-level steering for this repo. Maintained by /ds:distill;
-consumed by /ds:work-on (Step 2.7 → Plan directives, Step 3.5 → Enforced).
+consumed by /task-run (step 6 → Plan directives).
 
 ## Enforced (post-gen check)
-<!-- Mechanical, recurring rules the Step 3.5 post-gen check enforces hard. -->
+<!-- Mechanical, recurring rules for a post-generation check to enforce hard. -->
 - When you rename or remove something, grep the whole repo and fix every reference in the same change — source, tests, comments, log message strings, docstrings and the README, not just the call sites the type checker finds.            (src: 5b5477a existed only to finish fc789dd's sweep; e15f90e left a stale log message)
 - For every name in `__all__`, the types naming its parameters must be exported too — a consumer following a documented construction path has to be able to name every type on it.            (src: pr#32-comment:3735502255 → 5908aad)
 
 ## Plan directives (plan self-check)
-<!-- Structural rules folded into the Step 2.7 plan self-check. -->
+<!-- Structural rules /task-run folds into its plan. -->
 - When three or more fields and the methods that mutate them form one concept, give the concept its own type; the host class keeps one field and its constructor signature is unchanged.            (src: 3 of 12 PR comments converged on it → 3814be8 dropped 5 attributes and 3 methods)
 - Don't add a parameter, callable indirection or closure whose argument never varies across calls; if the value is fixed at construction, read it from the field at the point of use.            (src: ef30f46 dropped `Callable[[float], …]` for a zero-arg thunk)
 

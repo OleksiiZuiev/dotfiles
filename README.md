@@ -10,8 +10,8 @@ command's `description:` frontmatter, a bash function's `--help` — and that is
 ### Claude Code Configuration (`claude/`)
 
 - `commands/` - Slash commands. `ds/` holds the Linear-ticket and PR workflow, invoked as `/ds:<name>`
-  (`/ds:work-on`, `/ds:review`, `/ds:polish-pr` and friends); the top level holds general-purpose ones
-  (`/git-commit`, `/code`). Every `.md` at any depth is a command.
+  (`/ds:review`, `/ds:polish-pr`, `/ds:quick` and friends); the top level holds general-purpose ones
+  (`/task-run`, `/git-commit`, `/code`). Every `.md` at any depth is a command.
 - `hooks/` - Hook scripts referenced from `settings.json`, each with its test beside it — e.g.
   `block-bad-bash.sh`, a `PreToolUse` guard on Bash calls.
 - `scripts/` - Helpers that commands, hooks and bash functions call, with their tests beside them.
@@ -20,7 +20,7 @@ command's `description:` frontmatter, a bash function's `--help` — and that is
 - `skills/` - One directory per skill, each with a `SKILL.md`. Skills installed by the `skills` CLI are
   moved in here and excluded from git per clone (see the install steps below).
 - `overlays/` - Repo-keyed personal steering, one `{repo-key}.md` per repo. Written by `/ds:distill`,
-  read by `/ds:work-on`.
+  read by `/task-run`.
 - `settings.json` - Claude Code settings (permissions, hooks, env, status line)
 - `CLAUDE.md` - Global instructions for Claude Code
 - `statusline.sh` - Status line script

@@ -13,13 +13,15 @@ work: the same corrections get re-spent next session.
 - **Global `~/.claude/CLAUDE.md`** — rules that generalize across every repo.
 - **Repo-keyed overlay `~/.claude/overlays/{repo-key}.md`** — your personal, user-level rules for
   *this* repo (no need to generalize repo-wide; they're your lens on someone else's codebase). The
-  overlay has two consumer sections, each read by a different `/ds:work-on` step:
-  - `## Enforced (post-gen check)` — mechanical, recurring rules the Step 3.5 post-gen check enforces
-    hard. **This is the main output:** the steering thinkie proved that *stated* guidance loses to
+  overlay has two rule sections:
+  - `## Enforced (post-gen check)` — mechanical, recurring rules for a post-generation check to
+    enforce hard. **This is the main output:** the steering thinkie proved that *stated* guidance loses to
     surrounding code at codegen time (the "trim comments" rule was in global CLAUDE.md **and** the
     repo AGENTS.md and still ignored ~20×), so a recurring mechanical rule needs a *check*, not
-    another doc.
-  - `## Plan directives (plan self-check)` — structural rules folded into the Step 2.7 plan self-check.
+    another doc. No command reads this section; the check is the PostToolUse enforcement hook task
+    (VE-12 in the vault's vibe-engineering project).
+  - `## Plan directives (plan self-check)` — structural rules `/task-run` folds into its plan
+    (step 6).
 
 **Hard rules:**
 - **Never auto-apply.** Every candidate goes through the one-by-one triage gate (the `polish-triage` skill's
@@ -37,14 +39,14 @@ work: the same corrections get re-spent next session.
 # Steering overlay — {repo-key}
 
 Personal user-level steering for this repo. Maintained by /ds:distill;
-consumed by /ds:work-on (Step 2.7 → Plan directives, Step 3.5 → Enforced).
+consumed by /task-run (step 6 → Plan directives).
 
 ## Enforced (post-gen check)
-<!-- Mechanical, recurring rules the Step 3.5 post-gen check enforces hard. -->
+<!-- Mechanical, recurring rules for a post-generation check to enforce hard. -->
 - <imperative bullet>            (src: <short evidence>)
 
 ## Plan directives (plan self-check)
-<!-- Structural rules folded into the Step 2.7 plan self-check. -->
+<!-- Structural rules /task-run folds into its plan. -->
 - <imperative bullet>            (src: <short evidence>)
 
 ## Workflow
@@ -61,11 +63,11 @@ github-account: <login>
 - <short fingerprint of a dismissed candidate>
 ```
 
-`/ds:work-on` reads `## Enforced` and `## Plan directives`; the `## Distill ledger` is private
+`/task-run` reads `## Plan directives`; the `## Distill ledger` is private
 bookkeeping. Create the file from this template the first time anything routes to the overlay (or the
 ledger needs an entry), leaving out `## Workflow`.
 
-`## Workflow` is read by the unified task-run command. `delivery: pr` opens a pull request and
+`## Workflow` is read by `/task-run` too. `delivery: pr` opens a pull request and
 `delivery: direct` lands the commit without one, pushing it to `origin/main` from a worktree;
 `worktree: yes` works in a worktree and `worktree: no` works in the checkout; `github-account:` names
 the GitHub account `repo-gh` runs `gh` as, and without it `gh` runs as the active account. A repo without the section gets a worktree and a
@@ -75,7 +77,7 @@ draft pull request.
 
 ### Step 0: Resolve repo-key and scope
 
-1. **Repo-key** (worktree-stable — the same trick the statusline and `/ds:work-on` Step 2.9 use):
+1. **Repo-key** (worktree-stable — the same trick the statusline uses):
    ```bash
    repo_key=$(basename "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")")
    ```
@@ -89,7 +91,7 @@ draft pull request.
    dotfiles=$(dirname "$(dirname "$(readlink -f ~/.claude/CLAUDE.md)")")   # e.g. /c/work/github/OleksiiZuiev/dotfiles
    ```
    Path roles:
-   - **Consume paths** (symlinks under the real `~/.claude`, what `/ds:work-on` reads):
+   - **Consume paths** (symlinks under the real `~/.claude`, what `/task-run` reads):
      `~/.claude/overlays/{repo-key}.md`, `~/.claude/CLAUDE.md`.
    - **Write paths** (the dotfiles source, what you Edit/commit): `{dotfiles}/claude/overlays/{repo-key}.md`,
      `{dotfiles}/claude/CLAUDE.md`. Edit the write paths, never the symlink targets directly.
@@ -249,8 +251,8 @@ Committed: <sha>
 ```
 
 List the promoted rules with their destinations. Suggest next steps:
-- The newly enforced rules take effect on the next `/ds:work-on` run in this repo (Step 3.5 reads
-  `## Enforced`, Step 2.7 reads `## Plan directives`).
+- New `## Plan directives` take effect on the next `/task-run` in this repo. New `## Enforced` rules
+  are recorded but not yet checked by anything.
 - Re-run `/ds:distill` after more corrections; the ledger keeps it from re-proposing.
 
 ## Important Notes
@@ -258,7 +260,7 @@ List the promoted rules with their destinations. Suggest next steps:
   already-handled — say so. The user decides.
 - **Two outputs, two homes:** the bulk is already-stated-but-ignored mechanical rules → `## Enforced`
   (for the check); genuinely new structural/global rules → `## Plan directives` / global CLAUDE.md.
-- **Distill only pays off because the consumer exists** — `/ds:work-on` Step 3.5 enforces `## Enforced`
-  and Step 2.7 folds in `## Plan directives`.
+- **Distill pays off only where a consumer exists** — `/task-run` folds in `## Plan directives`;
+  `## Enforced` has none until the PostToolUse enforcement hook (VE-12) is built.
 - **Deferred (not v1):** drafting an upstream PR to a repo's `AGENTS.md`; report-only mode; ingesting
   accumulated `*.findings.md`.

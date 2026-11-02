@@ -235,7 +235,7 @@ Use `mcp__claude_ai_Linear__save_comment` to document the refinement:
 #### 7. Record in Ticket Context
 
 The audit comment is for the ticket's readers; this entry is for the agents downstream.
-`/ds:work-on` loads the ticket context on a fresh start, `/ds:create-pr` and `/ds:explain-pr` read
+`/task-run` loads the ticket context on a fresh start, `/ds:create-pr` and `/ds:explain-pr` read
 it, and `/ds:distill` harvests its `#### Key Decisions` — none of them read Linear comments.
 
 Append a session under `## Sessions` in `${CLAUDE_TICKET_CONTEXTS_DIR:-/c/work/ticket-contexts}/{TICKET-ID}.md`,
